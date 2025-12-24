@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <title>たとえて降水確率</title>
+  <style>
+    body { font-family: -apple-system, system-ui; margin: 0; padding: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; margin: 12px 0; }
+    .big { font-size: 40px; font-weight: 700; }
+    .small { color: #666; font-size: 13px; }
+    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; }
+  </style>
+</head>
+<body>
+  <h1>たとえて降水確率</h1>
+
+  <div class="card">
+    <div class="small">今日の降水確率（仮）</div>
+    <div class="big" id="pop">30%</div>
+    <div class="small">※API未接続（手入力/仮データ）</div>
+  </div>
+
+  <div class="card">
+    <div class="small">人間向け翻訳</div>
+    <div class="big" style="font-size:22px" id="metaphor"></div>
+  </div>
+
+  <button id="minus">-10%</button>
+  <button id="plus">+10%</button>
+
+  <script>
+    // 初期例え（固定データ：APIなし運用OK）
+    const metaphors = {
+      0:  "大阪で標準語のおばちゃんに会う確率",
+      10: "いつも行くコンビニのレジで並ぶ確率",
+      20: "今日、家の空気が穏やかな確率",
+      30: "フルスイングでフェアウェイをキープする確率",
+      40: "今日、だれかに怒られる確率",
+      50: "あなたの幸せ度",
+      60: "（統計ベース）日本の持ち家率くらいの確率",
+      70: "今日の夕飯で白ご飯を食べる確率",
+      80: "（統計ベース）大人が毎日スマホを触る確率",
+      90: "（統計ベース）平日に何かしら用事がある確率",
+      100:"あなたが今日、世界を変える確率"
+    };
+
+    let pop = 30;
+
+    function render() {
+      document.getElementById("pop").textContent = `${pop}%`;
+      document.getElementById("metaphor").textContent = `${pop}%：${metaphors[pop] ?? "（未設定）"}`;
+    }
+
+    document.getElementById("minus").onclick = () => { pop = Math.max(0, pop - 10); render(); };
+    document.getElementById("plus").onclick  = () => { pop = Math.min(100, pop + 10); render(); };
+
+    // Service Worker登録
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js");
+    }
+
+    render();
+  </script>
+</body>
+</html>
