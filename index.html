@@ -4,28 +4,37 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
-  <link rel="manifest" href="manifest.json">
+
+  <!-- GitHub Pages の subpath 対策：ここが超重要 -->
+  <base href="/tatoete-kousui/">
+
+  <!-- PWA manifest（webmanifestを使う） -->
+  <link rel="manifest" href="/tatoete-kousui/manifest.webmanifest" />
+
   <title>たとえて降水確率</title>
+
   <style>
     body { font-family: -apple-system, system-ui; margin: 0; padding: 20px; }
     .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; margin: 12px 0; }
     .big { font-size: 40px; font-weight: 700; }
     .small { color: #666; font-size: 13px; }
-    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; }
+    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; margin-right: 8px; }
+    button:active { transform: translateY(1px); }
   </style>
 </head>
+
 <body>
   <h1>たとえて降水確率</h1>
 
   <div class="card">
     <div class="small">今日の降水確率（仮）</div>
     <div class="big" id="pop">30%</div>
-    <div class="small">※API未接続（手入力/仮データ）</div>
+    <div class="small">※API未接続（手入力／仮データ）</div>
   </div>
 
   <div class="card">
     <div class="small">人間向け翻訳</div>
-    <div class="big" style="font-size:22px" id="metaphor"></div>
+    <div class="big" style="font-size:22px" id="metaphor">—</div>
   </div>
 
   <button id="minus">-10%</button>
@@ -34,37 +43,60 @@
   <script>
     // 初期例え（固定データ：APIなし運用OK）
     const metaphors = {
-      0:  "大阪で標準語のおばちゃんに会う確率",
+      0:  "大阪で梅準備のおばちゃんに会う確率",
       10: "いつも行くコンビニのレジで並ぶ確率",
-      20: "今日、家の空気が穏やかな確率",
+      20: "今日、家の空気が微妙に冷たい確率",
       30: "フルスイングでフェアウェイをキープする確率",
       40: "今日、だれかに怒られる確率",
-      50: "あなたの幸せ度",
-      60: "（統計ベース）日本の持ち家率くらいの確率",
-      70: "今日の夕飯で白ご飯を食べる確率",
-      80: "（統計ベース）大人が毎日スマホを触る確率",
-      90: "（統計ベース）平日に何かしら用事がある確率",
-      100:"あなたが今日、世界を変える確率"
+      50: "洗車した直後に雨が降る確率",
+      60: "信号で止まった瞬間に赤が長引く確率",
+      70: "傘を持たずに出て『しまった』となる確率",
+      80: "ズーズーが聞こえてくる確率（※退避推奨）",
+      90: "今日は確実に降るやつ…の確率",
+      100:"外に出た瞬間から負けが確定してる確率"
     };
 
     let pop = 30;
 
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function nearestKey(value) {
+      // 0,10,20..100 に丸める
+      return Math.round(value / 10) * 10;
+    }
+
     function render() {
       document.getElementById("pop").textContent = `${pop}%`;
-      document.getElementById("metaphor").textContent = `${pop}%：${metaphors[pop] ?? "（未設定）"}`;
+
+      const k = nearestKey(pop);
+      const text = metaphors[k] ?? "—";
+      document.getElementById("metaphor").textContent = text;
     }
 
-    document.getElementById("minus").onclick = () => { pop = Math.max(0, pop - 10); render(); };
-    document.getElementById("plus").onclick  = () => { pop = Math.min(100, pop + 10); render(); };
+    document.getElementById("minus").addEventListener("click", () => {
+      pop = clamp(pop - 10, 0, 100);
+      render();
+    });
 
-    // Service Worker登録
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js");
-    }
+    document.getElementById("plus").addEventListener("click", () => {
+      pop = clamp(pop + 10, 0, 100);
+      render();
+    });
 
     render();
+
+    // Service Worker 登録（subpath対応で絶対パス）
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", async () => {
+        try {
+          await navigator.serviceWorker.register("/tatoete-kousui/sw.js");
+        } catch (e) {
+          console.log("SW registration failed:", e);
+        }
+      });
+    }
   </script>
 </body>
 </html>
-
-
