@@ -4,22 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
-
-  <!-- GitHub Pages の subpath 対策：ここが超重要 -->
-  <base href="/tatoete-kousui/">
-
-  <!-- PWA manifest（webmanifestを使う） -->
-  <link rel="manifest" href="/tatoete-kousui/manifest.webmanifest" />
-
+  <link rel="manifest" href="./manifest.json" />
   <title>たとえて降水確率</title>
-
   <style>
     body { font-family: -apple-system, system-ui; margin: 0; padding: 20px; }
     .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; margin: 12px 0; }
     .big { font-size: 40px; font-weight: 700; }
     .small { color: #666; font-size: 13px; }
-    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; margin-right: 8px; }
-    button:active { transform: translateY(1px); }
+    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; margin: 6px 8px 0 0; }
+    .row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+    code { background:#f6f6f6; padding:2px 6px; border-radius:6px; }
   </style>
 </head>
 
@@ -27,9 +21,15 @@
   <h1>たとえて降水確率</h1>
 
   <div class="card">
-    <div class="small">今日の降水確率（仮）</div>
-    <div class="big" id="pop">30%</div>
-    <div class="small">※API未接続（手入力／仮データ）</div>
+    <div class="small">現在地</div>
+    <div class="big" style="font-size:18px" id="place">未取得</div>
+    <div class="small" id="coords">—</div>
+  </div>
+
+  <div class="card">
+    <div class="small">降水確率（いま）</div>
+    <div class="big" id="pop">--%</div>
+    <div class="small" id="asof">—</div>
   </div>
 
   <div class="card">
@@ -37,66 +37,129 @@
     <div class="big" style="font-size:22px" id="metaphor">—</div>
   </div>
 
-  <button id="minus">-10%</button>
-  <button id="plus">+10%</button>
+  <div class="row">
+    <button id="btnLocate">現在地で更新</button>
+    <button id="minus">-10%</button>
+    <button id="plus">+10%</button>
+  </div>
+
+  <div class="small" style="margin-top:10px" id="status"></div>
 
   <script>
-    // 初期例え（固定データ：APIなし運用OK）
+    // 例え（必要なら増やしてOK）
     const metaphors = {
-      0:  "大阪で梅準備のおばちゃんに会う確率",
-      10: "いつも行くコンビニのレジで並ぶ確率",
-      20: "今日、家の空気が微妙に冷たい確率",
-      30: "フルスイングでフェアウェイをキープする確率",
-      40: "今日、だれかに怒られる確率",
-      50: "洗車した直後に雨が降る確率",
-      60: "信号で止まった瞬間に赤が長引く確率",
-      70: "傘を持たずに出て『しまった』となる確率",
-      80: "ズーズーが聞こえてくる確率（※退避推奨）",
-      90: "今日は確実に降るやつ…の確率",
-      100:"外に出た瞬間から負けが確定してる確率"
+      0:  "今日は傘いらん。心も晴れ。",
+      10: "折りたたみを“お守り”で。",
+      20: "洗車？…うーん、様子見。",
+      30: "迷う日。持っていけば勝ち。",
+      40: "折りたたみ推奨。油断は禁物。",
+      50: "傘を持つか、勇気を持つか。",
+      60: "長傘が安心。帰りで刺される。",
+      70: "ほぼ傘。攻めるならカッパ。",
+      80: "傘ないと詰む。守備固め。",
+      90: "今日は雨のターン。",
+      100:"外に出た瞬間から濡れるやつ。"
     };
 
-    let pop = 30;
+    let manualPop = 30;
 
-    function clamp(v, min, max) {
-      return Math.max(min, Math.min(max, v));
+    const el = (id) => document.getElementById(id);
+    const setStatus = (msg) => { el("status").textContent = msg || ""; };
+
+    function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+    function round10(v){ return Math.round(v / 10) * 10; }
+
+    function renderPop(p, label){
+      const p10 = clamp(round10(p), 0, 100);
+      el("pop").textContent = `${p10}%`;
+      el("metaphor").textContent = metaphors[p10] ?? "—";
+      if (label) el("asof").textContent = label;
     }
 
-    function nearestKey(value) {
-      // 0,10,20..100 に丸める
-      return Math.round(value / 10) * 10;
-    }
+    // ---- Open-Meteo：緯度経度→時間別降水確率を取得 ----
+    async function fetchPrecipProb(lat, lon){
+      // hourly=precipitation_probability を使う
+      const url =
+        `https://api.open-meteo.com/v1/forecast` +
+        `?latitude=${encodeURIComponent(lat)}` +
+        `&longitude=${encodeURIComponent(lon)}` +
+        `&hourly=precipitation_probability` +
+        `&timezone=Asia%2FTokyo`;
 
-    function render() {
-      document.getElementById("pop").textContent = `${pop}%`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
+      const data = await res.json();
 
-      const k = nearestKey(pop);
-      const text = metaphors[k] ?? "—";
-      document.getElementById("metaphor").textContent = text;
-    }
+      const times = data?.hourly?.time;
+      const probs = data?.hourly?.precipitation_probability;
+      if (!times || !probs || times.length === 0) throw new Error("No hourly data");
 
-    document.getElementById("minus").addEventListener("click", () => {
-      pop = clamp(pop - 10, 0, 100);
-      render();
-    });
-
-    document.getElementById("plus").addEventListener("click", () => {
-      pop = clamp(pop + 10, 0, 100);
-      render();
-    });
-
-    render();
-
-    // Service Worker 登録（subpath対応で絶対パス）
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", async () => {
-        try {
-          await navigator.serviceWorker.register("/tatoete-kousui/sw.js");
-        } catch (e) {
-          console.log("SW registration failed:", e);
+      // 現在時刻に一番近い時間の index を探す
+      const now = new Date();
+      let bestI = 0;
+      let bestDiff = Infinity;
+      for (let i = 0; i < times.length; i++){
+        const t = new Date(times[i]);
+        const diff = Math.abs(t.getTime() - now.getTime());
+        if (diff < bestDiff){
+          bestDiff = diff;
+          bestI = i;
         }
+      }
+
+      return {
+        prob: probs[bestI],
+        time: times[bestI]
+      };
+    }
+
+    function requestLocation(){
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("Geolocation not supported"));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        });
       });
     }
+
+    el("btnLocate").addEventListener("click", async () => {
+      setStatus("現在地を取得中…（許可が出たら続行します）");
+      try{
+        const pos = await requestLocation();
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+
+        el("coords").textContent = `lat ${lat.toFixed(5)}, lon ${lon.toFixed(5)}`;
+        el("place").textContent = "現在地（GPS）";
+
+        setStatus("天気を取得中…");
+        const r = await fetchPrecipProb(lat, lon);
+
+        renderPop(Number(r.prob), `更新：${r.time}（Asia/Tokyo）`);
+        setStatus("OK");
+      } catch (e){
+        // 位置情報拒否など
+        setStatus(`失敗：${e.message}`);
+      }
+    });
+
+    // 手動調整（残しておくとデバッグが楽）
+    el("minus").addEventListener("click", () => {
+      manualPop = clamp(manualPop - 10, 0, 100);
+      renderPop(manualPop, "手動調整");
+    });
+    el("plus").addEventListener("click", () => {
+      manualPop = clamp(manualPop + 10, 0, 100);
+      renderPop(manualPop, "手動調整");
+    });
+
+    // 初期表示
+    renderPop(manualPop, "手動（初期）");
   </script>
 </body>
 </html>
