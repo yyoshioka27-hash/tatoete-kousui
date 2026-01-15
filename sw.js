@@ -1,55 +1,54 @@
-const CACHE_NAME = "tatoete-kousui-v1";
-const BASE = "/tatoete-kousui";
+// ★ 更新するたびに数字を上げる
+const CACHE_NAME = "tatoete-v2";
 
 const ASSETS = [
-  `${BASE}/`,
-  `${BASE}/index.html`,
-  `${BASE}/manifest.webmanifest`,
-  `${BASE}/sw.js`,
-  `${BASE}/icons/icon-192.png`,
-  `${BASE}/icons/icon-512.png`
+  "./",
+  "./index.html",
+  "./manifest.webmanifest"
 ];
 
+// インストール時：必要最低限だけキャッシュ
 self.addEventListener("install", (event) => {
+  self.skipWaiting(); // ★ すぐ有効化
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
-  self.skipWaiting();
 });
 
+// 有効化時：古いキャッシュを全削除
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => (k === CACHE_NAME ? null : caches.delete(k))));
-      await self.clients.claim();
-    })()
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      )
+    )
   );
+  self.clients.claim(); // ★ すぐ制御
 });
 
+// fetch戦略
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  const url = new URL(req.url);
 
-  // GitHub Pagesの自分のスコープ内だけ扱う
-  if (!url.pathname.startsWith(BASE)) return;
+  // HTMLは常に最新を取りに行く（重要）
+  if (req.headers.get("accept")?.includes("text/html")) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
 
+  // それ以外（manifest等）はキャッシュ優先
   event.respondWith(
-    (async () => {
-      const cached = await caches.match(req);
-      if (cached) return cached;
-
-      try {
-        const res = await fetch(req);
-        // 成功したものはキャッシュして次回を速くする
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(req, res.clone());
-        return res;
-      } catch (e) {
-        // オフライン時のフォールバック（最低限 index を返す）
-        const fallback = await caches.match(`${BASE}/index.html`);
-        return fallback || new Response("Offline", { status: 503 });
-      }
-    })()
+    caches.match(req).then((cached) => cached || fetch(req))
   );
 });

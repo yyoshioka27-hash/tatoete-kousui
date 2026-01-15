@@ -4,162 +4,516 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
-  <link rel="manifest" href="./manifest.json" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <title>たとえて降水確率</title>
   <style>
     body { font-family: -apple-system, system-ui; margin: 0; padding: 20px; }
     .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; margin: 12px 0; }
     .big { font-size: 40px; font-weight: 700; }
     .small { color: #666; font-size: 13px; }
-    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; margin: 6px 8px 0 0; }
-    .row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-    code { background:#f6f6f6; padding:2px 6px; border-radius:6px; }
+    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+    input, select { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; width: 100%; box-sizing: border-box; }
+    label { margin-right: 12px; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+    .muted { color:#888; font-size:12px; }
+    .ok { color:#0a7; font-size:12px; }
+    .ng { color:#c33; font-size:12px; }
+    .pill { display:inline-block; padding: 6px 10px; border: 1px solid #ddd; border-radius: 999px; font-size:12px; margin-right: 6px; }
+    .slot { border: 1px solid #eee; border-radius: 14px; padding: 12px; margin-top: 10px; }
+    .slot .big { font-size: 34px; }
+    .slot .small { margin-top: 6px; }
+
+    /* 例え文（朝・昼・夜）を読みやすく */
+    #meta_m, #meta_d, #meta_e {
+      font-size: 18px;
+      color: #333;
+      line-height: 1.6;
+      font-weight: 500;
+    }
+
+    /* 人間向け翻訳（メイン）を大きく（PC向け） */
+    #metaphor {
+      font-size: 26px;
+      line-height: 1.7;
+    }
+
+    /* =========================
+       スマホ対応（画面幅 600px 以下）
+       ========================= */
+    @media (max-width: 600px) {
+
+      body { padding: 12px; }
+
+      h1 {
+        font-size: 22px;
+        margin: 0 0 12px;
+      }
+
+      .card {
+        padding: 12px;
+        margin: 10px 0;
+      }
+
+      /* 入力欄・ボタンを指で押しやすく */
+      input, select, button {
+        font-size: 16px;
+        padding: 10px 12px;
+      }
+
+      .row {
+        grid-template-columns: 1fr;
+      }
+
+      button#search {
+        width: 100%;
+      }
+
+      /* %（朝・昼・夜） */
+      .slot .big { font-size: 28px; }
+
+      /* 朝・昼・夜の例え文 */
+      #meta_m, #meta_d, #meta_e {
+        font-size: 15px;
+        line-height: 1.55;
+      }
+
+      /* 人間向け翻訳（メイン） */
+      #metaphor {
+        font-size: 20px;
+        line-height: 1.6;
+      }
+
+      /* ピル（API / TZ 表示） */
+      .pill {
+        font-size: 11px;
+        padding: 5px 8px;
+      }
+    }
   </style>
 </head>
-
 <body>
   <h1>たとえて降水確率</h1>
 
   <div class="card">
-    <div class="small">現在地</div>
-    <div class="big" style="font-size:18px" id="place">未取得</div>
-    <div class="small" id="coords">—</div>
+    <div class="small">天気予報を知りたい地点</div>
+    <div class="row" style="margin-top:8px;">
+      <input id="place" placeholder="例：仙台市 / Sendai / 仙台駅 / 仙台市青葉区" />
+      <button id="search">検索</button>
+    </div>
+    <div style="margin-top:10px;">
+      <select id="candidates" disabled>
+        <option>検索結果がここに出ます</option>
+      </select>
+      <div id="placeStatus" class="muted" style="margin-top:8px;">地点を入力して「検索」してください（APIキー不要）</div>
+    </div>
   </div>
 
   <div class="card">
-    <div class="small">降水確率（いま）</div>
-    <div class="big" id="pop">--%</div>
-    <div class="small" id="asof">—</div>
+    <div class="small">例えモード</div>
+    <div style="margin-top:8px;">
+      <label><input type="radio" name="mode" value="serious" checked> まじめ</label>
+      <label><input type="radio" name="mode" value="normal"> ふつう</label>
+      <label><input type="radio" name="mode" value="fun"> おふざけ</label>
+    </div>
+    <div class="muted" style="margin-top:8px;">※同じ確率でも、毎回ちがう例えが出ます</div>
   </div>
 
   <div class="card">
-    <div class="small">人間向け翻訳</div>
-    <div class="big" style="font-size:22px" id="metaphor">—</div>
+    <div class="small">今日の降水確率（朝/昼/夜）</div>
+    <div class="small" id="popHint">地点を選ぶと自動取得します</div>
+
+    <div class="slot">
+      <div class="small">朝（6–11時）</div>
+      <div class="big" id="pop_m">--%</div>
+      <div class="small" id="meta_m"></div>
+    </div>
+
+    <div class="slot">
+      <div class="small">昼（12–17時）</div>
+      <div class="big" id="pop_d">--%</div>
+      <div class="small" id="meta_d"></div>
+    </div>
+
+    <div class="slot">
+      <div class="small">夜（18–23時）</div>
+      <div class="big" id="pop_e">--%</div>
+      <div class="small" id="meta_e"></div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <span class="pill" id="sourceTag">API: 未接続</span>
+      <span class="pill" id="tzTag">TZ: --</span>
+    </div>
   </div>
 
-  <div class="row">
-    <button id="btnLocate">現在地で更新</button>
-    <button id="minus">-10%</button>
-    <button id="plus">+10%</button>
+  <div class="card">
+    <div class="small">人間向け翻訳（毎回ランダム）</div>
+    <div class="big" id="metaphor">地点を選んでください</div>
+    <div class="muted" id="metaFoot" style="margin-top:10px;"></div>
   </div>
 
-  <div class="small" style="margin-top:10px" id="status"></div>
+  <button id="refresh">同じ確率でも例えを変える</button>
 
   <script>
-    // 例え（必要なら増やしてOK）
-    const metaphors = {
-      0:  "今日は傘いらん。心も晴れ。",
-      10: "折りたたみを“お守り”で。",
-      20: "洗車？…うーん、様子見。",
-      30: "迷う日。持っていけば勝ち。",
-      40: "折りたたみ推奨。油断は禁物。",
-      50: "傘を持つか、勇気を持つか。",
-      60: "長傘が安心。帰りで刺される。",
-      70: "ほぼ傘。攻めるならカッパ。",
-      80: "傘ないと詰む。守備固め。",
-      90: "今日は雨のターン。",
-      100:"外に出た瞬間から濡れるやつ。"
+    // =========================
+    // 統計ネタ（まじめ用）
+    // =========================
+    const FACTS = {
+      ENGLISH_PCT: 18.8,
+      MOBILE_OWN_PCT: 82
     };
 
-    let manualPop = 30;
+    const FACT_POOL = [
+      () => `英語を話す人が世界の約${FACTS.ENGLISH_PCT}%と言われるくらいの確率。少数派だけど、当たる日は当たります。`,
+      () => `世界の約${FACTS.ENGLISH_PCT}%程度が英語を話す推計に近い水準。『起きる可能性が現実的にある』ゾーンです。`,
+      () => `携帯電話を持っている人が世界で約${FACTS.MOBILE_OWN_PCT}%と言われるくらいの確率。かなり起こります。`,
+      () => `世界で携帯を持つ人が約${FACTS.MOBILE_OWN_PCT}%という話に近い水準。『降る前提』で計画しましょう。`
+    ];
 
-    const el = (id) => document.getElementById(id);
-    const setStatus = (msg) => { el("status").textContent = msg || ""; };
+    const metaphorDB = {
+      serious: [
+        { min: 0,  max: 9,   texts: [
+          "ほぼ降水の心配なし。運用上は『傘なし』で良い確度です。",
+          "リスクは極小。外出計画は雨を無視してOKなレベルです。"
+        ]},
+        { min: 10, max: 29,  texts: [
+          "低確率だけどゼロじゃない。保険として折りたたみ傘が合理的。",
+          "小さな不確実性が残る日。予定が長いなら備えが効きます。"
+        ]},
+        { min: 30, max: 49,  texts: [
+          () => pickRandom(FACT_POOL)(),
+          () => pickRandom(FACT_POOL)()
+        ]},
+        { min: 50, max: 69,  texts: [
+          "五分五分〜やや高め。意思決定としては『傘を持つ』が優勢。",
+          "外れると損が大きい確率帯。傘携行が期待値的に得です。"
+        ]},
+        { min: 70, max: 89,  texts: [
+          () => pickRandom(FACT_POOL)(),
+          () => pickRandom(FACT_POOL)()
+        ]},
+        { min: 90, max: 100, texts: [
+          "ほぼ確実。雨天として動線・荷物・服装を組むのが正解です。",
+          "失敗許容が低いレベルで高確率。雨対策を標準装備に。"
+        ]}
+      ],
 
-    function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
-    function round10(v){ return Math.round(v / 10) * 10; }
+      normal: [
+        { min: 0,  max: 9,   texts: [
+          "今日はまず降らないっしょ。傘は置いてOK。",
+          "ほぼ安心。空、やる気ゼロです。"
+        ]},
+        { min: 10, max: 29,  texts: [
+          "たぶん平気。でも折りたたみあると心が強い。",
+          "一応ある。『一応』が一番やっかい。"
+        ]},
+        { min: 30, max: 49,  texts: [
+          "降るかも。外出長いなら傘を。",
+          "微妙に怪しい。傘を持つか、強運を信じるか。"
+        ]},
+        { min: 50, max: 69,  texts: [
+          "半々以上。持っとこ。あとで自分を褒められる。",
+          "傘なしはギャンブル寄り。"
+        ]},
+        { min: 70, max: 89,  texts: [
+          "けっこう降りそう。傘はレギュラー入り。",
+          "雨前提で動くとストレス減ります。"
+        ]},
+        { min: 90, max: 100, texts: [
+          "ほぼ雨。傘は必須。",
+          "今日は雨確定に近い。潔く備えよう。"
+        ]}
+      ],
 
-    function renderPop(p, label){
-      const p10 = clamp(round10(p), 0, 100);
-      el("pop").textContent = `${p10}%`;
-      el("metaphor").textContent = metaphors[p10] ?? "—";
-      if (label) el("asof").textContent = label;
+      fun: [
+        { min: 0,  max: 9,   texts: [
+          "砂漠でスコールに当たるくらい。",
+          "傘を持ったら逆に晴れる、あれです。"
+        ]},
+        { min: 10, max: 29,  texts: [
+          "『一滴も降らない』とは言ってない、って顔してる。",
+          "折りたたみ傘を持つと…降らない法則、発動候補。"
+        ]},
+        { min: 30, max: 49,  texts: [
+          "フルスイングでフェアウェイをキープする確率。",
+          "洗濯物を外に出した瞬間、空が反抗する確率。"
+        ]},
+        { min: 50, max: 69,  texts: [
+          "コイントス。裏が出たらびしょ濡れ。",
+          "『降ったら会社のせい』が通用する確率。"
+        ]},
+        { min: 70, max: 89,  texts: [
+          "雨という名のイベント、だいたい開催。",
+          "今日は空が“水分補給”してくる日。"
+        ]},
+        { min: 90, max: 100, texts: [
+          "世界は今日、あなたを濡らしにきています。",
+          "傘？ いや、もはや装備品です。"
+        ]}
+      ]
+    };
+
+    // =========================
+    // 天気取得：Open-Meteo
+    // =========================
+    const GEO = "https://geocoding-api.open-meteo.com/v1/search";
+    const FC  = "https://api.open-meteo.com/v1/forecast";
+
+    let state = {
+      pops: null,         // { m: number|null, d: number|null, e: number|null }
+      placeLabel: null,
+      tz: null,
+      source: "API: 未接続",
+    };
+
+    function pickRandom(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
     }
 
-    // ---- Open-Meteo：緯度経度→時間別降水確率を取得 ----
-    async function fetchPrecipProb(lat, lon){
-      // hourly=precipitation_probability を使う
-      const url =
-        `https://api.open-meteo.com/v1/forecast` +
-        `?latitude=${encodeURIComponent(lat)}` +
-        `&longitude=${encodeURIComponent(lon)}` +
-        `&hourly=precipitation_probability` +
-        `&timezone=Asia%2FTokyo`;
+    function getMode() {
+      return document.querySelector('input[name="mode"]:checked').value;
+    }
 
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
-      const data = await res.json();
+    function metaphorFor(pop, mode) {
+      const ranges = metaphorDB[mode];
+      const r = ranges.find(x => pop >= x.min && pop <= x.max) || ranges[ranges.length - 1];
+      const picked = pickRandom(r.texts);
+      return (typeof picked === "function") ? picked() : picked;
+    }
 
-      const times = data?.hourly?.time;
-      const probs = data?.hourly?.precipitation_probability;
-      if (!times || !probs || times.length === 0) throw new Error("No hourly data");
+    function setStatus(text, kind="muted") {
+      const el = document.getElementById("placeStatus");
+      el.className = kind;
+      el.textContent = text;
+    }
 
-      // 現在時刻に一番近い時間の index を探す
-      const now = new Date();
-      let bestI = 0;
-      let bestDiff = Infinity;
-      for (let i = 0; i < times.length; i++){
-        const t = new Date(times[i]);
-        const diff = Math.abs(t.getTime() - now.getTime());
-        if (diff < bestDiff){
-          bestDiff = diff;
-          bestI = i;
+    // ★ 日本語地名を少しでもヒットしやすくする前処理
+    function normalizePlaceName(input) {
+      return input
+        .replace(/[ 　]+/g, " ")
+        .replace(/(都|道|府|県|市|区|町|村)$/g, "")   // 末尾の行政単位を落とす
+        .replace(/(都|道|府|県|市|区|町|村)/g, "")     // 途中も軽く落とす（仙台市青葉区 → 仙台青葉）
+        .trim();
+    }
+
+    function render() {
+      const hintEl = document.getElementById("popHint");
+      const sourceTag = document.getElementById("sourceTag");
+      const tzTag = document.getElementById("tzTag");
+
+      const metaAll = document.getElementById("metaphor");
+      const footEl = document.getElementById("metaFoot");
+
+      sourceTag.textContent = state.source;
+      tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
+
+      const mode = getMode();
+
+      const setSlot = (idPop, idMeta, value, label) => {
+        const popEl = document.getElementById(idPop);
+        const metaEl = document.getElementById(idMeta);
+
+        if (value == null) {
+          popEl.textContent = "--%";
+          metaEl.textContent = "データなし";
+          return null;
         }
+
+        popEl.textContent = `${value}%`;
+        const text = metaphorFor(value, mode);
+        metaEl.textContent = `${label}：${text}`;
+        return { value, text, label };
+      };
+
+      if (!state.pops) {
+        hintEl.textContent = "地点を選ぶと自動取得します";
+        setSlot("pop_m", "meta_m", null, "朝");
+        setSlot("pop_d", "meta_d", null, "昼");
+        setSlot("pop_e", "meta_e", null, "夜");
+        metaAll.textContent = "地点を選んでください";
+        footEl.textContent = "";
+        return;
       }
 
+      hintEl.textContent = state.placeLabel ? `地点：${state.placeLabel}` : "地点：--";
+
+      const a = setSlot("pop_m", "meta_m", state.pops.m, "朝");
+      const b = setSlot("pop_d", "meta_d", state.pops.d, "昼");
+      const c = setSlot("pop_e", "meta_e", state.pops.e, "夜");
+
+      const candidates = [a, b, c].filter(Boolean);
+      if (!candidates.length) {
+        metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
+      } else {
+        const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
+        metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
+      }
+
+      if (mode === "serious") {
+        footEl.textContent = "※まじめモード：統計ネタ等を混ぜた“ためになる例え”をランダム表示";
+      } else if (mode === "normal") {
+        footEl.textContent = "※ふつうモード：日常会話の温度感でランダム表示";
+      } else {
+        footEl.textContent = "※おふざけモード：SNS向けに遊んだ例えをランダム表示";
+      }
+    }
+
+    async function geocode(name) {
+      const url = new URL(GEO);
+      url.searchParams.set("name", name);
+      url.searchParams.set("count", "10");
+      url.searchParams.set("language", "ja");
+      url.searchParams.set("format", "json");
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) throw new Error("地点検索に失敗しました");
+      return await res.json();
+    }
+
+    async function fetchPopsBySlots(lat, lon) {
+      const url = new URL(FC);
+      url.searchParams.set("latitude", String(lat));
+      url.searchParams.set("longitude", String(lon));
+      url.searchParams.set("hourly", "precipitation_probability");
+      url.searchParams.set("timezone", "auto");
+      url.searchParams.set("forecast_days", "2");
+
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) throw new Error("天気取得に失敗しました");
+      const data = await res.json();
+
+      const times = data.hourly?.time || [];
+      const pops  = data.hourly?.precipitation_probability || [];
+      const tz    = data.timezone || null;
+
+      const today = (times[0] || "").slice(0, 10);
+      const bucket = { m: [], d: [], e: [] };
+
+      for (let i = 0; i < Math.min(times.length, pops.length); i++) {
+        const t = times[i];
+        const p = pops[i];
+        if (typeof p !== "number") continue;
+        if (!t || t.slice(0, 10) !== today) continue;
+
+        const hour = Number(t.slice(11, 13));
+        if (hour >= 6 && hour <= 11) bucket.m.push(p);
+        else if (hour >= 12 && hour <= 17) bucket.d.push(p);
+        else if (hour >= 18 && hour <= 23) bucket.e.push(p);
+      }
+
+      const maxOrNull = (arr) => arr.length ? Math.round(Math.max(...arr)) : null;
+
       return {
-        prob: probs[bestI],
-        time: times[bestI]
+        pops: {
+          m: maxOrNull(bucket.m),
+          d: maxOrNull(bucket.d),
+          e: maxOrNull(bucket.e),
+        },
+        tz
       };
     }
 
-    function requestLocation(){
-      return new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-          reject(new Error("Geolocation not supported"));
+    // UI: 検索→候補表示
+    document.getElementById("search").onclick = async () => {
+      const raw = document.getElementById("place").value.trim();
+      const q = normalizePlaceName(raw);
+
+      const sel = document.getElementById("candidates");
+      sel.innerHTML = "";
+      sel.disabled = true;
+
+      if (!q) {
+        setStatus("地点名を入力してください", "ng");
+        return;
+      }
+
+      setStatus("検索中…", "muted");
+
+      try {
+        // まず正規化した文字列で検索
+        let g = await geocode(q);
+        let results = g.results || [];
+
+        // もしダメなら、生入力でも一度試す（保険）
+        if (!results.length && raw !== q) {
+          g = await geocode(raw);
+          results = g.results || [];
+        }
+
+        if (!results.length) {
+          setStatus("候補が見つかりませんでした。別の書き方で試してください。（例：Sendai）", "ng");
           return;
         }
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+
+        results.forEach((r, idx) => {
+          const labelParts = [r.name, r.admin1, r.country].filter(Boolean);
+          const label = labelParts.join(" / ");
+          const opt = document.createElement("option");
+          opt.value = String(idx);
+          opt.textContent = label;
+          opt.dataset.lat = r.latitude;
+          opt.dataset.lon = r.longitude;
+          sel.appendChild(opt);
         });
-      });
+
+        sel.disabled = false;
+        setStatus("候補を選ぶと天気を取得します", "ok");
+
+        sel.onchange = async () => {
+          const opt = sel.options[sel.selectedIndex];
+          const lat = Number(opt.dataset.lat);
+          const lon = Number(opt.dataset.lon);
+
+          state.placeLabel = opt.textContent;
+          state.source = "API: Open-Meteo";
+          render();
+          setStatus("天気取得中…", "muted");
+
+          try {
+            const out = await fetchPopsBySlots(lat, lon);
+            state.pops = out.pops;
+            state.tz = out.tz;
+
+            const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
+            if (!any) {
+              setStatus("降水確率が取得できませんでした（別地点で試してください）", "ng");
+              state.source = "API: 取得失敗";
+              state.pops = null;
+            } else {
+              setStatus("取得しました", "ok");
+            }
+
+            render();
+          } catch (e) {
+            setStatus(e.message || "天気取得エラー", "ng");
+            state.source = "API: エラー";
+            state.pops = null;
+            render();
+          }
+        };
+
+        // 自動で1件目を選択して即取得
+        sel.selectedIndex = 0;
+        sel.onchange();
+
+      } catch (e) {
+        setStatus(e.message || "検索エラー", "ng");
+      }
+    };
+
+    // モード変更で例え更新（同じ確率でもランダムが変わる）
+    document.querySelectorAll('input[name="mode"]').forEach(r =>
+      r.addEventListener("change", render)
+    );
+
+    // 「同じ確率でも例えを変える」ボタン（確率はそのまま、文章だけランダム更新）
+    document.getElementById("refresh").onclick = () => render();
+
+    // Service Worker登録（PWA）
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js");
     }
 
-    el("btnLocate").addEventListener("click", async () => {
-      setStatus("現在地を取得中…（許可が出たら続行します）");
-      try{
-        const pos = await requestLocation();
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-
-        el("coords").textContent = `lat ${lat.toFixed(5)}, lon ${lon.toFixed(5)}`;
-        el("place").textContent = "現在地（GPS）";
-
-        setStatus("天気を取得中…");
-        const r = await fetchPrecipProb(lat, lon);
-
-        renderPop(Number(r.prob), `更新：${r.time}（Asia/Tokyo）`);
-        setStatus("OK");
-      } catch (e){
-        // 位置情報拒否など
-        setStatus(`失敗：${e.message}`);
-      }
-    });
-
-    // 手動調整（残しておくとデバッグが楽）
-    el("minus").addEventListener("click", () => {
-      manualPop = clamp(manualPop - 10, 0, 100);
-      renderPop(manualPop, "手動調整");
-    });
-    el("plus").addEventListener("click", () => {
-      manualPop = clamp(manualPop + 10, 0, 100);
-      renderPop(manualPop, "手動調整");
-    });
-
-    // 初期表示
-    renderPop(manualPop, "手動（初期）");
+    render();
   </script>
 </body>
 </html>
