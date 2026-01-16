@@ -154,6 +154,31 @@
 
   <button id="refresh">同じ確率でも例えを変える</button>
 
+  <!-- いいねボタンとネタ追加セクション -->
+  <div class="card" id="likeSection">
+    <div class="small">このネタを評価</div>
+    <div style="margin-top:8px;">
+      <button id="likeBtn">👍いいね (<span id="likeCount">0</span>)</button>
+      <span id="specialBadge" style="margin-left:10px;font-size:20px;"></span>
+    </div>
+  </div>
+
+  <div class="card" id="addSection">
+    <div class="small">ネタを追加</div>
+    <div style="margin-top:8px;">
+      <textarea id="newPhrase" rows="3" placeholder="例：降ったら会社のせい"></textarea>
+    </div>
+    <div style="margin-top:8px;">
+      <select id="newPhraseMode">
+        <option value="serious">真面目</option>
+        <option value="trivia">雑学</option>
+        <option value="fun">お笑い</option>
+      </select>
+      <button id="addPhraseBtn" style="margin-left:10px;">追加</button>
+    </div>
+    <div class="muted" id="addStatus" style="margin-top:8px;"></div>
+  </div>
+
   <!-- 外部の例えデータを読み込み -->
   <script src="metaphors.js"></script>
 
@@ -175,6 +200,76 @@
     const lastMetaphor = {};
     // randomFact は metaphors.js で定義されています
 
+    /* いいね機能・ネタ追加機能用の定数とヘルパー関数 */
+    const LIKES_KEY = "metaphorLikes";
+    const ADDED_KEY = "addedPhrases";
+
+    // いいねデータを読み込み
+    function loadLikes() {
+      try {
+        return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+    function saveLikes(obj) {
+      localStorage.setItem(LIKES_KEY, JSON.stringify(obj));
+    }
+    let likesData = loadLikes();
+    function getLikesFor(phrase) {
+      return likesData[phrase] || 0;
+    }
+    function incrementLike(phrase) {
+      likesData[phrase] = (likesData[phrase] || 0) + 1;
+      saveLikes(likesData);
+    }
+
+    // ユーザーが追加したネタを読み込み
+    function loadAddedPhrases() {
+      try {
+        return JSON.parse(localStorage.getItem(ADDED_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+    function saveAddedPhrases(obj) {
+      localStorage.setItem(ADDED_KEY, JSON.stringify(obj));
+    }
+    let addedPhrases = loadAddedPhrases();
+
+    // 重み付けされたランダム選択：いいね数が多いほど選ばれやすくする
+    function pickWeightedRandom(arr) {
+      const weights = arr.map(item => {
+        if (typeof item === 'function') return 1;
+        const text = item;
+        return (likesData[text] || 0) + 1;
+      });
+      const total = weights.reduce((a,b) => a + b, 0);
+      let r = Math.random() * total;
+      for (let i = 0; i < arr.length; i++) {
+        if (r < weights[i]) return arr[i];
+        r -= weights[i];
+      }
+      return arr[0];
+    }
+
+    // 保存されている追加ネタをmetaphorDBに挿入（中程度の確率帯 30-49 に追加）
+    function applyAddedPhrases() {
+      ['serious','trivia','fun'].forEach(mode => {
+        const arr = addedPhrases[mode] || [];
+        if (arr.length && metaphorDB[mode] && metaphorDB[mode][2]) {
+          arr.forEach(p => {
+            if (!metaphorDB[mode][2].texts.includes(p)) {
+              metaphorDB[mode][2].texts.push(p);
+            }
+          });
+        }
+      });
+    }
+
+    // 初期化時に追加ネタをデータベースに反映
+    applyAddedPhrases();
+
     function pickRandom(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
     }
@@ -186,7 +281,8 @@
     function metaphorFor(pop, mode) {
       const ranges = metaphorDB[mode] || [];
       const r = ranges.find(x => pop >= x.min && pop <= x.max) || ranges[ranges.length - 1];
-      let picked = pickRandom(r.texts);
+      // 重み付けランダム選択
+      let picked = pickWeightedRandom(r.texts);
       // 同じモードと範囲で連続して同じテキストが選ばれないようにする
       if (r.texts && r.texts.length > 1) {
         const key = `${mode}:${r.min}-${r.max}`;
@@ -251,6 +347,14 @@
         setSlot("pop_e", "meta_e", null, "夜");
         metaAll.textContent = "地点を選んでください";
         footEl.textContent = "";
+        // いいねUIのリセット
+        const likeCountEl = document.getElementById("likeCount");
+        const likeBtn = document.getElementById("likeBtn");
+        const badgeEl = document.getElementById("specialBadge");
+        likeCountEl.textContent = "0";
+        badgeEl.textContent = "";
+        likeBtn.disabled = true;
+        state.currentPhrase = null;
         return;
       }
 
@@ -261,11 +365,34 @@
       const c = setSlot("pop_e", "meta_e", state.pops.e, "夜");
 
       const candidates = [a, b, c].filter(Boolean);
+      const likeCountEl = document.getElementById("likeCount");
+      const likeBtn = document.getElementById("likeBtn");
+      const badgeEl = document.getElementById("specialBadge");
       if (!candidates.length) {
         metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
+        // いいねUIを初期化
+        likeCountEl.textContent = "0";
+        badgeEl.textContent = "";
+        likeBtn.disabled = true;
+        state.currentPhrase = null;
       } else {
         const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
         metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
+        // 現在のフレーズを保存
+        state.currentPhrase = maxOne.text;
+        // いいねボタンを有効化してUI更新
+        const currentLikes = getLikesFor(state.currentPhrase);
+        likeCountEl.textContent = String(currentLikes);
+        badgeEl.textContent = currentLikes >= 5 ? "⭐人気！" : "";
+        likeBtn.disabled = false;
+        // クリックイベントを更新
+        likeBtn.onclick = () => {
+          if (!state.currentPhrase) return;
+          incrementLike(state.currentPhrase);
+          const count = getLikesFor(state.currentPhrase);
+          likeCountEl.textContent = String(count);
+          badgeEl.textContent = count >= 5 ? "⭐人気！" : "";
+        };
       }
 
       if (mode === "serious") {
@@ -426,6 +553,34 @@
 
     // 「同じ確率でも例えを変える」ボタン（確率はそのまま、文章だけランダム更新）
     document.getElementById("refresh").onclick = () => render();
+
+    // 追加ネタボタン
+    document.getElementById("addPhraseBtn").onclick = () => {
+      const textarea = document.getElementById("newPhrase");
+      const modeSel  = document.getElementById("newPhraseMode");
+      const statusEl = document.getElementById("addStatus");
+      const text = textarea.value.trim();
+      const mode = modeSel.value;
+      if (!text) {
+        statusEl.textContent = "入力が空です";
+        return;
+      }
+      // 中程度の確率帯 (index 2) に追加
+      if (metaphorDB[mode] && metaphorDB[mode][2]) {
+        if (!metaphorDB[mode][2].texts.includes(text)) {
+          metaphorDB[mode][2].texts.push(text);
+        }
+        addedPhrases[mode] = addedPhrases[mode] || [];
+        if (!addedPhrases[mode].includes(text)) {
+          addedPhrases[mode].push(text);
+          saveAddedPhrases(addedPhrases);
+        }
+        statusEl.textContent = "追加しました！";
+        textarea.value = "";
+      } else {
+        statusEl.textContent = "追加できませんでした";
+      }
+    };
 
     // Service Worker登録（PWA）
     if ("serviceWorker" in navigator) {
