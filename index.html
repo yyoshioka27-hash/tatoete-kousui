@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="./icon-192.png">
   <title>たとえて降水確率</title>
   <style>
     body { font-family: -apple-system, system-ui; margin: 0; padding: 20px; }
@@ -112,9 +111,9 @@
   <div class="card">
     <div class="small">例えモード</div>
     <div style="margin-top:8px;">
-      <label><input type="radio" name="mode" value="serious" checked> まじめ</label>
-      <label><input type="radio" name="mode" value="normal"> ふつう</label>
-      <label><input type="radio" name="mode" value="fun"> おふざけ</label>
+      <label><input type="radio" name="mode" value="serious" checked> 真面目</label>
+      <label><input type="radio" name="mode" value="trivia"> 雑学</label>
+      <label><input type="radio" name="mode" value="fun"> お笑い</label>
     </div>
     <div class="muted" style="margin-top:8px;">※同じ確率でも、毎回ちがう例えが出ます</div>
   </div>
@@ -155,104 +154,10 @@
 
   <button id="refresh">同じ確率でも例えを変える</button>
 
+  <!-- 外部の例えデータを読み込み -->
+  <script src="metaphors.js"></script>
+
   <script>
-    // =========================
-    // 統計ネタ（まじめ用）
-    // =========================
-    const FACTS = {
-      ENGLISH_PCT: 18.8,
-      MOBILE_OWN_PCT: 82
-    };
-
-    const FACT_POOL = [
-      () => `英語を話す人が世界の約${FACTS.ENGLISH_PCT}%と言われるくらいの確率。少数派だけど、当たる日は当たります。`,
-      () => `世界の約${FACTS.ENGLISH_PCT}%程度が英語を話す推計に近い水準。『起きる可能性が現実的にある』ゾーンです。`,
-      () => `携帯電話を持っている人が世界で約${FACTS.MOBILE_OWN_PCT}%と言われるくらいの確率。かなり起こります。`,
-      () => `世界で携帯を持つ人が約${FACTS.MOBILE_OWN_PCT}%という話に近い水準。『降る前提』で計画しましょう。`
-    ];
-
-    const metaphorDB = {
-      serious: [
-        { min: 0,  max: 9,   texts: [
-          "ほぼ降水の心配なし。運用上は『傘なし』で良い確度です。",
-          "リスクは極小。外出計画は雨を無視してOKなレベルです。"
-        ]},
-        { min: 10, max: 29,  texts: [
-          "低確率だけどゼロじゃない。保険として折りたたみ傘が合理的。",
-          "小さな不確実性が残る日。予定が長いなら備えが効きます。"
-        ]},
-        { min: 30, max: 49,  texts: [
-          () => pickRandom(FACT_POOL)(),
-          () => pickRandom(FACT_POOL)()
-        ]},
-        { min: 50, max: 69,  texts: [
-          "五分五分〜やや高め。意思決定としては『傘を持つ』が優勢。",
-          "外れると損が大きい確率帯。傘携行が期待値的に得です。"
-        ]},
-        { min: 70, max: 89,  texts: [
-          () => pickRandom(FACT_POOL)(),
-          () => pickRandom(FACT_POOL)()
-        ]},
-        { min: 90, max: 100, texts: [
-          "ほぼ確実。雨天として動線・荷物・服装を組むのが正解です。",
-          "失敗許容が低いレベルで高確率。雨対策を標準装備に。"
-        ]}
-      ],
-
-      normal: [
-        { min: 0,  max: 9,   texts: [
-          "今日はまず降らないっしょ。傘は置いてOK。",
-          "ほぼ安心。空、やる気ゼロです。"
-        ]},
-        { min: 10, max: 29,  texts: [
-          "たぶん平気。でも折りたたみあると心が強い。",
-          "一応ある。『一応』が一番やっかい。"
-        ]},
-        { min: 30, max: 49,  texts: [
-          "降るかも。外出長いなら傘を。",
-          "微妙に怪しい。傘を持つか、強運を信じるか。"
-        ]},
-        { min: 50, max: 69,  texts: [
-          "半々以上。持っとこ。あとで自分を褒められる。",
-          "傘なしはギャンブル寄り。"
-        ]},
-        { min: 70, max: 89,  texts: [
-          "けっこう降りそう。傘はレギュラー入り。",
-          "雨前提で動くとストレス減ります。"
-        ]},
-        { min: 90, max: 100, texts: [
-          "ほぼ雨。傘は必須。",
-          "今日は雨確定に近い。潔く備えよう。"
-        ]}
-      ],
-
-      fun: [
-        { min: 0,  max: 9,   texts: [
-          "砂漠でスコールに当たるくらい。",
-          "傘を持ったら逆に晴れる、あれです。"
-        ]},
-        { min: 10, max: 29,  texts: [
-          "『一滴も降らない』とは言ってない、って顔してる。",
-          "折りたたみ傘を持つと…降らない法則、発動候補。"
-        ]},
-        { min: 30, max: 49,  texts: [
-          "フルスイングでフェアウェイをキープする確率。",
-          "洗濯物を外に出した瞬間、空が反抗する確率。"
-        ]},
-        { min: 50, max: 69,  texts: [
-          "コイントス。裏が出たらびしょ濡れ。",
-          "『降ったら会社のせい』が通用する確率。"
-        ]},
-        { min: 70, max: 89,  texts: [
-          "雨という名のイベント、だいたい開催。",
-          "今日は空が“水分補給”してくる日。"
-        ]},
-        { min: 90, max: 100, texts: [
-          "世界は今日、あなたを濡らしにきています。",
-          "傘？ いや、もはや装備品です。"
-        ]}
-      ]
-    };
 
     // =========================
     // 天気取得：Open-Meteo
@@ -266,6 +171,9 @@
       tz: null,
       source: "API: 未接続",
     };
+    // 前回選んだ例え文を記憶しておき、連続同じメッセージが出ないようにする
+    const lastMetaphor = {};
+    // randomFact は metaphors.js で定義されています
 
     function pickRandom(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
@@ -276,9 +184,19 @@
     }
 
     function metaphorFor(pop, mode) {
-      const ranges = metaphorDB[mode];
+      const ranges = metaphorDB[mode] || [];
       const r = ranges.find(x => pop >= x.min && pop <= x.max) || ranges[ranges.length - 1];
-      const picked = pickRandom(r.texts);
+      let picked = pickRandom(r.texts);
+      // 同じモードと範囲で連続して同じテキストが選ばれないようにする
+      if (r.texts && r.texts.length > 1) {
+        const key = `${mode}:${r.min}-${r.max}`;
+        let attempts = 0;
+        while (picked === lastMetaphor[key] && attempts < 5) {
+          picked = pickRandom(r.texts);
+          attempts++;
+        }
+        lastMetaphor[key] = picked;
+      }
       return (typeof picked === "function") ? picked() : picked;
     }
 
@@ -351,11 +269,11 @@
       }
 
       if (mode === "serious") {
-        footEl.textContent = "※まじめモード：統計ネタ等を混ぜた“ためになる例え”をランダム表示";
-      } else if (mode === "normal") {
-        footEl.textContent = "※ふつうモード：日常会話の温度感でランダム表示";
+        footEl.textContent = "※真面目モード：統計ネタ等を混ぜた“ためになる例え”をランダム表示";
+      } else if (mode === "trivia" || mode === "normal") {
+        footEl.textContent = "※雑学モード：日常会話の温度感でランダム表示";
       } else {
-        footEl.textContent = "※おふざけモード：SNS向けに遊んだ例えをランダム表示";
+        footEl.textContent = "※お笑いモード：SNS向けに遊んだ例えをランダム表示";
       }
     }
 
@@ -518,4 +436,3 @@
   </script>
 </body>
 </html>
-
