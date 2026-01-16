@@ -126,18 +126,24 @@
       <div class="small">朝（6–11時）</div>
       <div class="big" id="pop_m">--%</div>
       <div class="small" id="meta_m"></div>
+      <!-- 朝用いいねボタン -->
+      <div class="small"><button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button><span id="badge_m" style="margin-left:10px;font-size:20px;"></span></div>
     </div>
 
     <div class="slot">
       <div class="small">昼（12–17時）</div>
       <div class="big" id="pop_d">--%</div>
       <div class="small" id="meta_d"></div>
+      <!-- 昼用いいねボタン -->
+      <div class="small"><button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button><span id="badge_d" style="margin-left:10px;font-size:20px;"></span></div>
     </div>
 
     <div class="slot">
       <div class="small">夜（18–23時）</div>
       <div class="big" id="pop_e">--%</div>
       <div class="small" id="meta_e"></div>
+      <!-- 夜用いいねボタン -->
+      <div class="small"><button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button><span id="badge_e" style="margin-left:10px;font-size:20px;"></span></div>
     </div>
 
     <div style="margin-top:10px;">
@@ -154,14 +160,8 @@
 
   <button id="refresh">同じ確率でも例えを変える</button>
 
-  <!-- いいねボタンとネタ追加セクション -->
-  <div class="card" id="likeSection">
-    <div class="small">このネタを評価</div>
-    <div style="margin-top:8px;">
-      <button id="likeBtn">👍いいね (<span id="likeCount">0</span>)</button>
-      <span id="specialBadge" style="margin-left:10px;font-size:20px;"></span>
-    </div>
-  </div>
+  <!-- いいねボタンは各時間帯の下に配置するため、
+       グローバルな評価カードは不要になりました。 -->
 
   <div class="card" id="addSection">
     <div class="small">ネタを追加</div>
@@ -195,6 +195,8 @@
       placeLabel: null,
       tz: null,
       source: "API: 未接続",
+      // 表示中の例え文を時間帯ごとに保持
+      currentPhrases: { m: null, d: null, e: null }
     };
     // 前回選んだ例え文を記憶しておき、連続同じメッセージが出ないようにする
     const lastMetaphor = {};
@@ -296,6 +298,42 @@
       return (typeof picked === "function") ? picked() : picked;
     }
 
+    /**
+     * 対象スロットのいいねUIを更新する関数。
+     * 対応するテキストがない場合はボタンを無効化し、
+     * 存在する場合は現在のいいね数とバッジを表示する。
+     * ボタンのクリックでいいね数を増加させ、UIを再描画する。
+     * @param {string} slot 'm'|'d'|'e'
+     */
+    function updateLikeUI(slot) {
+      const phrase = state.currentPhrases[slot];
+      const countEl = document.getElementById(`likeCount_${slot}`);
+      const badgeEl = document.getElementById(`badge_${slot}`);
+      const btnEl = document.getElementById(`like_${slot}`);
+      if (!phrase) {
+        // フレーズが無い場合は初期状態
+        countEl.textContent = "0";
+        badgeEl.textContent = "";
+        if (btnEl) {
+          btnEl.disabled = true;
+          btnEl.onclick = null;
+        }
+        return;
+      }
+      // いいね数を取得して表示
+      const count = getLikesFor(phrase);
+      countEl.textContent = String(count);
+      badgeEl.textContent = count >= 5 ? "⭐人気！" : "";
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.onclick = () => {
+          // 現在のフレーズにいいねを付与
+          incrementLike(phrase);
+          updateLikeUI(slot);
+        };
+      }
+    }
+
     function setStatus(text, kind="muted") {
       const el = document.getElementById("placeStatus");
       el.className = kind;
@@ -347,14 +385,13 @@
         setSlot("pop_e", "meta_e", null, "夜");
         metaAll.textContent = "地点を選んでください";
         footEl.textContent = "";
-        // いいねUIのリセット
-        const likeCountEl = document.getElementById("likeCount");
-        const likeBtn = document.getElementById("likeBtn");
-        const badgeEl = document.getElementById("specialBadge");
-        likeCountEl.textContent = "0";
-        badgeEl.textContent = "";
-        likeBtn.disabled = true;
-        state.currentPhrase = null;
+        // 各時間帯のフレーズ情報といいねUIをリセット
+        state.currentPhrases.m = null;
+        state.currentPhrases.d = null;
+        state.currentPhrases.e = null;
+        updateLikeUI('m');
+        updateLikeUI('d');
+        updateLikeUI('e');
         return;
       }
 
@@ -365,34 +402,26 @@
       const c = setSlot("pop_e", "meta_e", state.pops.e, "夜");
 
       const candidates = [a, b, c].filter(Boolean);
-      const likeCountEl = document.getElementById("likeCount");
-      const likeBtn = document.getElementById("likeBtn");
-      const badgeEl = document.getElementById("specialBadge");
       if (!candidates.length) {
         metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
-        // いいねUIを初期化
-        likeCountEl.textContent = "0";
-        badgeEl.textContent = "";
-        likeBtn.disabled = true;
-        state.currentPhrase = null;
+        // 各時間帯のフレーズ情報といいねUIを初期化
+        state.currentPhrases.m = null;
+        state.currentPhrases.d = null;
+        state.currentPhrases.e = null;
+        updateLikeUI('m');
+        updateLikeUI('d');
+        updateLikeUI('e');
       } else {
         const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
         metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
-        // 現在のフレーズを保存
-        state.currentPhrase = maxOne.text;
-        // いいねボタンを有効化してUI更新
-        const currentLikes = getLikesFor(state.currentPhrase);
-        likeCountEl.textContent = String(currentLikes);
-        badgeEl.textContent = currentLikes >= 5 ? "⭐人気！" : "";
-        likeBtn.disabled = false;
-        // クリックイベントを更新
-        likeBtn.onclick = () => {
-          if (!state.currentPhrase) return;
-          incrementLike(state.currentPhrase);
-          const count = getLikesFor(state.currentPhrase);
-          likeCountEl.textContent = String(count);
-          badgeEl.textContent = count >= 5 ? "⭐人気！" : "";
-        };
+        // 現在のフレーズを保存: 各時間帯ごと
+        state.currentPhrases.m = a ? a.text : null;
+        state.currentPhrases.d = b ? b.text : null;
+        state.currentPhrases.e = c ? c.text : null;
+        // 各いいねUIを更新
+        updateLikeUI('m');
+        updateLikeUI('d');
+        updateLikeUI('e');
       }
 
       if (mode === "serious") {
