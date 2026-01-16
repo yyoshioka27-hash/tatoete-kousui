@@ -1,5 +1,5 @@
-// ★ 更新するたびに数字を上げる（tatoete-v4: いいね機能追加）
-const CACHE_NAME = "tatoete-v4";
+// ★ 更新するたびに数字を上げる（tatoete-v5: 各時間帯のいいね機能）
+const CACHE_NAME = "tatoete-v5";
 
 const ASSETS = [
   "./",
