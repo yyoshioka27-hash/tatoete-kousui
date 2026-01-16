@@ -1,6 +1,9 @@
 // たとえて降水確率：例えデータ定義ファイル
+//
 // このファイルでは、降水確率を人間向けに表現するための
-// さまざまな例え文や統計ネタを定義します。
+// さまざまな例え文や統計ネタを定義します。index.html の
+// スクリプトより前に読み込むことで、グローバル変数として
+// `FACTS`, `FACT_POOL`, `randomFact`, `metaphorDB` を提供します。
 
 // 統計ネタ（まじめ用）
 window.FACTS = {
@@ -16,7 +19,7 @@ window.FACT_POOL = [
   () => `世界で携帯を持つ人が約${window.FACTS.MOBILE_OWN_PCT}%という話に近い水準。『降る前提』で計画しましょう。`
 ];
 
-// 統計ネタからランダムに1つ選んで返すヘルパー関数
+// 統計ネタからランダムに1つ選んで返すヘルパー関数。
 window.randomFact = function() {
   const pool = window.FACT_POOL;
   const idx = Math.floor(Math.random() * pool.length);
