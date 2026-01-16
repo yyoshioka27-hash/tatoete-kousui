@@ -1,5 +1,5 @@
-// ★ 更新するたびに数字を上げる（tatoete-v5: 各時間帯のいいね機能）
-const CACHE_NAME = "tatoete-v5";
+// ★ 更新するたびに数字を上げる（tatoete-v6: 例え追加版）
+const CACHE_NAME = "tatoete-v6";
 
 const ASSETS = [
   "./",
@@ -10,7 +10,7 @@ const ASSETS = [
 
 // インストール時：必要最低限だけキャッシュ
 self.addEventListener("install", (event) => {
-  self.skipWaiting(); // すぐ有効化
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
@@ -21,20 +21,18 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       )
     )
   );
-  self.clients.claim(); // すぐ制御
+  self.clients.claim();
 });
 
-// fetch戦略
+// fetch 戦略
 self.addEventListener("fetch", (event) => {
   const req = event.request;
 
-  // HTMLは常に最新を取りに行く
+  // HTMLは常にネットワーク優先
   if (req.headers.get("accept")?.includes("text/html")) {
     event.respondWith(
       fetch(req)
@@ -48,7 +46,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // それ以外（manifest等）はキャッシュ優先
+  // それ以外はキャッシュ優先
   event.respondWith(
     caches.match(req).then((cached) => cached || fetch(req))
   );
