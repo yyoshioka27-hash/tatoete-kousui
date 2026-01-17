@@ -12,7 +12,7 @@
     .big { font-size: 40px; font-weight: 700; }
     .small { color: #666; font-size: 13px; }
     button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
-    input, select { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; width: 100%; box-sizing: border-box; }
+    input, select, textarea { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; width: 100%; box-sizing: border-box; }
     label { margin-right: 12px; }
     .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
     .muted { color:#888; font-size:12px; }
@@ -37,57 +37,17 @@
       line-height: 1.7;
     }
 
-    /* =========================
-       スマホ対応（画面幅 600px 以下）
-       ========================= */
     @media (max-width: 600px) {
-
       body { padding: 12px; }
-
-      h1 {
-        font-size: 22px;
-        margin: 0 0 12px;
-      }
-
-      .card {
-        padding: 12px;
-        margin: 10px 0;
-      }
-
-      /* 入力欄・ボタンを指で押しやすく */
-      input, select, button {
-        font-size: 16px;
-        padding: 10px 12px;
-      }
-
-      .row {
-        grid-template-columns: 1fr;
-      }
-
-      button#search {
-        width: 100%;
-      }
-
-      /* %（朝・昼・夜） */
+      h1 { font-size: 22px; margin: 0 0 12px; }
+      .card { padding: 12px; margin: 10px 0; }
+      input, select, textarea, button { font-size: 16px; padding: 10px 12px; }
+      .row { grid-template-columns: 1fr; }
+      button#search { width: 100%; }
       .slot .big { font-size: 28px; }
-
-      /* 朝・昼・夜の例え文 */
-      #meta_m, #meta_d, #meta_e {
-        font-size: 15px;
-        line-height: 1.55;
-      }
-
-      /* 人間向け翻訳（メイン） */
-      #metaphor {
-        font-size: 20px;
-        line-height: 1.6;
-      }
-
-      /* ピル（API / TZ 表示） */
-      .pill {
-        font-size: 11px;
-        padding: 5px 8px;
-      }
+      #meta_m, #meta_d, #meta_e { font-size: 15px; line-height: 1.55; }
+      #metaphor { font-size: 20px; line-height: 1.6; }
+      .pill { font-size: 11px; padding: 5px 8px; }
     }
   </style>
 </head>
@@ -108,14 +68,15 @@
     </div>
   </div>
 
+  <!-- UIは残す（将来また使うかも）※A版ではモードはロジックに使わない -->
   <div class="card">
-    <div class="small">例えモード</div>
+    <div class="small">例えモード（※A版は統合表示）</div>
     <div style="margin-top:8px;">
       <label><input type="radio" name="mode" value="serious" checked> 真面目</label>
       <label><input type="radio" name="mode" value="trivia"> 雑学</label>
       <label><input type="radio" name="mode" value="fun"> お笑い</label>
     </div>
-    <div class="muted" style="margin-top:8px;">※同じ確率でも、毎回ちがう例えが出ます</div>
+    <div class="muted" style="margin-top:8px;">※同じ確率でも、毎回ちがうネタが出ます（👍で出やすくなります）</div>
   </div>
 
   <div class="card">
@@ -126,7 +87,6 @@
       <div class="small">朝（6–11時）</div>
       <div class="big" id="pop_m">--%</div>
       <div class="small" id="meta_m"></div>
-      <!-- 朝用いいねボタン -->
       <div class="small"><button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button><span id="badge_m" style="margin-left:10px;font-size:20px;"></span></div>
     </div>
 
@@ -134,7 +94,6 @@
       <div class="small">昼（12–17時）</div>
       <div class="big" id="pop_d">--%</div>
       <div class="small" id="meta_d"></div>
-      <!-- 昼用いいねボタン -->
       <div class="small"><button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button><span id="badge_d" style="margin-left:10px;font-size:20px;"></span></div>
     </div>
 
@@ -142,7 +101,6 @@
       <div class="small">夜（18–23時）</div>
       <div class="big" id="pop_e">--%</div>
       <div class="small" id="meta_e"></div>
-      <!-- 夜用いいねボタン -->
       <div class="small"><button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button><span id="badge_e" style="margin-left:10px;font-size:20px;"></span></div>
     </div>
 
@@ -160,11 +118,9 @@
 
   <button id="refresh">同じ確率でも例えを変える</button>
 
-  <!-- いいねボタンは各時間帯の下に配置するため、
-       グローバルな評価カードは不要になりました。 -->
-
+  <!-- A版では “追加ネタ” はまだ止める（UIは残す） -->
   <div class="card" id="addSection">
-    <div class="small">ネタを追加</div>
+    <div class="small">ネタを追加（※次バージョンで対応）</div>
     <div style="margin-top:8px;">
       <textarea id="newPhrase" rows="3" placeholder="例：降ったら会社のせい"></textarea>
     </div>
@@ -179,11 +135,10 @@
     <div class="muted" id="addStatus" style="margin-top:8px;"></div>
   </div>
 
-  <!-- 外部の例えデータを読み込み -->
+  <!-- 外部のネタ定義（NETA + bucket10） -->
   <script src="metaphors.js"></script>
 
   <script>
-
     // =========================
     // 天気取得：Open-Meteo
     // =========================
@@ -195,139 +150,89 @@
       placeLabel: null,
       tz: null,
       source: "API: 未接続",
-      // 表示中の例え文を時間帯ごとに保持
       currentPhrases: { m: null, d: null, e: null }
     };
-    // 前回選んだ例え文を記憶しておき、連続同じメッセージが出ないようにする
-    const lastMetaphor = {};
-    // randomFact は metaphors.js で定義されています
 
-    /* いいね機能・ネタ追加機能用の定数とヘルパー関数 */
+    // =========================
+    // いいね（既存機能を維持）
+    // =========================
     const LIKES_KEY = "metaphorLikes";
-    const ADDED_KEY = "addedPhrases";
 
-    // いいねデータを読み込み
     function loadLikes() {
-      try {
-        return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}');
-      } catch (e) {
-        return {};
-      }
+      try { return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}'); }
+      catch (e) { return {}; }
     }
-    function saveLikes(obj) {
-      localStorage.setItem(LIKES_KEY, JSON.stringify(obj));
-    }
+    function saveLikes(obj) { localStorage.setItem(LIKES_KEY, JSON.stringify(obj)); }
+
     let likesData = loadLikes();
-    function getLikesFor(phrase) {
-      return likesData[phrase] || 0;
-    }
+
+    function getLikesFor(phrase) { return likesData[phrase] || 0; }
     function incrementLike(phrase) {
       likesData[phrase] = (likesData[phrase] || 0) + 1;
       saveLikes(likesData);
     }
 
-    // ユーザーが追加したネタを読み込み
-    function loadAddedPhrases() {
-      try {
-        return JSON.parse(localStorage.getItem(ADDED_KEY) || '{}');
-      } catch (e) {
-        return {};
-      }
-    }
-    function saveAddedPhrases(obj) {
-      localStorage.setItem(ADDED_KEY, JSON.stringify(obj));
-    }
-    let addedPhrases = loadAddedPhrases();
+    // =========================
+    // A版：ネタ選択（0/10/.../100のバケット × 各3ネタ）
+    // 👍が多いほど出やすい + 直前回避
+    // =========================
+    const lastSeedByBucket = {};
 
-    // 重み付けされたランダム選択：いいね数が多いほど選ばれやすくする
-    function pickWeightedRandom(arr) {
-      const weights = arr.map(item => {
-        if (typeof item === 'function') return 1;
-        const text = item;
-        return (likesData[text] || 0) + 1;
-      });
-      const total = weights.reduce((a,b) => a + b, 0);
+    function pickSeedByBucket(bucket) {
+      const pool = (window.NETA && window.NETA[bucket]) ? window.NETA[bucket] : [];
+      if (!pool.length) return "データなし";
+
+      const weights = pool.map(t => (likesData[t] || 0) + 1);
+      const total = weights.reduce((a, b) => a + b, 0);
+
       let r = Math.random() * total;
-      for (let i = 0; i < arr.length; i++) {
-        if (r < weights[i]) return arr[i];
+      let picked = pool[0];
+      for (let i = 0; i < pool.length; i++) {
+        if (r < weights[i]) { picked = pool[i]; break; }
         r -= weights[i];
       }
-      return arr[0];
-    }
 
-    // 保存されている追加ネタをmetaphorDBに挿入（中程度の確率帯 30-49 に追加）
-    function applyAddedPhrases() {
-      ['serious','trivia','fun'].forEach(mode => {
-        const arr = addedPhrases[mode] || [];
-        if (arr.length && metaphorDB[mode] && metaphorDB[mode][2]) {
-          arr.forEach(p => {
-            if (!metaphorDB[mode][2].texts.includes(p)) {
-              metaphorDB[mode][2].texts.push(p);
-            }
-          });
-        }
-      });
-    }
-
-    // 初期化時に追加ネタをデータベースに反映
-    applyAddedPhrases();
-
-    function pickRandom(arr) {
-      return arr[Math.floor(Math.random() * arr.length)];
-    }
-
-    function getMode() {
-      return document.querySelector('input[name="mode"]:checked').value;
-    }
-
-    function metaphorFor(pop, mode) {
-      const ranges = metaphorDB[mode] || [];
-      const r = ranges.find(x => pop >= x.min && pop <= x.max) || ranges[ranges.length - 1];
-      // 重み付けランダム選択
-      let picked = pickWeightedRandom(r.texts);
-      // 同じモードと範囲で連続して同じテキストが選ばれないようにする
-      if (r.texts && r.texts.length > 1) {
-        const key = `${mode}:${r.min}-${r.max}`;
+      const key = String(bucket);
+      if (pool.length > 1) {
         let attempts = 0;
-        while (picked === lastMetaphor[key] && attempts < 5) {
-          picked = pickRandom(r.texts);
+        while (picked === lastSeedByBucket[key] && attempts < 5) {
+          picked = pool[Math.floor(Math.random() * pool.length)];
           attempts++;
         }
-        lastMetaphor[key] = picked;
       }
-      return (typeof picked === "function") ? picked() : picked;
+      lastSeedByBucket[key] = picked;
+      return picked;
     }
 
-    /**
-     * 対象スロットのいいねUIを更新する関数。
-     * 対応するテキストがない場合はボタンを無効化し、
-     * 存在する場合は現在のいいね数とバッジを表示する。
-     * ボタンのクリックでいいね数を増加させ、UIを再描画する。
-     * @param {string} slot 'm'|'d'|'e'
-     */
+    // pop% → bucket10 → seed
+    function metaphorForPop(pop) {
+      const b = bucket10(pop);
+      return pickSeedByBucket(b);
+    }
+
+    // =========================
+    // いいねUI更新（既存を維持）
+    // =========================
     function updateLikeUI(slot) {
       const phrase = state.currentPhrases[slot];
       const countEl = document.getElementById(`likeCount_${slot}`);
       const badgeEl = document.getElementById(`badge_${slot}`);
       const btnEl = document.getElementById(`like_${slot}`);
+
       if (!phrase) {
-        // フレーズが無い場合は初期状態
         countEl.textContent = "0";
         badgeEl.textContent = "";
-        if (btnEl) {
-          btnEl.disabled = true;
-          btnEl.onclick = null;
-        }
+        if (btnEl) { btnEl.disabled = true; btnEl.onclick = null; }
         return;
       }
-      // いいね数を取得して表示
+
       const count = getLikesFor(phrase);
       countEl.textContent = String(count);
       badgeEl.textContent = count >= 5 ? "⭐人気！" : "";
+
       if (btnEl) {
         btnEl.disabled = false;
         btnEl.onclick = () => {
-          // 現在のフレーズにいいねを付与
           incrementLike(phrase);
           updateLikeUI(slot);
         };
@@ -340,12 +245,11 @@
       el.textContent = text;
     }
 
-    // ★ 日本語地名を少しでもヒットしやすくする前処理
     function normalizePlaceName(input) {
       return input
         .replace(/[ 　]+/g, " ")
-        .replace(/(都|道|府|県|市|区|町|村)$/g, "")   // 末尾の行政単位を落とす
-        .replace(/(都|道|府|県|市|区|町|村)/g, "")     // 途中も軽く落とす（仙台市青葉区 → 仙台青葉）
+        .replace(/(都|道|府|県|市|区|町|村)$/g, "")
+        .replace(/(都|道|府|県|市|区|町|村)/g, "")
         .trim();
     }
 
@@ -360,77 +264,68 @@
       sourceTag.textContent = state.source;
       tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
 
-      const mode = getMode();
-
-      const setSlot = (idPop, idMeta, value, label) => {
+      const setSlot = (idPop, idMeta, value, label, slotKey) => {
         const popEl = document.getElementById(idPop);
         const metaEl = document.getElementById(idMeta);
 
         if (value == null) {
           popEl.textContent = "--%";
           metaEl.textContent = "データなし";
+          state.currentPhrases[slotKey] = null;
+          updateLikeUI(slotKey);
           return null;
         }
 
         popEl.textContent = `${value}%`;
-        const text = metaphorFor(value, mode);
+        const text = metaphorForPop(value); // ★ 新仕様
         metaEl.textContent = `${label}：${text}`;
+
+        state.currentPhrases[slotKey] = text;
+        updateLikeUI(slotKey);
+
         return { value, text, label };
       };
 
       if (!state.pops) {
         hintEl.textContent = "地点を選ぶと自動取得します";
-        setSlot("pop_m", "meta_m", null, "朝");
-        setSlot("pop_d", "meta_d", null, "昼");
-        setSlot("pop_e", "meta_e", null, "夜");
-        metaAll.textContent = "地点を選んでください";
+        renderEmpty();
         footEl.textContent = "";
-        // 各時間帯のフレーズ情報といいねUIをリセット
-        state.currentPhrases.m = null;
-        state.currentPhrases.d = null;
-        state.currentPhrases.e = null;
-        updateLikeUI('m');
-        updateLikeUI('d');
-        updateLikeUI('e');
         return;
       }
 
       hintEl.textContent = state.placeLabel ? `地点：${state.placeLabel}` : "地点：--";
 
-      const a = setSlot("pop_m", "meta_m", state.pops.m, "朝");
-      const b = setSlot("pop_d", "meta_d", state.pops.d, "昼");
-      const c = setSlot("pop_e", "meta_e", state.pops.e, "夜");
+      const a = setSlot("pop_m", "meta_m", state.pops.m, "朝", "m");
+      const b = setSlot("pop_d", "meta_d", state.pops.d, "昼", "d");
+      const c = setSlot("pop_e", "meta_e", state.pops.e, "夜", "e");
 
       const candidates = [a, b, c].filter(Boolean);
       if (!candidates.length) {
         metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
-        // 各時間帯のフレーズ情報といいねUIを初期化
-        state.currentPhrases.m = null;
-        state.currentPhrases.d = null;
-        state.currentPhrases.e = null;
-        updateLikeUI('m');
-        updateLikeUI('d');
-        updateLikeUI('e');
       } else {
         const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
         metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
-        // 現在のフレーズを保存: 各時間帯ごと
-        state.currentPhrases.m = a ? a.text : null;
-        state.currentPhrases.d = b ? b.text : null;
-        state.currentPhrases.e = c ? c.text : null;
-        // 各いいねUIを更新
-        updateLikeUI('m');
-        updateLikeUI('d');
-        updateLikeUI('e');
       }
 
-      if (mode === "serious") {
-        footEl.textContent = "※真面目モード：統計ネタ等を混ぜた“ためになる例え”をランダム表示";
-      } else if (mode === "trivia" || mode === "normal") {
-        footEl.textContent = "※雑学モード：日常会話の温度感でランダム表示";
-      } else {
-        footEl.textContent = "※お笑いモード：SNS向けに遊んだ例えをランダム表示";
-      }
+      footEl.textContent = "※降水確率を0/10/…/100%に丸め、候補3つからランダム表示（👍が多いほど出やすい）";
+    }
+
+    function renderEmpty() {
+      const metaAll = document.getElementById("metaphor");
+      document.getElementById("pop_m").textContent = "--%";
+      document.getElementById("meta_m").textContent = "データなし";
+      document.getElementById("pop_d").textContent = "--%";
+      document.getElementById("meta_d").textContent = "データなし";
+      document.getElementById("pop_e").textContent = "--%";
+      document.getElementById("meta_e").textContent = "データなし";
+      metaAll.textContent = "地点を選んでください";
+
+      state.currentPhrases.m = null;
+      state.currentPhrases.d = null;
+      state.currentPhrases.e = null;
+      updateLikeUI('m');
+      updateLikeUI('d');
+      updateLikeUI('e');
     }
 
     async function geocode(name) {
@@ -504,11 +399,9 @@
       setStatus("検索中…", "muted");
 
       try {
-        // まず正規化した文字列で検索
         let g = await geocode(q);
         let results = g.results || [];
 
-        // もしダメなら、生入力でも一度試す（保険）
         if (!results.length && raw !== q) {
           g = await geocode(raw);
           results = g.results || [];
@@ -566,7 +459,6 @@
           }
         };
 
-        // 自動で1件目を選択して即取得
         sel.selectedIndex = 0;
         sel.onchange();
 
@@ -575,40 +467,18 @@
       }
     };
 
-    // モード変更で例え更新（同じ確率でもランダムが変わる）
+    // モード変更はA版では render を呼ぶだけ（表示を更新したいので残す）
     document.querySelectorAll('input[name="mode"]').forEach(r =>
       r.addEventListener("change", render)
     );
 
-    // 「同じ確率でも例えを変える」ボタン（確率はそのまま、文章だけランダム更新）
+    // 「同じ確率でも例えを変える」ボタン
     document.getElementById("refresh").onclick = () => render();
 
-    // 追加ネタボタン
+    // ネタ追加ボタン（A版では停止）
     document.getElementById("addPhraseBtn").onclick = () => {
-      const textarea = document.getElementById("newPhrase");
-      const modeSel  = document.getElementById("newPhraseMode");
       const statusEl = document.getElementById("addStatus");
-      const text = textarea.value.trim();
-      const mode = modeSel.value;
-      if (!text) {
-        statusEl.textContent = "入力が空です";
-        return;
-      }
-      // 中程度の確率帯 (index 2) に追加
-      if (metaphorDB[mode] && metaphorDB[mode][2]) {
-        if (!metaphorDB[mode][2].texts.includes(text)) {
-          metaphorDB[mode][2].texts.push(text);
-        }
-        addedPhrases[mode] = addedPhrases[mode] || [];
-        if (!addedPhrases[mode].includes(text)) {
-          addedPhrases[mode].push(text);
-          saveAddedPhrases(addedPhrases);
-        }
-        statusEl.textContent = "追加しました！";
-        textarea.value = "";
-      } else {
-        statusEl.textContent = "追加できませんでした";
-      }
+      statusEl.textContent = "この機能は次バージョンで対応します（いまはネタ固定で動作確認中）";
     };
 
     // Service Worker登録（PWA）
