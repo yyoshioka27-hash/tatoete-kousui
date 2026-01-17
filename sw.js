@@ -1,5 +1,5 @@
 // ★ 更新するたびに数字を上げる（tatoete-v6: 例え追加版）
-const CACHE_NAME = "tatoete-v6";
+const CACHE_NAME = "tatoete-v7";
 
 const ASSETS = [
   "./",
@@ -51,3 +51,4 @@ self.addEventListener("fetch", (event) => {
     caches.match(req).then((cached) => cached || fetch(req))
   );
 });
+
