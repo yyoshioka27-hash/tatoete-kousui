@@ -99,14 +99,12 @@ window.NETA_TRIVIA = {
   let _lastSeed = null;
 
   window.pickNeta = function (bucket) {
-    const pool = window.NETA[bucket] ?? [];
-    if (pool.length === 0) return "";
-    let candidates = pool.filter((t) => t !== _lastSeed);
-    if (candidates.length === 0) candidates = pool;
-    const seed = candidates[Math.floor(Math.random() * candidates.length)];
-    _lastSeed = seed;
-    return seed;
-  };
+  const mode = getSelectedMode && getSelectedMode(); // trivia / fun
+  const pool =
+    mode === "trivia"
+      ? (window.NETA_TRIVIA?.[bucket] ?? [])
+      : (window.NETA?.[bucket] ?? []);
+
 
   // =========================
   // 互換：旧 metaphorDB を参照している場合のための最低限
