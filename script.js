@@ -224,4 +224,127 @@ async function fetchPopsBySlots(lat, lon) {
     if (!t || t.slice(0, 10) !== today) continue;
 
     const hour = Number(t.slice(11, 13));
-    if (hour >=
+    if (hour >= 6 && hour <= 11) bucket.m.push(p);
+    else if (hour >= 12 && hour <= 17) bucket.d.push(p);
+    else if (hour >= 18 && hour <= 23) bucket.e.push(p);
+  }
+
+  const maxOrNull = (arr) => arr.length ? Math.round(Math.max(...arr)) : null;
+
+  return {
+    pops: {
+      m: maxOrNull(bucket.m),
+      d: maxOrNull(bucket.d),
+      e: maxOrNull(bucket.e),
+    },
+    tz
+  };
+}
+
+// UI: 検索→候補表示
+document.getElementById("search").onclick = async () => {
+  const raw = document.getElementById("place").value.trim();
+  const q = normalizePlaceName(raw);
+
+  const sel = document.getElementById("candidates");
+  sel.innerHTML = "";
+  sel.disabled = true;
+
+  if (!q) {
+    setStatus("地点名を入力してください", "ng");
+    return;
+  }
+
+  setStatus("検索中…", "muted");
+
+  try {
+    let g = await geocode(q);
+    let results = g.results || [];
+
+    if (!results.length && raw !== q) {
+      g = await geocode(raw);
+      results = g.results || [];
+    }
+
+    if (!results.length) {
+      setStatus("候補が見つかりませんでした。別の書き方で試してください。（例：Sendai）", "ng");
+      return;
+    }
+
+    results.forEach((r, idx) => {
+      const labelParts = [r.name, r.admin1, r.country].filter(Boolean);
+      const label = labelParts.join(" / ");
+      const opt = document.createElement("option");
+      opt.value = String(idx);
+      opt.textContent = label;
+      opt.dataset.lat = r.latitude;
+      opt.dataset.lon = r.longitude;
+      sel.appendChild(opt);
+    });
+
+    sel.disabled = false;
+    setStatus("候補を選ぶと天気を取得します", "ok");
+
+    sel.onchange = async () => {
+      const opt = sel.options[sel.selectedIndex];
+      const lat = Number(opt.dataset.lat);
+      const lon = Number(opt.dataset.lon);
+
+      state.placeLabel = opt.textContent;
+      state.source = "API: Open-Meteo";
+      render();
+      setStatus("天気取得中…", "muted");
+
+      try {
+        const out = await fetchPopsBySlots(lat, lon);
+        state.pops = out.pops;
+        state.tz = out.tz;
+
+        const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
+        if (!any) {
+          setStatus("降水確率が取得できませんでした（別地点で試してください）", "ng");
+          state.source = "API: 取得失敗";
+          state.pops = null;
+        } else {
+          setStatus("取得しました", "ok");
+        }
+
+        render();
+      } catch (e) {
+        setStatus(e.message || "天気取得エラー", "ng");
+        state.source = "API: エラー";
+        state.pops = null;
+        render();
+      }
+    };
+
+    sel.selectedIndex = 0;
+    sel.onchange();
+
+  } catch (e) {
+    setStatus(e.message || "検索エラー", "ng");
+  }
+};
+
+// モード変更はA版では render を呼ぶだけ（表示を更新したいので残す）
+document.querySelectorAll('input[name="mode"]').forEach(r =>
+  r.addEventListener("change", render)
+);
+
+// 「同じ確率でも例えを変える」ボタン
+document.getElementById("refresh").onclick = () => render();
+
+// ネタ追加ボタン（A版では停止）
+document.getElementById("addPhraseBtn").onclick = () => {
+  const statusEl = document.getElementById("addStatus");
+  statusEl.textContent = "この機能は次バージョンで対応します（いまはネタ固定で動作確認中）";
+};
+
+// Service Worker登録（PWA）
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js", { scope: "./" });
+}
+
+render();
+
+// END
