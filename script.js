@@ -24,6 +24,10 @@ function loadLikes() {
 function saveLikes(obj) { localStorage.setItem(LIKES_KEY, JSON.stringify(obj)); }
 
 let likesData = loadLikes();
+function getSelectedMode() {
+  const el = document.querySelector('input[name="mode"]:checked');
+  return el ? el.value : "trivia"; // デフォルトは雑学
+}
 
 function getLikesFor(phrase) { return likesData[phrase] || 0; }
 function incrementLike(phrase) {
