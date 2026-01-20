@@ -42,7 +42,10 @@ function incrementLike(phrase) {
 const lastSeedByBucket = {};
 
 function pickSeedByBucket(bucket) {
-    const pool = (getSelectedMode() === "trivia" ? (window.NETA_TRIVIA?.[bucket] ?? []) : ((window.NETA?.[bucket]) ?? []));
+    bucket = Number(bucket); // ★追加：必ず数値にする
+  const pool = (getSelectedMode() === "trivia"
+    ? (window.NETA_TRIVIA?.[bucket] ?? [])
+    : (window.NETA?.[bucket] ?? []));
   if (!pool.length) return "データなし";
 
   const weights = pool.map(t => (likesData[t] || 0) + 1);
