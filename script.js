@@ -148,9 +148,12 @@ function render() {
       return null;
     }
 
-    popEl.textContent = `${value}%`;
-    const text = metaphorForPop(value); // ★ 新仕様
-    metaEl.textContent = `${label}：${text}`;
+const rounded = bucket10(value);   // ★ 0,10,20,...に丸める
+popEl.textContent = `${rounded}%`;
+
+const text = metaphorForPop(rounded);
+metaEl.textContent = `${label}：${text}`;
+
 
     state.currentPhrases[slotKey] = text;
     updateLikeUI(slotKey);
