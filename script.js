@@ -348,9 +348,9 @@ document.getElementById("addPhraseBtn").onclick = () => {
 };
 
 // Service Worker登録（PWA）
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js", { scope: "./" });
-}
+//if ("serviceWorker" in navigator) {
+//  navigator.serviceWorker.register("./sw.js", { scope: "./" });
+//}
 
 render();
 
