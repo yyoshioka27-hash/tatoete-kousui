@@ -1,6 +1,12 @@
 // =========================
 // 天気取得：Open-Meteo
 // =========================
+// ★保険：metaphors.js が読めてなくても落ちないようにする
+window.bucket10 = window.bucket10 || function (p) {
+  p = Math.max(0, Math.min(100, Number(p)));
+  const b = Math.round(p / 10) * 10;
+  return Math.max(0, Math.min(100, b));
+};
 const GEO = "https://geocoding-api.open-meteo.com/v1/search";
 const FC  = "https://api.open-meteo.com/v1/forecast";
 
