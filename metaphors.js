@@ -3,6 +3,12 @@
 // 仕様：0,10,20,...,100% の 11段階
 // 各段階 3ネタ（合計33）
 // モード分けはしない（雑学/お笑いの境界は作らない）
+// 保険：metaphors.js が読み込まれていれば bucket10 を必ず定義する
+window.bucket10 = window.bucket10 || function (p) {
+  p = Math.max(0, Math.min(100, Number(p)));
+  const b = Math.round(p / 10) * 10;
+  return Math.max(0, Math.min(100, b));
+};
 
 (function () {
 // =========================
