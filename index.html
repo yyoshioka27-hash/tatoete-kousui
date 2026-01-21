@@ -51,6 +51,7 @@
     }
   </style>
 </head>
+
 <body>
   <h1>たとえて降水確率</h1>
 
@@ -68,7 +69,6 @@
     </div>
   </div>
 
-  <!-- UIは残す（将来また使うかも）※A版ではモードはロジックに使わない -->
   <div class="card">
     <div class="small">例えモード（※A版は統合表示）</div>
     <div style="margin-top:8px;">
@@ -86,21 +86,30 @@
       <div class="small">朝（6–11時）</div>
       <div class="big" id="pop_m">--%</div>
       <div class="small" id="meta_m"></div>
-      <div class="small"><button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button><span id="badge_m" style="margin-left:10px;font-size:20px;"></span></div>
+      <div class="small">
+        <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
+        <span id="badge_m" style="margin-left:10px;font-size:20px;"></span>
+      </div>
     </div>
 
     <div class="slot">
       <div class="small">昼（12–17時）</div>
       <div class="big" id="pop_d">--%</div>
       <div class="small" id="meta_d"></div>
-      <div class="small"><button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button><span id="badge_d" style="margin-left:10px;font-size:20px;"></span></div>
+      <div class="small">
+        <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
+        <span id="badge_d" style="margin-left:10px;font-size:20px;"></span>
+      </div>
     </div>
 
     <div class="slot">
       <div class="small">夜（18–23時）</div>
       <div class="big" id="pop_e">--%</div>
       <div class="small" id="meta_e"></div>
-      <div class="small"><button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button><span id="badge_e" style="margin-left:10px;font-size:20px;"></span></div>
+      <div class="small">
+        <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
+        <span id="badge_e" style="margin-left:10px;font-size:20px;"></span>
+      </div>
     </div>
 
     <div style="margin-top:10px;">
@@ -117,87 +126,78 @@
 
   <button id="refresh">同じ確率でも例えを変える</button>
 
-  <!-- A版では “追加ネタ” はまだ止める（UIは残す） -->
   <div class="card" id="addSection">
+
     <div class="card" id="manageSection">
-  <div class="small">追加ネタ管理（この端末）</div>
+      <div class="small"><b>追加ネタ管理（この端末）</b></div>
 
-  <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-    <label class="small">モード：</label>
-    <select id="manageMode">
-      <option value="trivia">雑学</option>
-      <option value="fun">お笑い</option>
-    </select>
+      <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <label class="small">モード：</label>
+        <select id="manageMode">
+          <option value="trivia">雑学</option>
+          <option value="fun">お笑い</option>
+        </select>
 
-    <label class="small">確率：</label>
-    <select id="manageBucket">
-      <option value="0">0%</option>
-      <option value="10">10%</option>
-      <option value="20">20%</option>
-      <option value="30">30%</option>
-      <option value="40">40%</option>
-      <option value="50">50%</option>
-      <option value="60">60%</option>
-      <option value="70">70%</option>
-      <option value="80">80%</option>
-      <option value="90">90%</option>
-      <option value="100">100%</option>
-    </select>
+        <label class="small">確率：</label>
+        <select id="manageBucket">
+          <option value="0">0%</option>
+          <option value="10">10%</option>
+          <option value="20">20%</option>
+          <option value="30">30%</option>
+          <option value="40">40%</option>
+          <option value="50">50%</option>
+          <option value="60">60%</option>
+          <option value="70">70%</option>
+          <option value="80">80%</option>
+          <option value="90">90%</option>
+          <option value="100">100%</option>
+        </select>
 
-    <button id="manageRefresh">一覧更新</button>
-    <button id="manageClearBucket">この%を全削除</button>
-    <button id="manageClearAll">全削除</button>
+        <button id="manageRefresh">一覧更新</button>
+        <button id="manageClearBucket">この%を全削除</button>
+        <button id="manageClearAll">全削除</button>
+      </div>
+
+      <div class="muted" id="manageStatus" style="margin-top:8px;"></div>
+      <div id="manageList" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="small"><b>ネタ追加（この端末に保存）</b></div>
+
+    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <label class="small">モード：</label>
+      <select id="newPhraseMode">
+        <option value="trivia">雑学</option>
+        <option value="fun">お笑い</option>
+      </select>
+
+      <label class="small">確率：</label>
+      <select id="newPhraseBucket">
+        <option value="0">0%</option>
+        <option value="10">10%</option>
+        <option value="20">20%</option>
+        <option value="30">30%</option>
+        <option value="40">40%</option>
+        <option value="50">50%</option>
+        <option value="60">60%</option>
+        <option value="70">70%</option>
+        <option value="80">80%</option>
+        <option value="90">90%</option>
+        <option value="100">100%</option>
+      </select>
+
+      <button id="addPhraseBtn" style="margin-left:10px;">追加</button>
+    </div>
+
+    <div style="margin-top:8px;">
+      <textarea id="newPhrase" rows="3" placeholder="例：日本の識字率は99％（約100％）"></textarea>
+    </div>
+
+    <div class="muted" id="addStatus" style="margin-top:8px;"></div>
   </div>
-
-  <div class="muted" id="manageStatus" style="margin-top:8px;"></div>
-
-  <div id="manageList" style="margin-top:10px;"></div>
-</div>
-
-  <div class="small">ネタ追加（この端末に保存）</div>
-
-  <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-    <label class="small">モード：</label>
-    <select id="newPhraseMode">
-      <option value="trivia">雑学</option>
-      <option value="fun">お笑い</option>
-    </select>
-
-    <label class="small">確率：</label>
-    <select id="newPhraseBucket">
-      <option value="0">0%</option>
-      <option value="10">10%</option>
-      <option value="20">20%</option>
-      <option value="30">30%</option>
-      <option value="40">40%</option>
-      <option value="50">50%</option>
-      <option value="60">60%</option>
-      <option value="70">70%</option>
-      <option value="80">80%</option>
-      <option value="90">90%</option>
-      <option value="100">100%</option>
-    </select>
-
-    <button id="addPhraseBtn" style="margin-left:10px;">追加</button>
-  </div>
-
-  <div style="margin-top:8px;">
-    <textarea id="newPhrase" rows="3" placeholder="例：日本の識字率は99％（約100％）"></textarea>
-  </div>
-
-  <div class="muted" id="addStatus" style="margin-top:8px;"></div>
-</div>
-
 
   <!-- 外部のネタ定義（NETA + bucket10） -->
-  <script src="metaphors.js?v=3"></script>
-  <!-- ★ ここが追加：直書きJSを外部化 -->
-  <script defer src="script.js?v=3"></script>
+  <script src="metaphors.js?v=4"></script>
+  <script defer src="script.js?v=4"></script>
 </body>
 </html>
-
-
-
-
-
-
