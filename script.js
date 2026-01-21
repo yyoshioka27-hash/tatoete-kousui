@@ -418,17 +418,31 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 // 「同じ確率でも例えを変える」ボタン
 document.getElementById("refresh").onclick = () => render();
 
-// ネタ追加ボタン（A版では停止）
+// ネタ追加ボタン（実装版）
 document.getElementById("addPhraseBtn").onclick = () => {
   const statusEl = document.getElementById("addStatus");
-  statusEl.textContent = "この機能は次バージョンで対応します（いまはネタ固定で動作確認中）";
+  const modeEl = document.getElementById("newPhraseMode");
+  const bucketEl = document.getElementById("newPhraseBucket");
+  const textEl = document.getElementById("newPhrase");
+
+  const mode = modeEl ? modeEl.value : "trivia";
+  const bucket = normalizeBucketInput(bucketEl ? bucketEl.value : "");
+  const text = (textEl ? textEl.value : "").trim();
+
+  if (!bucket && bucket !== 0) {
+    statusEl.textContent = "確率（0/10/…/100）を選んでください";
+    return;
+  }
+  if (!text) {
+    statusEl.textContent = "ネタ本文を入力してください";
+    return;
+  }
+
+  addUserNeta(mode, bucket, text);
+  textEl.value = "";
+  statusEl.textContent = `追加しました：${mode === "trivia" ? "雑学" : "お笑い"} / ${bucket}%`;
+  render();
 };
 
-// Service Worker登録（PWA）
-//if ("serviceWorker" in navigator) {
-//  navigator.serviceWorker.register("./sw.js", { scope: "./" });
-//}
-
-render();
 
 // END
