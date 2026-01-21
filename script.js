@@ -52,6 +52,31 @@ function normalizeBucketInput(v) {
 }
 
 function addUserNeta(mode, bucket, text) {
+  function deleteUserNeta(mode, bucket, text) {
+  const key = (mode === "trivia") ? "trivia" : "fun";
+  const arr = userNeta[key]?.[bucket];
+  if (!arr || !arr.length) return;
+
+  userNeta[key][bucket] = arr.filter(t => t !== text);
+  if (userNeta[key][bucket].length === 0) {
+    delete userNeta[key][bucket];
+  }
+  saveUserNeta(userNeta);
+}
+
+function clearUserNetaBucket(mode, bucket) {
+  const key = (mode === "trivia") ? "trivia" : "fun";
+  if (userNeta[key]?.[bucket]) {
+    delete userNeta[key][bucket];
+    saveUserNeta(userNeta);
+  }
+}
+
+function clearUserNetaAll() {
+  userNeta = { trivia: {}, fun: {} };
+  saveUserNeta(userNeta);
+}
+
   const key = (mode === "trivia") ? "trivia" : "fun";
   if (!userNeta[key][bucket]) userNeta[key][bucket] = [];
   // 同一文の重複は入れない（好みで外してOK）
@@ -420,6 +445,31 @@ document.getElementById("refresh").onclick = () => render();
 
 // ネタ追加ボタン（実装版）
 document.getElementById("addPhraseBtn").onclick = () => {
+  function deleteUserNeta(mode, bucket, text) {
+  const key = (mode === "trivia") ? "trivia" : "fun";
+  const arr = userNeta[key]?.[bucket];
+  if (!arr || !arr.length) return;
+
+  userNeta[key][bucket] = arr.filter(t => t !== text);
+  if (userNeta[key][bucket].length === 0) {
+    delete userNeta[key][bucket];
+  }
+  saveUserNeta(userNeta);
+}
+
+function clearUserNetaBucket(mode, bucket) {
+  const key = (mode === "trivia") ? "trivia" : "fun";
+  if (userNeta[key]?.[bucket]) {
+    delete userNeta[key][bucket];
+    saveUserNeta(userNeta);
+  }
+}
+
+function clearUserNetaAll() {
+  userNeta = { trivia: {}, fun: {} };
+  saveUserNeta(userNeta);
+}
+
   const statusEl = document.getElementById("addStatus");
   const modeEl = document.getElementById("newPhraseMode");
   const bucketEl = document.getElementById("newPhraseBucket");
