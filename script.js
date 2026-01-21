@@ -124,6 +124,14 @@ function normalizePlaceName(input) {
     .replace(/(都|道|府|県|市|区|町|村)/g, "")
     .trim();
 }
+// 降水確率(0-100)から天気アイコンを決める（簡易版）
+function iconForPop(pop) {
+  if (pop == null) return "";
+  const p = Number(pop);
+  if (p <= 20) return "☀️";
+  if (p <= 60) return "☁️";
+  return "☔";
+}
 
 function render() {
   const hintEl = document.getElementById("popHint");
@@ -149,7 +157,9 @@ function render() {
     }
 
 const rounded = bucket10(value);   // ★ 0,10,20,...に丸める
-popEl.textContent = `${rounded}%`;
+const icon = iconForPop(rounded);
+popEl.textContent = `${icon} ${rounded}%`;
+
 
 const text = metaphorForPop(rounded);
 metaEl.textContent = `${label}：${text}`;
