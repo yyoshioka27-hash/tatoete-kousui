@@ -17,6 +17,64 @@ let state = {
   source: "API: 未接続",
   currentPhrases: { m: null, d: null, e: null }
 };
+// =========================
+// ユーザー追加ネタ（localStorage）
+// - 雑学: NETA_TRIVIA に追加
+// - お笑い: NETA に追加
+// =========================
+const USER_NETA_KEY = "userNetaV1";
+
+function loadUserNeta() {
+  try {
+    const obj = JSON.parse(localStorage.getItem(USER_NETA_KEY) || "{}");
+    // 期待形：{ trivia:{0:[...],10:[...]...}, fun:{...} }
+    return {
+      trivia: obj.trivia || {},
+      fun: obj.fun || {}
+    };
+  } catch (e) {
+    return { trivia: {}, fun: {} };
+  }
+}
+
+function saveUserNeta(obj) {
+  localStorage.setItem(USER_NETA_KEY, JSON.stringify(obj));
+}
+
+let userNeta = loadUserNeta();
+
+function normalizeBucketInput(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const b = window.bucket10 ? window.bucket10(n) : (Math.round(n / 10) * 10);
+  if (![0,10,20,30,40,50,60,70,80,90,100].includes(b)) return null;
+  return b;
+}
+
+function addUserNeta(mode, bucket, text) {
+  const key = (mode === "trivia") ? "trivia" : "fun";
+  if (!userNeta[key][bucket]) userNeta[key][bucket] = [];
+  // 同一文の重複は入れない（好みで外してOK）
+  if (!userNeta[key][bucket].includes(text)) {
+    userNeta[key][bucket].push(text);
+    saveUserNeta(userNeta);
+  }
+}
+
+// 取得：組み込み + 追加 を合体して返す
+function getPool(mode, bucket) {
+  const b = Number(bucket);
+  const base = (mode === "trivia")
+    ? (window.NETA_TRIVIA?.[b] ?? [])
+    : (window.NETA?.[b] ?? []);
+
+  const extra = (mode === "trivia")
+    ? (userNeta.trivia?.[b] ?? [])
+    : (userNeta.fun?.[b] ?? []);
+
+  // base→extra の順で合体（表示/抽選は同列）
+  return [...base, ...extra];
+}
 
 // =========================
 // いいね（既存機能を維持）
@@ -49,9 +107,9 @@ const lastSeedByBucket = {};
 
 function pickSeedByBucket(bucket) {
     bucket = Number(bucket); // ★追加：必ず数値にする
-  const pool = (getSelectedMode() === "trivia"
-    ? (window.NETA_TRIVIA?.[bucket] ?? [])
-    : (window.NETA?.[bucket] ?? []));
+  const mode = getSelectedMode();
+const pool = getPool(mode, bucket);
+
   if (!pool.length) return "データなし";
 
   const weights = pool.map(t => (likesData[t] || 0) + 1);
