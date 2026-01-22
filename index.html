@@ -205,40 +205,16 @@
 
 <div class="card" id="addSection">
 
+  <!-- 追加ネタ管理（この端末） -->
   <div class="card" id="manageSection">
     <div class="small"><b>追加ネタ管理（この端末）</b></div>
 
-    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <label class="small">モード：</label>
-      <select id="manageMode">
-        <option value="trivia">雑学</option>
-        <option value="fun">お笑い</option>
-      </select>
-
-      <label class="small">確率：</label>
-      <select id="manageBucket">
-        <option value="0">0%</option>
-        <option value="10">10%</option>
-        <option value="20">20%</option>
-        <option value="30">30%</option>
-        <option value="40">40%</option>
-        <option value="50">50%</option>
-        <option value="60">60%</option>
-        <option value="70">70%</option>
-        <option value="80">80%</option>
-        <option value="90">90%</option>
-        <option value="100">100%</option>
-      </select>
-
-      <button id="manageRefresh">一覧更新</button>
-      <button id="manageClearBucket">この%を全削除</button>
-      <button id="manageClearAll">全削除</button>
-    </div>
-
+    <!-- ★希望どおり：上側の「モード／確率」プルダウンは削除（ここは一覧だけ） -->
     <div class="muted" id="manageStatus" style="margin-top:8px;"></div>
     <div id="manageList" style="margin-top:10px;"></div>
   </div>
 
+  <!-- ネタ追加（この端末に保存） -->
   <div class="small"><b>ネタ追加（この端末に保存）</b></div>
 
   <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -264,6 +240,11 @@
     </select>
 
     <button id="addPhraseBtn" style="margin-left:10px;">追加</button>
+
+    <!-- ★希望どおり：管理ボタン3つを「ネタ追加」の横へ移動 -->
+    <button id="manageRefresh">一覧更新</button>
+    <button id="manageClearBucket">この%を全削除</button>
+    <button id="manageClearAll">全削除</button>
   </div>
 
   <div style="margin-top:8px;">
