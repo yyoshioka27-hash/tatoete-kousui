@@ -633,3 +633,36 @@ document.getElementById("addPhraseBtn").onclick = () => {
 // 初期化
 setupToggleExtraPanel();
 render();
+// ==============================
+// Theme (Gradient) by precipitation
+// ==============================
+function themeFromPercent(p){
+  if (p <= 10)  return { bg1:"#fff7d6", bg2:"#ffffff", accent:"#f59e0b" };
+  if (p <= 30)  return { bg1:"#e8f6ff", bg2:"#ffffff", accent:"#38bdf8" };
+  if (p <= 50)  return { bg1:"#eaf0ff", bg2:"#f8fafc", accent:"#60a5fa" };
+  if (p <= 70)  return { bg1:"#dbeafe", bg2:"#eff6ff", accent:"#2563eb" };
+  if (p <= 90)  return { bg1:"#c7d2fe", bg2:"#e0e7ff", accent:"#1d4ed8" };
+  return          { bg1:"#e9d5ff", bg2:"#0b1220", accent:"#a855f7" }; // 100%
+}
+
+function applyTheme(p){
+  const t = themeFromPercent(Number(p));
+  const root = document.documentElement;
+
+  root.style.setProperty("--bg1", t.bg1);
+  root.style.setProperty("--bg2", t.bg2);
+  root.style.setProperty("--accent", t.accent);
+
+  // 100%のときだけ暗め背景 → 文字を白寄りに
+  if (Number(p) >= 100) {
+    root.style.setProperty("--text", "#f9fafb");
+    root.style.setProperty("--sub", "rgba(249,250,251,0.75)");
+    root.style.setProperty("--card", "rgba(17,24,39,0.55)");
+    root.style.setProperty("--shadow", "0 14px 30px rgba(0,0,0,0.45)");
+  } else {
+    root.style.setProperty("--text", "#0f172a");
+    root.style.setProperty("--sub", "#475569");
+    root.style.setProperty("--card", "rgba(255,255,255,0.86)");
+    root.style.setProperty("--shadow", "0 10px 26px rgba(0,0,0,0.10)");
+  }
+}
