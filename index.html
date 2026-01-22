@@ -8,117 +8,39 @@
   <title>たとえて降水確率</title>
 
   <style>
-    body {
-      font-family: -apple-system, system-ui;
-      margin: 0;
-      padding: 20px;
-    }
-    .card {
-      border: 1px solid #ddd;
-      border-radius: 16px;
-      padding: 16px;
-      margin: 12px 0;
-    }
-    .big {
-      font-size: 40px;
-      font-weight: 700;
-    }
-    .small {
-      color: #666;
-      font-size: 13px;
-    }
-    button {
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid #ddd;
-      background: #fff;
-      cursor: pointer;
-    }
-    input, select, textarea {
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid #ddd;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    label {
-      margin-right: 12px;
-    }
-    .row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-    }
-    .muted {
-      color:#888;
-      font-size:12px;
-    }
-    .ok {
-      color:#0a7;
-      font-size:12px;
-    }
-    .ng {
-      color:#c33;
-      font-size:12px;
-    }
-    .pill {
-      display:inline-block;
-      padding: 6px 10px;
-      border: 1px solid #ddd;
-      border-radius: 999px;
-      font-size:12px;
-      margin-right: 6px;
-    }
-    .slot {
-      border: 1px solid #eee;
-      border-radius: 14px;
-      padding: 12px;
-      margin-top: 10px;
-    }
-    .slot .big {
-      font-size: 34px;
-    }
-    .slot .small {
-      margin-top: 6px;
-    }
+    body { font-family: -apple-system, system-ui; margin: 0; padding: 20px; }
+    .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; margin: 12px 0; }
+    .big { font-size: 40px; font-weight: 700; }
+    .small { color: #666; font-size: 13px; }
+    button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+    input, select, textarea { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; width: 100%; box-sizing: border-box; }
+    label { margin-right: 12px; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+    .muted { color:#888; font-size:12px; }
+    .ok { color:#0a7; font-size:12px; }
+    .ng { color:#c33; font-size:12px; }
+    .pill { display:inline-block; padding: 6px 10px; border: 1px solid #ddd; border-radius: 999px; font-size:12px; margin-right: 6px; }
+    .slot { border: 1px solid #eee; border-radius: 14px; padding: 12px; margin-top: 10px; }
+    .slot .big { font-size: 34px; }
+    .slot .small { margin-top: 6px; }
 
     /* 例え文（朝・昼・夜） */
-    #meta_m, #meta_d, #meta_e {
-      font-size: 18px;
-      color: #333;
-      line-height: 1.6;
-      font-weight: 500;
-    }
+    #meta_m, #meta_d, #meta_e { font-size: 18px; color: #333; line-height: 1.6; font-weight: 500; }
 
     /* 人間向け翻訳 */
-    #metaphor {
-      font-size: 26px;
-      line-height: 1.7;
-    }
+    #metaphor { font-size: 26px; line-height: 1.7; }
 
     @media (max-width: 600px) {
       body { padding: 12px; }
       h1 { font-size: 22px; margin: 0 0 12px; }
       .card { padding: 12px; margin: 10px 0; }
-      input, select, textarea, button {
-        font-size: 16px;
-        padding: 10px 12px;
-      }
+      input, select, textarea, button { font-size: 16px; padding: 10px 12px; }
       .row { grid-template-columns: 1fr; }
       button#search { width: 100%; }
       .slot .big { font-size: 28px; }
-      #meta_m, #meta_d, #meta_e {
-        font-size: 15px;
-        line-height: 1.55;
-      }
-      #metaphor {
-        font-size: 20px;
-        line-height: 1.6;
-      }
-      .pill {
-        font-size: 11px;
-        padding: 5px 8px;
-      }
+      #meta_m, #meta_d, #meta_e { font-size: 15px; line-height: 1.55; }
+      #metaphor { font-size: 20px; line-height: 1.6; }
+      .pill { font-size: 11px; padding: 5px 8px; }
     }
   </style>
 </head>
@@ -159,18 +81,20 @@
   <div class="small">今日の降水確率（朝/昼/夜）</div>
   <div class="small" id="popHint">地点を選ぶと自動取得します</div>
 
+  <!-- 朝 -->
   <div class="slot">
     <div class="small">朝（6–11時）</div>
+
     <div class="big">
-  <span id="wx_m" style="margin-right:8px;">--</span>
-  <span id="pop_m">--%</span>
-</div>
+      <span id="wx_m" style="margin-right:8px;">--</span>
+      <span id="pop_m">--%</span>
+    </div>
 
-<div class="small" id="meta_m"></div>
+    <div class="small" id="meta_m"></div>
 
-<div class="small" style="margin-top:8px;">
-  <button id="del_m" style="display:none;">このネタを削除</button>
-</div>
+    <div class="small" style="margin-top:8px;">
+      <button id="del_m" style="display:none;">このネタを削除</button>
+    </div>
 
     <div class="small">
       <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
@@ -178,20 +102,42 @@
     </div>
   </div>
 
+  <!-- 昼 -->
   <div class="slot">
     <div class="small">昼（12–17時）</div>
-    <div class="big" id="pop_d">--%</div>
+
+    <div class="big">
+      <span id="wx_d" style="margin-right:8px;">--</span>
+      <span id="pop_d">--%</span>
+    </div>
+
     <div class="small" id="meta_d"></div>
+
+    <div class="small" style="margin-top:8px;">
+      <button id="del_d" style="display:none;">このネタを削除</button>
+    </div>
+
     <div class="small">
       <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
       <span id="badge_d" style="margin-left:10px;font-size:20px;"></span>
     </div>
   </div>
 
+  <!-- 夜 -->
   <div class="slot">
     <div class="small">夜（18–23時）</div>
-    <div class="big" id="pop_e">--%</div>
+
+    <div class="big">
+      <span id="wx_e" style="margin-right:8px;">--</span>
+      <span id="pop_e">--%</span>
+    </div>
+
     <div class="small" id="meta_e"></div>
+
+    <div class="small" style="margin-top:8px;">
+      <button id="del_e" style="display:none;">このネタを削除</button>
+    </div>
+
     <div class="small">
       <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
       <span id="badge_e" style="margin-left:10px;font-size:20px;"></span>
@@ -213,17 +159,6 @@
 <button id="refresh">同じ確率でも例えを変える</button>
 
 <div class="card" id="addSection">
-
-  <!-- 追加ネタ管理（この端末） -->
-  <div class="card" id="manageSection">
-    <div class="small"><b>追加ネタ管理（この端末）</b></div>
-
-    <!-- ★希望どおり：上側の「モード／確率」プルダウンは削除（ここは一覧だけ） -->
-    <div class="muted" id="manageStatus" style="margin-top:8px;"></div>
-    <div id="manageList" style="margin-top:10px;"></div>
-  </div>
-
-  <!-- ネタ追加（この端末に保存） -->
   <div class="small"><b>ネタ追加（この端末に保存）</b></div>
 
   <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -249,11 +184,6 @@
     </select>
 
     <button id="addPhraseBtn" style="margin-left:10px;">追加</button>
-
-    <!-- ★希望どおり：管理ボタン3つを「ネタ追加」の横へ移動 -->
-    <button id="manageRefresh">一覧更新</button>
-    <button id="manageClearBucket">この%を全削除</button>
-    <button id="manageClearAll">全削除</button>
   </div>
 
   <div style="margin-top:8px;">
@@ -269,4 +199,3 @@
 
 </body>
 </html>
-
