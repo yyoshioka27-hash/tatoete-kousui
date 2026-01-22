@@ -22,6 +22,8 @@ let state = {
   }
 };
 
+const $ = (id) => document.getElementById(id);
+
 // =========================
 // いいね
 // =========================
@@ -49,7 +51,6 @@ function incrementLike(phrase) {
 // 追加ネタ（localStorage）
 // ==============================
 const EXTRA_LS_KEY = "extra_phrases_v1";
-const $ = (id) => document.getElementById(id);
 
 function genId() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
@@ -178,8 +179,8 @@ function renderExtraList() {
     btn.onclick = () => {
       if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
       removeExtraById(it.id);
-      renderExtraList(); // 一覧即更新
-      render();          // 表示にも影響するので更新
+      renderExtraList();
+      render();
     };
     right.appendChild(btn);
 
@@ -188,6 +189,30 @@ function renderExtraList() {
 
     bodyEl.appendChild(div);
   }
+}
+
+// =========================
+// 開閉ボタン（追加ネタ一覧）
+// =========================
+function setupToggleExtraPanel() {
+  const btn = $("toggleExtraList");
+  const panel = $("extraListPanel");
+  if (!btn || !panel) return;
+
+  const setOpen = (open) => {
+    panel.style.display = open ? "block" : "none";
+    btn.textContent = open ? "追加ネタ一覧を閉じる ▲" : "追加ネタ一覧を開く ▼";
+    btn.dataset.open = open ? "1" : "0";
+    if (open) renderExtraList(); // 開いた瞬間に最新表示
+  };
+
+  // 初期は閉じる
+  setOpen(false);
+
+  btn.onclick = () => {
+    const nowOpen = btn.dataset.open === "1";
+    setOpen(!nowOpen);
+  };
 }
 
 // =========================
@@ -209,7 +234,6 @@ function setIcon(slotKey, roundedPop) {
 
 // =========================
 // ネタ抽選（既存 + 追加 を混ぜる）
-// → 候補を結合して抽選（候補数と👍で自然に混ざる）
 // =========================
 const lastPickKey = {};
 
@@ -227,13 +251,11 @@ function buildCandidatePool(mode, bucket) {
   const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
   const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
 
-  // 同文重複排除（先勝ち）
   const out = [];
   const seen = new Set();
   for (const item of [...baseTexts, ...extras]) {
-    const key = item.text;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (seen.has(item.text)) continue;
+    seen.add(item.text);
     out.push(item);
   }
   return out;
@@ -259,7 +281,6 @@ function pickMetaphor(mode, bucket) {
   const key = `${mode}_${b}`;
   let picked = weightedPick(pool);
 
-  // 直前回避（同じバケットで同じ文が連続しにくい）
   if (pool.length > 1) {
     let attempts = 0;
     while (picked.text === lastPickKey[key] && attempts < 6) {
@@ -304,7 +325,7 @@ function updateLikeUI(slot) {
 }
 
 // =========================
-// 「このネタを削除」ボタン（表示中の追加ネタだけ）
+// 「このネタを削除」（表示中の追加ネタだけ）
 // =========================
 function updateDeleteUI(slotKey) {
   const btn = document.getElementById(`del_${slotKey}`);
@@ -322,8 +343,9 @@ function updateDeleteUI(slotKey) {
   btn.onclick = () => {
     if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
     removeExtraById(extraId);
-    renderExtraList(); // 一覧も更新
-    render();          // 表示も更新
+    // 開いていれば一覧も更新
+    renderExtraList();
+    render();
   };
 }
 
@@ -587,15 +609,11 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 // 「同じ確率でも例えを変える」
 document.getElementById("refresh").onclick = () => render();
 
-// =========================
-// 追加ネタ一覧パネル：イベント
-// =========================
+// 一覧フィルタ変更
 if ($("listMode")) $("listMode").addEventListener("change", renderExtraList);
 if ($("listBucket")) $("listBucket").addEventListener("change", renderExtraList);
 
-// =========================
 // ネタ追加
-// =========================
 document.getElementById("addPhraseBtn").onclick = () => {
   const statusEl = document.getElementById("addStatus");
   const mode = ($("newPhraseMode")?.value ?? "trivia");
@@ -607,12 +625,11 @@ document.getElementById("addPhraseBtn").onclick = () => {
   if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
   if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
 
-  renderExtraList(); // 一覧も更新
-  render();          // 表示も更新
+  // 開いていれば一覧も更新
+  renderExtraList();
+  render();
 };
 
-// 初期表示
-renderExtraList();
+// 初期化
+setupToggleExtraPanel();
 render();
-
-// END
