@@ -10,6 +10,50 @@
   <style>
     body { font-family: -apple-system, system-ui; margin: 0; padding: 20px; }
     .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; margin: 12px 0; }
+    /* ===== Theme by precipitation ===== */
+:root{
+  --bg1:#ffffff;
+  --bg2:#ffffff;
+  --accent:#111827;
+  --text:#111827;
+  --sub:#6b7280;
+  --card: rgba(255,255,255,0.86);
+  --shadow: 0 10px 26px rgba(0,0,0,0.10);
+}
+
+/* 画面全体をグラデーション背景にする（②） */
+body{
+  background: linear-gradient(180deg, var(--bg1), var(--bg2));
+  color: var(--text);
+}
+
+/* 大きい％表示を“主役”に */
+.big{
+  font-size: 56px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+/* 小さい文字 */
+.small{
+  color: var(--sub);
+}
+
+/* ボタンや選択UIも少しだけ色を合わせる */
+button{
+  border: 1px solid rgba(0,0,0,0.10);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+}
+
+/* ④：カードを“吹き出し風”に（後で .bubble を付ける） */
+.card{
+  background: var(--card);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255,255,255,0.35);
+  backdrop-filter: blur(8px);
+}
+
     .big { font-size: 40px; font-weight: 700; }
     .small { color: #666; font-size: 13px; }
     button { padding: 12px 14px; border-radius: 12px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
@@ -249,3 +293,4 @@
 
 </body>
 </html>
+
