@@ -1,6 +1,6 @@
 {
-  "name": "たとえて降水確率",
-  "short_name": "降水確率",
+  "name": "「たとえて、降水確率」－降水確率を“別の確率”で例えてみた。",
+  "short_name": "「たとえて、降水確率」－降水確率を“別の確率”で例えてみた。",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -10,3 +10,4 @@
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
+
