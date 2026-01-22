@@ -1,12 +1,14 @@
 // =========================
 // 天気取得：Open-Meteo
 // =========================
+
 // ★保険：metaphors.js が読めてなくても落ちないようにする
 window.bucket10 = window.bucket10 || function (p) {
   p = Math.max(0, Math.min(100, Number(p)));
   const b = Math.round(p / 10) * 10;
   return Math.max(0, Math.min(100, b));
 };
+
 const GEO = "https://geocoding-api.open-meteo.com/v1/search";
 const FC  = "https://api.open-meteo.com/v1/forecast";
 
@@ -30,6 +32,7 @@ function loadLikes() {
 function saveLikes(obj) { localStorage.setItem(LIKES_KEY, JSON.stringify(obj)); }
 
 let likesData = loadLikes();
+
 function getSelectedMode() {
   const el = document.querySelector('input[name="mode"]:checked');
   return el ? el.value : "trivia"; // デフォルトは雑学
@@ -41,19 +44,271 @@ function incrementLike(phrase) {
   saveLikes(likesData);
 }
 
+// ==============================
+// 追加ネタ管理（localStorage）
+// 既存機能は触らず、管理UIだけ増やす
+// ==============================
+const EXTRA_LS_KEY = "extra_phrases_v1";
+
+// 旧キーが存在する場合の吸収（念のため）
+const LEGACY_KEYS = [
+  "extra_phrases",
+  "extraPhrases",
+  "extra_phrases_v0",
+  "extra_phrases_bucket",
+  "extra_phrases_store"
+];
+
+const $ = (id) => document.getElementById(id);
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function safeParseJSON(raw) {
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function migrateLegacyIfNeeded() {
+  const cur = localStorage.getItem(EXTRA_LS_KEY);
+  if (cur) return;
+
+  for (const k of LEGACY_KEYS) {
+    const raw = localStorage.getItem(k);
+    if (!raw) continue;
+
+    const data = safeParseJSON(raw);
+    if (!data) continue;
+
+    // 想定：配列 or 何かしら
+    // 配列ならそのまま、オブジェクトなら可能な範囲で拾う
+    let list = [];
+    if (Array.isArray(data)) {
+      list = data;
+    } else if (typeof data === "object") {
+      // 例： { "trivia_10": ["..."], "fun_20": ["..."] } みたいな形を拾う
+      for (const key of Object.keys(data)) {
+        const v = data[key];
+        if (!Array.isArray(v)) continue;
+        const m = key.match(/(trivia|fun)[_\-]?(\d{1,3})/);
+        if (!m) continue;
+        const mode = m[1];
+        const bucket = Number(m[2]);
+        v.forEach((t) => {
+          const text = String(t || "").trim();
+          if (!text) return;
+          list.push({
+            id: genId(),
+            mode,
+            bucket,
+            text,
+            createdAt: Date.now()
+          });
+        });
+      }
+    }
+
+    // 正規化して保存
+    list = normalizeExtraList(list);
+    localStorage.setItem(EXTRA_LS_KEY, JSON.stringify(list));
+    return;
+  }
+}
+
+function genId() {
+  if (window.crypto?.randomUUID) return crypto.randomUUID();
+  return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function loadExtraStore() {
+  migrateLegacyIfNeeded();
+  const raw = localStorage.getItem(EXTRA_LS_KEY);
+  if (!raw) return [];
+  const data = safeParseJSON(raw);
+  return Array.isArray(data) ? normalizeExtraList(data) : [];
+}
+
+function saveExtraStore(list) {
+  const norm = normalizeExtraList(list);
+  localStorage.setItem(EXTRA_LS_KEY, JSON.stringify(norm));
+  return norm;
+}
+
+function normalizeExtraList(list) {
+  const out = [];
+  const seen = new Set();
+
+  for (const item of (list || [])) {
+    if (!item) continue;
+
+    const mode = (item.mode === "fun" ? "fun" : "trivia");
+    const bucket = Math.max(0, Math.min(100, Number(item.bucket)));
+    const b = window.bucket10(bucket);
+    const text = String(item.text || "").trim();
+
+    if (!text) continue;
+
+    // 重複は text+mode+bucket で排除（IDが違っても同じ内容なら1つに）
+    const key = `${mode}__${b}__${text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    out.push({
+      id: String(item.id || genId()),
+      mode,
+      bucket: b,
+      text,
+      createdAt: Number(item.createdAt || Date.now())
+    });
+  }
+
+  // 新しい順（表示がわかりやすい）
+  out.sort((a, b2) => (b2.createdAt - a.createdAt));
+  return out;
+}
+
+function getExtraPhrases(mode, bucket) {
+  const store = loadExtraStore();
+  const m = mode === "fun" ? "fun" : "trivia";
+  const b = window.bucket10(bucket);
+  return store.filter(x => x.mode === m && x.bucket === b).map(x => x.text);
+}
+
+// 管理UIは「ネタ追加」側の選択（newPhraseMode/newPhraseBucket）を参照する
+function getManageMode() {
+  const el = $("newPhraseMode");
+  return el ? el.value : "trivia";
+}
+function getManageBucket() {
+  const el = $("newPhraseBucket");
+  return el ? Number(el.value) : 0;
+}
+
+// 一覧描画
+function renderManageList() {
+  const statusEl = $("manageStatus");
+  const listEl = $("manageList");
+  if (!statusEl || !listEl) return;
+
+  const mode = getManageMode();
+  const bucket = window.bucket10(getManageBucket());
+
+  const store = loadExtraStore();
+  const filtered = store.filter(x => x.mode === mode && x.bucket === bucket);
+
+  statusEl.textContent = `モード：${mode === "trivia" ? "雑学" : "お笑い"} / 確率：${bucket}%　｜　登録数：${filtered.length}`;
+
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="muted">この条件の追加ネタはまだありません。</div>`;
+    return;
+  }
+
+  // 1件ずつ削除ボタン付き
+  listEl.innerHTML = filtered.map(x => {
+    const t = escapeHtml(x.text);
+    return `
+      <div style="display:flex; gap:10px; align-items:flex-start; border:1px solid #eee; border-radius:12px; padding:10px; margin:8px 0;">
+        <div style="flex:1; line-height:1.6; font-size:14px; color:#222;">${t}</div>
+        <button data-del-id="${escapeHtml(x.id)}" style="white-space:nowrap;">削除</button>
+      </div>
+    `;
+  }).join("");
+
+  // 削除イベント
+  listEl.querySelectorAll("button[data-del-id]").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.getAttribute("data-del-id");
+      if (!id) return;
+      let st = loadExtraStore();
+      st = st.filter(x => x.id !== id);
+      saveExtraStore(st);
+      renderManageList();
+      render(); // 表示にも反映
+    };
+  });
+}
+
+function addExtraPhrase(mode, bucket, text) {
+  const m = mode === "fun" ? "fun" : "trivia";
+  const b = window.bucket10(bucket);
+  const t = String(text || "").trim();
+
+  if (!t) return { ok: false, message: "ネタが空です" };
+  if (t.length > 200) return { ok: false, message: "長すぎます（200文字以内推奨）" };
+
+  let store = loadExtraStore();
+  store.unshift({
+    id: genId(),
+    mode: m,
+    bucket: b,
+    text: t,
+    createdAt: Date.now()
+  });
+  store = saveExtraStore(store);
+
+  return { ok: true, message: `追加しました（${m === "trivia" ? "雑学" : "お笑い"} / ${b}%）`, store };
+}
+
+function clearExtraBucket(mode, bucket) {
+  const m = mode === "fun" ? "fun" : "trivia";
+  const b = window.bucket10(bucket);
+
+  let store = loadExtraStore();
+  const before = store.length;
+  store = store.filter(x => !(x.mode === m && x.bucket === b));
+  store = saveExtraStore(store);
+  return { removed: before - store.length };
+}
+
+function clearExtraAll() {
+  localStorage.removeItem(EXTRA_LS_KEY);
+  return { removedAll: true };
+}
+
 // =========================
-// A版：ネタ選択（0/10/.../100のバケット × 各3ネタ）
+// A版：ネタ選択（0/10/.../100のバケット）
 // 👍が多いほど出やすい + 直前回避
+// + 追加ネタも混ぜる
 // =========================
 const lastSeedByBucket = {};
 
-function pickSeedByBucket(bucket) {
-    bucket = Number(bucket); // ★追加：必ず数値にする
-  const pool = (getSelectedMode() === "trivia"
+function getBasePoolByModeAndBucket(mode, bucket) {
+  bucket = Number(bucket);
+
+  const base = (mode === "trivia"
     ? (window.NETA_TRIVIA?.[bucket] ?? [])
     : (window.NETA?.[bucket] ?? []));
+
+  // 追加ネタ
+  const extra = getExtraPhrases(mode, bucket);
+
+  // 重複排除して結合
+  const seen = new Set();
+  const merged = [];
+  for (const t of [...base, ...extra]) {
+    const s = String(t || "").trim();
+    if (!s) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    merged.push(s);
+  }
+  return merged;
+}
+
+function pickSeedByBucket(bucket) {
+  bucket = Number(bucket);
+
+  const mode = getSelectedMode();
+  const pool = getBasePoolByModeAndBucket(mode, bucket);
+
   if (!pool.length) return "データなし";
 
+  // 👍重み：like+1
   const weights = pool.map(t => (likesData[t] || 0) + 1);
   const total = weights.reduce((a, b) => a + b, 0);
 
@@ -64,7 +319,8 @@ function pickSeedByBucket(bucket) {
     r -= weights[i];
   }
 
-  const key = String(bucket);
+  // 直前回避（同じbucketで連続を避ける）
+  const key = `${mode}_${String(bucket)}`;
   if (pool.length > 1) {
     let attempts = 0;
     while (picked === lastSeedByBucket[key] && attempts < 5) {
@@ -73,6 +329,7 @@ function pickSeedByBucket(bucket) {
     }
   }
   lastSeedByBucket[key] = picked;
+
   return picked;
 }
 
@@ -92,15 +349,15 @@ function updateLikeUI(slot) {
   const btnEl = document.getElementById(`like_${slot}`);
 
   if (!phrase) {
-    countEl.textContent = "0";
-    badgeEl.textContent = "";
+    if (countEl) countEl.textContent = "0";
+    if (badgeEl) badgeEl.textContent = "";
     if (btnEl) { btnEl.disabled = true; btnEl.onclick = null; }
     return;
   }
 
   const count = getLikesFor(phrase);
-  countEl.textContent = String(count);
-  badgeEl.textContent = count >= 5 ? "⭐人気！" : "";
+  if (countEl) countEl.textContent = String(count);
+  if (badgeEl) badgeEl.textContent = count >= 5 ? "⭐人気！" : "";
 
   if (btnEl) {
     btnEl.disabled = false;
@@ -111,8 +368,12 @@ function updateLikeUI(slot) {
   }
 }
 
+// =========================
+// UI helpers
+// =========================
 function setStatus(text, kind="muted") {
   const el = document.getElementById("placeStatus");
+  if (!el) return;
   el.className = kind;
   el.textContent = text;
 }
@@ -125,6 +386,9 @@ function normalizePlaceName(input) {
     .trim();
 }
 
+// =========================
+// render
+// =========================
 function render() {
   const hintEl = document.getElementById("popHint");
   const sourceTag = document.getElementById("sourceTag");
@@ -133,42 +397,41 @@ function render() {
   const metaAll = document.getElementById("metaphor");
   const footEl = document.getElementById("metaFoot");
 
-  sourceTag.textContent = state.source;
-  tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
+  if (sourceTag) sourceTag.textContent = state.source;
+  if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
 
   const setSlot = (idPop, idMeta, value, label, slotKey) => {
     const popEl = document.getElementById(idPop);
     const metaEl = document.getElementById(idMeta);
 
     if (value == null) {
-      popEl.textContent = "--%";
-      metaEl.textContent = "データなし";
+      if (popEl) popEl.textContent = "--%";
+      if (metaEl) metaEl.textContent = "データなし";
       state.currentPhrases[slotKey] = null;
       updateLikeUI(slotKey);
       return null;
     }
 
-const rounded = bucket10(value);   // ★ 0,10,20,...に丸める
-popEl.textContent = `${rounded}%`;
+    const rounded = bucket10(value); // 0,10,20,...に丸める
+    if (popEl) popEl.textContent = `${rounded}%`;
 
-const text = metaphorForPop(rounded);
-metaEl.textContent = `${label}：${text}`;
-
+    const text = metaphorForPop(rounded);
+    if (metaEl) metaEl.textContent = `${label}：${text}`;
 
     state.currentPhrases[slotKey] = text;
     updateLikeUI(slotKey);
 
-    return { value, text, label };
+    return { value: rounded, text, label };
   };
 
   if (!state.pops) {
-    hintEl.textContent = "地点を選ぶと自動取得します";
+    if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
     renderEmpty();
-    footEl.textContent = "";
+    if (footEl) footEl.textContent = "";
     return;
   }
 
-  hintEl.textContent = state.placeLabel ? `地点：${state.placeLabel}` : "地点：--";
+  if (hintEl) hintEl.textContent = state.placeLabel ? `地点：${state.placeLabel}` : "地点：--";
 
   const a = setSlot("pop_m", "meta_m", state.pops.m, "朝", "m");
   const b = setSlot("pop_d", "meta_d", state.pops.d, "昼", "d");
@@ -176,33 +439,34 @@ metaEl.textContent = `${label}：${text}`;
 
   const candidates = [a, b, c].filter(Boolean);
   if (!candidates.length) {
-    metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
+    if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
   } else {
     const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
-    metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
+    if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
   }
 
-  footEl.textContent = "※降水確率を0/10/…/100%に丸め、候補3つからランダム表示（👍が多いほど出やすい）";
+  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、候補からランダム表示（👍が多いほど出やすい）";
 }
 
 function renderEmpty() {
   const metaAll = document.getElementById("metaphor");
-  document.getElementById("pop_m").textContent = "--%";
-  document.getElementById("meta_m").textContent = "データなし";
-  document.getElementById("pop_d").textContent = "--%";
-  document.getElementById("meta_d").textContent = "データなし";
-  document.getElementById("pop_e").textContent = "--%";
-  document.getElementById("meta_e").textContent = "データなし";
-  metaAll.textContent = "地点を選んでください";
+  const ids = ["m", "d", "e"];
 
-  state.currentPhrases.m = null;
-  state.currentPhrases.d = null;
-  state.currentPhrases.e = null;
-  updateLikeUI('m');
-  updateLikeUI('d');
-  updateLikeUI('e');
+  ids.forEach(k => {
+    const popEl = document.getElementById(`pop_${k}`);
+    const metaEl = document.getElementById(`meta_${k}`);
+    if (popEl) popEl.textContent = "--%";
+    if (metaEl) metaEl.textContent = "データなし";
+    state.currentPhrases[k] = null;
+    updateLikeUI(k);
+  });
+
+  if (metaAll) metaAll.textContent = "地点を選んでください";
 }
 
+// =========================
+// API
+// =========================
 async function geocode(name) {
   const url = new URL(GEO);
   url.searchParams.set("name", name);
@@ -257,7 +521,9 @@ async function fetchPopsBySlots(lat, lon) {
   };
 }
 
+// =========================
 // UI: 検索→候補表示
+// =========================
 document.getElementById("search").onclick = async () => {
   const raw = document.getElementById("place").value.trim();
   const q = normalizePlaceName(raw);
@@ -342,7 +608,7 @@ document.getElementById("search").onclick = async () => {
   }
 };
 
-// モード変更はA版では render を呼ぶだけ（表示を更新したいので残す）
+// モード変更は render を呼ぶだけ（表示を更新）
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", render)
 );
@@ -350,16 +616,86 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 // 「同じ確率でも例えを変える」ボタン
 document.getElementById("refresh").onclick = () => render();
 
-// ネタ追加ボタン（A版では停止）
-document.getElementById("addPhraseBtn").onclick = () => {
-  const statusEl = document.getElementById("addStatus");
-  statusEl.textContent = "この機能は次バージョンで対応します（いまはネタ固定で動作確認中）";
-};
+// =========================
+// 追加ネタ：追加・管理ボタン
+// =========================
+(function wireExtraUI(){
+  const addBtn = $("addPhraseBtn");
+  const statusEl = $("addStatus");
 
+  const refreshBtn = $("manageRefresh");
+  const clearBucketBtn = $("manageClearBucket");
+  const clearAllBtn = $("manageClearAll");
+
+  // 初期表示
+  renderManageList();
+
+  // セレクト変更で一覧も更新したい（モード/確率を変えたら管理一覧も変える）
+  const modeSel = $("newPhraseMode");
+  const bucketSel = $("newPhraseBucket");
+  if (modeSel) modeSel.addEventListener("change", () => renderManageList());
+  if (bucketSel) bucketSel.addEventListener("change", () => renderManageList());
+
+  if (addBtn) {
+    addBtn.onclick = () => {
+      const mode = getManageMode();
+      const bucket = getManageBucket();
+      const text = ($("newPhrase")?.value ?? "").trim();
+
+      const res = addExtraPhrase(mode, bucket, text);
+      if (statusEl) {
+        statusEl.textContent = res.ok ? `✅ ${res.message}` : `⚠️ ${res.message}`;
+      }
+      if (res.ok) {
+        if ($("newPhrase")) $("newPhrase").value = "";
+        renderManageList();
+        render(); // 表示に反映
+      }
+    };
+  }
+
+  if (refreshBtn) {
+    refreshBtn.onclick = () => {
+      renderManageList();
+      render(); // 念のため
+      if (statusEl) statusEl.textContent = "一覧を更新しました";
+    };
+  }
+
+  if (clearBucketBtn) {
+    clearBucketBtn.onclick = () => {
+      const mode = getManageMode();
+      const bucket = getManageBucket();
+      const b = window.bucket10(bucket);
+      const label = `${mode === "trivia" ? "雑学" : "お笑い"} / ${b}%`;
+
+      if (!confirm(`${label} の追加ネタを全部削除します。よろしいですか？`)) return;
+
+      const out = clearExtraBucket(mode, bucket);
+      if (statusEl) statusEl.textContent = `✅ ${label} を ${out.removed} 件削除しました`;
+      renderManageList();
+      render();
+    };
+  }
+
+  if (clearAllBtn) {
+    clearAllBtn.onclick = () => {
+      if (!confirm("追加ネタを全削除します。よろしいですか？")) return;
+      clearExtraAll();
+      if (statusEl) statusEl.textContent = "✅ 追加ネタを全削除しました";
+      renderManageList();
+      render();
+    };
+  }
+})();
+
+// =========================
 // Service Worker登録（PWA）
-//if ("serviceWorker" in navigator) {
-//  navigator.serviceWorker.register("./sw.js", { scope: "./" });
-//}
+// （今はトラブル回避のためOFFのままでOK）
+// =========================
+// if ("serviceWorker" in navigator) {
+//   navigator.serviceWorker.register("./sw.js", { scope: "./" });
+// }
 
 render();
 
