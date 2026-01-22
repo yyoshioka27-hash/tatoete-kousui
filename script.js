@@ -1,7 +1,6 @@
 // =========================
 // 天気取得：Open-Meteo
 // =========================
-
 // ★保険：metaphors.js が読めてなくても落ちないようにする
 window.bucket10 = window.bucket10 || function (p) {
   p = Math.max(0, Math.min(100, Number(p)));
@@ -17,7 +16,12 @@ let state = {
   placeLabel: null,
   tz: null,
   source: "API: 未接続",
-  currentPhrases: { m: null, d: null, e: null }
+  // ★表示中ネタ（削除に備え、extraId も保持）
+  currentPhrases: { 
+    m: { text: null, extraId: null }, 
+    d: { text: null, extraId: null }, 
+    e: { text: null, extraId: null } 
+  }
 };
 
 // =========================
@@ -45,92 +49,27 @@ function incrementLike(phrase) {
 }
 
 // ==============================
-// 追加ネタ管理（localStorage）
-// 既存機能は触らず、管理UIだけ増やす
+// 追加ネタ（localStorage）
 // ==============================
 const EXTRA_LS_KEY = "extra_phrases_v1";
 
-// 旧キーが存在する場合の吸収（念のため）
-const LEGACY_KEYS = [
-  "extra_phrases",
-  "extraPhrases",
-  "extra_phrases_v0",
-  "extra_phrases_bucket",
-  "extra_phrases_store"
-];
-
 const $ = (id) => document.getElementById(id);
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function safeParseJSON(raw) {
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
-function migrateLegacyIfNeeded() {
-  const cur = localStorage.getItem(EXTRA_LS_KEY);
-  if (cur) return;
-
-  for (const k of LEGACY_KEYS) {
-    const raw = localStorage.getItem(k);
-    if (!raw) continue;
-
-    const data = safeParseJSON(raw);
-    if (!data) continue;
-
-    // 想定：配列 or 何かしら
-    // 配列ならそのまま、オブジェクトなら可能な範囲で拾う
-    let list = [];
-    if (Array.isArray(data)) {
-      list = data;
-    } else if (typeof data === "object") {
-      // 例： { "trivia_10": ["..."], "fun_20": ["..."] } みたいな形を拾う
-      for (const key of Object.keys(data)) {
-        const v = data[key];
-        if (!Array.isArray(v)) continue;
-        const m = key.match(/(trivia|fun)[_\-]?(\d{1,3})/);
-        if (!m) continue;
-        const mode = m[1];
-        const bucket = Number(m[2]);
-        v.forEach((t) => {
-          const text = String(t || "").trim();
-          if (!text) return;
-          list.push({
-            id: genId(),
-            mode,
-            bucket,
-            text,
-            createdAt: Date.now()
-          });
-        });
-      }
-    }
-
-    // 正規化して保存
-    list = normalizeExtraList(list);
-    localStorage.setItem(EXTRA_LS_KEY, JSON.stringify(list));
-    return;
-  }
-}
 
 function genId() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
   return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
+function safeParseJSON(raw) {
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
 function loadExtraStore() {
-  migrateLegacyIfNeeded();
   const raw = localStorage.getItem(EXTRA_LS_KEY);
   if (!raw) return [];
   const data = safeParseJSON(raw);
-  return Array.isArray(data) ? normalizeExtraList(data) : [];
+  if (!Array.isArray(data)) return [];
+  return normalizeExtraList(data);
 }
 
 function saveExtraStore(list) {
@@ -147,39 +86,57 @@ function normalizeExtraList(list) {
     if (!item) continue;
 
     const mode = (item.mode === "fun" ? "fun" : "trivia");
-    const bucket = Math.max(0, Math.min(100, Number(item.bucket)));
-    const b = window.bucket10(bucket);
+    const bucket = window.bucket10(Number(item.bucket));
     const text = String(item.text || "").trim();
-
     if (!text) continue;
 
-    // 重複は text+mode+bucket で排除（IDが違っても同じ内容なら1つに）
-    const key = `${mode}__${b}__${text}`;
+    // 同一内容は mode+bucket+text で重複排除
+    const key = `${mode}__${bucket}__${text}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
     out.push({
       id: String(item.id || genId()),
       mode,
-      bucket: b,
+      bucket,
       text,
       createdAt: Number(item.createdAt || Date.now())
     });
   }
 
-  // 新しい順（表示がわかりやすい）
-  out.sort((a, b2) => (b2.createdAt - a.createdAt));
+  // 新しい順
+  out.sort((a, b) => (b.createdAt - a.createdAt));
   return out;
 }
 
-function getExtraPhrases(mode, bucket) {
-  const store = loadExtraStore();
-  const m = mode === "fun" ? "fun" : "trivia";
+function addExtraPhrase(mode, bucket, text) {
+  const m = (mode === "fun" ? "fun" : "trivia");
   const b = window.bucket10(bucket);
-  return store.filter(x => x.mode === m && x.bucket === b).map(x => x.text);
+  const t = String(text || "").trim();
+  if (!t) return { ok: false, msg: "ネタが空です" };
+
+  let store = loadExtraStore();
+  store.unshift({ id: genId(), mode: m, bucket: b, text: t, createdAt: Date.now() });
+  saveExtraStore(store);
+  return { ok: true, msg: `追加しました（${m === "fun" ? "お笑い" : "雑学"} / ${b}%）` };
 }
 
-// 管理UIは「ネタ追加」側の選択（newPhraseMode/newPhraseBucket）を参照する
+function removeExtraById(id) {
+  let store = loadExtraStore();
+  const before = store.length;
+  store = store.filter(x => x.id !== id);
+  saveExtraStore(store);
+  return { removed: before - store.length };
+}
+
+function getExtraItems(mode, bucket) {
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = window.bucket10(bucket);
+  const store = loadExtraStore();
+  return store.filter(x => x.mode === m && x.bucket === b);
+}
+
+// 管理UI（今のUIは「ネタ追加」の選択を流用）
 function getManageMode() {
   const el = $("newPhraseMode");
   return el ? el.value : "trivia";
@@ -189,161 +146,104 @@ function getManageBucket() {
   return el ? Number(el.value) : 0;
 }
 
-// 一覧描画
-function renderManageList() {
-  const statusEl = $("manageStatus");
-  const listEl = $("manageList");
-  if (!statusEl || !listEl) return;
-
-  const mode = getManageMode();
-  const bucket = window.bucket10(getManageBucket());
-
-  const store = loadExtraStore();
-  const filtered = store.filter(x => x.mode === mode && x.bucket === bucket);
-
-  statusEl.textContent = `モード：${mode === "trivia" ? "雑学" : "お笑い"} / 確率：${bucket}%　｜　登録数：${filtered.length}`;
-
-  if (!filtered.length) {
-    listEl.innerHTML = `<div class="muted">この条件の追加ネタはまだありません。</div>`;
-    return;
-  }
-
-  // 1件ずつ削除ボタン付き
-  listEl.innerHTML = filtered.map(x => {
-    const t = escapeHtml(x.text);
-    return `
-      <div style="display:flex; gap:10px; align-items:flex-start; border:1px solid #eee; border-radius:12px; padding:10px; margin:8px 0;">
-        <div style="flex:1; line-height:1.6; font-size:14px; color:#222;">${t}</div>
-        <button data-del-id="${escapeHtml(x.id)}" style="white-space:nowrap;">削除</button>
-      </div>
-    `;
-  }).join("");
-
-  // 削除イベント
-  listEl.querySelectorAll("button[data-del-id]").forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-del-id");
-      if (!id) return;
-      let st = loadExtraStore();
-      st = st.filter(x => x.id !== id);
-      saveExtraStore(st);
-      renderManageList();
-      render(); // 表示にも反映
-    };
-  });
+// =========================
+// お天気アイコン（%の前）
+// 0–20: 🌤️ / 30–60: ☁️ / 70–100: 🌧️
+// ※表示は10刻みなので 20→🌤️、30→☁️、70→🌧️ が効く
+// =========================
+function iconForPop(roundedPop) {
+  const p = Number(roundedPop);
+  if (p <= 20) return "🌤️";
+  if (p <= 60) return "☁️";
+  return "🌧️";
 }
 
-function addExtraPhrase(mode, bucket, text) {
-  const m = mode === "fun" ? "fun" : "trivia";
-  const b = window.bucket10(bucket);
-  const t = String(text || "").trim();
-
-  if (!t) return { ok: false, message: "ネタが空です" };
-  if (t.length > 200) return { ok: false, message: "長すぎます（200文字以内推奨）" };
-
-  let store = loadExtraStore();
-  store.unshift({
-    id: genId(),
-    mode: m,
-    bucket: b,
-    text: t,
-    createdAt: Date.now()
-  });
-  store = saveExtraStore(store);
-
-  return { ok: true, message: `追加しました（${m === "trivia" ? "雑学" : "お笑い"} / ${b}%）`, store };
-}
-
-function clearExtraBucket(mode, bucket) {
-  const m = mode === "fun" ? "fun" : "trivia";
-  const b = window.bucket10(bucket);
-
-  let store = loadExtraStore();
-  const before = store.length;
-  store = store.filter(x => !(x.mode === m && x.bucket === b));
-  store = saveExtraStore(store);
-  return { removed: before - store.length };
-}
-
-function clearExtraAll() {
-  localStorage.removeItem(EXTRA_LS_KEY);
-  return { removedAll: true };
+function setIcon(slotKey, roundedPop) {
+  const el = document.getElementById(`wx_${slotKey}`);
+  if (!el) return;
+  if (roundedPop == null) { el.textContent = "--"; return; }
+  el.textContent = iconForPop(roundedPop);
 }
 
 // =========================
-// A版：ネタ選択（0/10/.../100のバケット）
-// 👍が多いほど出やすい + 直前回避
-// + 追加ネタも混ぜる
+// A版：ネタ選択
+// ✅ 既存ネタ + 追加ネタを「固定割合なし」で混ぜる
+//   → 候補配列を結合して抽選（候補数と👍で自然に混ざる）
+// 👍が多いほど出やすい + 直前回避（同じbucket連発回避）
 // =========================
-const lastSeedByBucket = {};
+const lastPickKey = {};
 
-function getBasePoolByModeAndBucket(mode, bucket) {
+function getBaseTexts(mode, bucket) {
   bucket = Number(bucket);
-
   const base = (mode === "trivia"
     ? (window.NETA_TRIVIA?.[bucket] ?? [])
     : (window.NETA?.[bucket] ?? []));
-
-  // 追加ネタ
-  const extra = getExtraPhrases(mode, bucket);
-
-  // 重複排除して結合
-  const seen = new Set();
-  const merged = [];
-  for (const t of [...base, ...extra]) {
-    const s = String(t || "").trim();
-    if (!s) continue;
-    if (seen.has(s)) continue;
-    seen.add(s);
-    merged.push(s);
-  }
-  return merged;
+  // 文字列の正規化
+  return base.map(x => String(x || "").trim()).filter(Boolean);
 }
 
-function pickSeedByBucket(bucket) {
-  bucket = Number(bucket);
+function buildCandidatePool(mode, bucket) {
+  const b = window.bucket10(bucket);
 
-  const mode = getSelectedMode();
-  const pool = getBasePoolByModeAndBucket(mode, bucket);
+  // 既存ネタ
+  const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
 
-  if (!pool.length) return "データなし";
+  // 追加ネタ（id付き）
+  const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
 
-  // 👍重み：like+1
-  const weights = pool.map(t => (likesData[t] || 0) + 1);
+  // 結合＋同文重複排除（既存と追加で同文があっても1つにする）
+  const out = [];
+  const seen = new Set();
+  for (const item of [...baseTexts, ...extras]) {
+    const key = item.text; // text重複は1つに（extraIdは保持できないので、重複時は先勝ち）
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
+function weightedPick(items) {
+  // 👍重み: likes+1（text単位）
+  const weights = items.map(it => (likesData[it.text] || 0) + 1);
   const total = weights.reduce((a, b) => a + b, 0);
 
   let r = Math.random() * total;
-  let picked = pool[0];
-  for (let i = 0; i < pool.length; i++) {
-    if (r < weights[i]) { picked = pool[i]; break; }
+  for (let i = 0; i < items.length; i++) {
+    if (r < weights[i]) return items[i];
     r -= weights[i];
   }
+  return items[0];
+}
 
-  // 直前回避（同じbucketで連続を避ける）
-  const key = `${mode}_${String(bucket)}`;
+function pickMetaphor(mode, bucket) {
+  const b = window.bucket10(bucket);
+  const pool = buildCandidatePool(mode, b);
+  if (!pool.length) return { text: "データなし", extraId: null };
+
+  // 直前回避：同じ mode+bucket で連続同文を避ける
+  const key = `${mode}_${b}`;
+  let picked = weightedPick(pool);
+
   if (pool.length > 1) {
     let attempts = 0;
-    while (picked === lastSeedByBucket[key] && attempts < 5) {
-      picked = pool[Math.floor(Math.random() * pool.length)];
+    while (picked.text === lastPickKey[key] && attempts < 6) {
+      picked = weightedPick(pool);
       attempts++;
     }
   }
-  lastSeedByBucket[key] = picked;
+  lastPickKey[key] = picked.text;
 
-  return picked;
-}
-
-// pop% → bucket10 → seed
-function metaphorForPop(pop) {
-  const b = bucket10(pop);
-  return pickSeedByBucket(b);
+  return picked; // {text, extraId}
 }
 
 // =========================
 // いいねUI更新（既存を維持）
 // =========================
 function updateLikeUI(slot) {
-  const phrase = state.currentPhrases[slot];
+  const phraseObj = state.currentPhrases[slot];
+  const phrase = phraseObj?.text;
+
   const countEl = document.getElementById(`likeCount_${slot}`);
   const badgeEl = document.getElementById(`badge_${slot}`);
   const btnEl = document.getElementById(`like_${slot}`);
@@ -366,6 +266,31 @@ function updateLikeUI(slot) {
       updateLikeUI(slot);
     };
   }
+}
+
+// =========================
+// 「このネタを削除」ボタン制御
+// =========================
+function updateDeleteUI(slotKey) {
+  const btn = document.getElementById(`del_${slotKey}`);
+  if (!btn) return;
+
+  const extraId = state.currentPhrases[slotKey]?.extraId || null;
+
+  if (!extraId) {
+    btn.style.display = "none";
+    btn.onclick = null;
+    return;
+  }
+
+  btn.style.display = "inline-block";
+  btn.onclick = () => {
+    if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
+    removeExtraById(extraId);
+
+    // 削除したら再抽選して即反映
+    render();
+  };
 }
 
 // =========================
@@ -400,28 +325,39 @@ function render() {
   if (sourceTag) sourceTag.textContent = state.source;
   if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
 
-  const setSlot = (idPop, idMeta, value, label, slotKey) => {
-    const popEl = document.getElementById(idPop);
-    const metaEl = document.getElementById(idMeta);
+  const setSlot = (slotKey, value, label) => {
+    const popEl = document.getElementById(`pop_${slotKey}`);
+    const metaEl = document.getElementById(`meta_${slotKey}`);
 
     if (value == null) {
       if (popEl) popEl.textContent = "--%";
       if (metaEl) metaEl.textContent = "データなし";
-      state.currentPhrases[slotKey] = null;
+
+      setIcon(slotKey, null);
+
+      state.currentPhrases[slotKey] = { text: null, extraId: null };
       updateLikeUI(slotKey);
+      updateDeleteUI(slotKey);
       return null;
     }
 
     const rounded = bucket10(value); // 0,10,20,...に丸める
     if (popEl) popEl.textContent = `${rounded}%`;
 
-    const text = metaphorForPop(rounded);
-    if (metaEl) metaEl.textContent = `${label}：${text}`;
+    // ★アイコン（%の前）
+    setIcon(slotKey, rounded);
 
-    state.currentPhrases[slotKey] = text;
+    // ★ネタ抽選（固定割合なしで混ぜる＝候補結合して抽選）
+    const mode = getSelectedMode();
+    const picked = pickMetaphor(mode, rounded);
+
+    if (metaEl) metaEl.textContent = `${label}：${picked.text}`;
+
+    state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId };
     updateLikeUI(slotKey);
+    updateDeleteUI(slotKey);
 
-    return { value: rounded, text, label };
+    return { value: rounded, text: picked.text, label };
   };
 
   if (!state.pops) {
@@ -433,9 +369,9 @@ function render() {
 
   if (hintEl) hintEl.textContent = state.placeLabel ? `地点：${state.placeLabel}` : "地点：--";
 
-  const a = setSlot("pop_m", "meta_m", state.pops.m, "朝", "m");
-  const b = setSlot("pop_d", "meta_d", state.pops.d, "昼", "d");
-  const c = setSlot("pop_e", "meta_e", state.pops.e, "夜", "e");
+  const a = setSlot("m", state.pops.m, "朝");
+  const b = setSlot("d", state.pops.d, "昼");
+  const c = setSlot("e", state.pops.e, "夜");
 
   const candidates = [a, b, c].filter(Boolean);
   if (!candidates.length) {
@@ -445,20 +381,24 @@ function render() {
     if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
   }
 
-  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、候補からランダム表示（👍が多いほど出やすい）";
+  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ候補からランダム表示（👍が多いほど出やすい）";
 }
 
 function renderEmpty() {
   const metaAll = document.getElementById("metaphor");
-  const ids = ["m", "d", "e"];
 
-  ids.forEach(k => {
+  ["m","d","e"].forEach(k => {
     const popEl = document.getElementById(`pop_${k}`);
     const metaEl = document.getElementById(`meta_${k}`);
+
     if (popEl) popEl.textContent = "--%";
     if (metaEl) metaEl.textContent = "データなし";
-    state.currentPhrases[k] = null;
+
+    setIcon(k, null);
+
+    state.currentPhrases[k] = { text: null, extraId: null };
     updateLikeUI(k);
+    updateDeleteUI(k);
   });
 
   if (metaAll) metaAll.textContent = "地点を選んでください";
@@ -608,7 +548,7 @@ document.getElementById("search").onclick = async () => {
   }
 };
 
-// モード変更は render を呼ぶだけ（表示を更新）
+// モード変更は render を呼ぶだけ（表示を更新したいので残す）
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", render)
 );
@@ -617,85 +557,27 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 document.getElementById("refresh").onclick = () => render();
 
 // =========================
-// 追加ネタ：追加・管理ボタン
+// ネタ追加ボタン（localStorageへ保存）
 // =========================
-(function wireExtraUI(){
-  const addBtn = $("addPhraseBtn");
-  const statusEl = $("addStatus");
+document.getElementById("addPhraseBtn").onclick = () => {
+  const statusEl = document.getElementById("addStatus");
+  const mode = getManageMode();
+  const bucket = getManageBucket();
+  const text = (document.getElementById("newPhrase")?.value ?? "").trim();
 
-  const refreshBtn = $("manageRefresh");
-  const clearBucketBtn = $("manageClearBucket");
-  const clearAllBtn = $("manageClearAll");
+  const res = addExtraPhrase(mode, bucket, text);
 
-  // 初期表示
-  renderManageList();
+  if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
+  if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
 
-  // セレクト変更で一覧も更新したい（モード/確率を変えたら管理一覧も変える）
-  const modeSel = $("newPhraseMode");
-  const bucketSel = $("newPhraseBucket");
-  if (modeSel) modeSel.addEventListener("change", () => renderManageList());
-  if (bucketSel) bucketSel.addEventListener("change", () => renderManageList());
+  // 追加後は表示も更新（追加ネタが混ざるので）
+  render();
+};
 
-  if (addBtn) {
-    addBtn.onclick = () => {
-      const mode = getManageMode();
-      const bucket = getManageBucket();
-      const text = ($("newPhrase")?.value ?? "").trim();
-
-      const res = addExtraPhrase(mode, bucket, text);
-      if (statusEl) {
-        statusEl.textContent = res.ok ? `✅ ${res.message}` : `⚠️ ${res.message}`;
-      }
-      if (res.ok) {
-        if ($("newPhrase")) $("newPhrase").value = "";
-        renderManageList();
-        render(); // 表示に反映
-      }
-    };
-  }
-
-  if (refreshBtn) {
-    refreshBtn.onclick = () => {
-      renderManageList();
-      render(); // 念のため
-      if (statusEl) statusEl.textContent = "一覧を更新しました";
-    };
-  }
-
-  if (clearBucketBtn) {
-    clearBucketBtn.onclick = () => {
-      const mode = getManageMode();
-      const bucket = getManageBucket();
-      const b = window.bucket10(bucket);
-      const label = `${mode === "trivia" ? "雑学" : "お笑い"} / ${b}%`;
-
-      if (!confirm(`${label} の追加ネタを全部削除します。よろしいですか？`)) return;
-
-      const out = clearExtraBucket(mode, bucket);
-      if (statusEl) statusEl.textContent = `✅ ${label} を ${out.removed} 件削除しました`;
-      renderManageList();
-      render();
-    };
-  }
-
-  if (clearAllBtn) {
-    clearAllBtn.onclick = () => {
-      if (!confirm("追加ネタを全削除します。よろしいですか？")) return;
-      clearExtraAll();
-      if (statusEl) statusEl.textContent = "✅ 追加ネタを全削除しました";
-      renderManageList();
-      render();
-    };
-  }
-})();
-
-// =========================
 // Service Worker登録（PWA）
-// （今はトラブル回避のためOFFのままでOK）
-// =========================
-// if ("serviceWorker" in navigator) {
-//   navigator.serviceWorker.register("./sw.js", { scope: "./" });
-// }
+//if ("serviceWorker" in navigator) {
+//  navigator.serviceWorker.register("./sw.js", { scope: "./" });
+//}
 
 render();
 
