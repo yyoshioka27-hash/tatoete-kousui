@@ -1,7 +1,6 @@
 // =========================
 // 天気取得：Open-Meteo
 // =========================
-// ★保険：metaphors.js が読めてなくても落ちないようにする
 window.bucket10 = window.bucket10 || function (p) {
   p = Math.max(0, Math.min(100, Number(p)));
   const b = Math.round(p / 10) * 10;
@@ -12,26 +11,25 @@ const GEO = "https://geocoding-api.open-meteo.com/v1/search";
 const FC  = "https://api.open-meteo.com/v1/forecast";
 
 let state = {
-  pops: null,         // { m: number|null, d: number|null, e: number|null }
+  pops: null,
   placeLabel: null,
   tz: null,
   source: "API: 未接続",
-  // ★表示中ネタ（削除に備え、extraId も保持）
-  currentPhrases: { 
-    m: { text: null, extraId: null }, 
-    d: { text: null, extraId: null }, 
-    e: { text: null, extraId: null } 
+  currentPhrases: {
+    m: { text: null, extraId: null },
+    d: { text: null, extraId: null },
+    e: { text: null, extraId: null }
   }
 };
 
 // =========================
-// いいね（既存機能を維持）
+// いいね
 // =========================
 const LIKES_KEY = "metaphorLikes";
 
 function loadLikes() {
   try { return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}'); }
-  catch (e) { return {}; }
+  catch { return {}; }
 }
 function saveLikes(obj) { localStorage.setItem(LIKES_KEY, JSON.stringify(obj)); }
 
@@ -39,9 +37,8 @@ let likesData = loadLikes();
 
 function getSelectedMode() {
   const el = document.querySelector('input[name="mode"]:checked');
-  return el ? el.value : "trivia"; // デフォルトは雑学
+  return el ? el.value : "trivia";
 }
-
 function getLikesFor(phrase) { return likesData[phrase] || 0; }
 function incrementLike(phrase) {
   likesData[phrase] = (likesData[phrase] || 0) + 1;
@@ -52,7 +49,6 @@ function incrementLike(phrase) {
 // 追加ネタ（localStorage）
 // ==============================
 const EXTRA_LS_KEY = "extra_phrases_v1";
-
 const $ = (id) => document.getElementById(id);
 
 function genId() {
@@ -62,20 +58,6 @@ function genId() {
 
 function safeParseJSON(raw) {
   try { return JSON.parse(raw); } catch { return null; }
-}
-
-function loadExtraStore() {
-  const raw = localStorage.getItem(EXTRA_LS_KEY);
-  if (!raw) return [];
-  const data = safeParseJSON(raw);
-  if (!Array.isArray(data)) return [];
-  return normalizeExtraList(data);
-}
-
-function saveExtraStore(list) {
-  const norm = normalizeExtraList(list);
-  localStorage.setItem(EXTRA_LS_KEY, JSON.stringify(norm));
-  return norm;
 }
 
 function normalizeExtraList(list) {
@@ -90,7 +72,6 @@ function normalizeExtraList(list) {
     const text = String(item.text || "").trim();
     if (!text) continue;
 
-    // 同一内容は mode+bucket+text で重複排除
     const key = `${mode}__${bucket}__${text}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -104,9 +85,22 @@ function normalizeExtraList(list) {
     });
   }
 
-  // 新しい順
   out.sort((a, b) => (b.createdAt - a.createdAt));
   return out;
+}
+
+function loadExtraStore() {
+  const raw = localStorage.getItem(EXTRA_LS_KEY);
+  if (!raw) return [];
+  const data = safeParseJSON(raw);
+  if (!Array.isArray(data)) return [];
+  return normalizeExtraList(data);
+}
+
+function saveExtraStore(list) {
+  const norm = normalizeExtraList(list);
+  localStorage.setItem(EXTRA_LS_KEY, JSON.stringify(norm));
+  return norm;
 }
 
 function addExtraPhrase(mode, bucket, text) {
@@ -136,20 +130,69 @@ function getExtraItems(mode, bucket) {
   return store.filter(x => x.mode === m && x.bucket === b);
 }
 
-// 管理UI（今のUIは「ネタ追加」の選択を流用）
-function getManageMode() {
-  const el = $("newPhraseMode");
-  return el ? el.value : "trivia";
-}
-function getManageBucket() {
-  const el = $("newPhraseBucket");
-  return el ? Number(el.value) : 0;
+// =========================
+// 追加ネタ一覧パネル（追加ネタだけ）
+// =========================
+function renderExtraList() {
+  const modeEl = $("listMode");
+  const bucketEl = $("listBucket");
+  const statusEl = $("listStatus");
+  const bodyEl = $("listBody");
+
+  if (!modeEl || !bucketEl || !statusEl || !bodyEl) return;
+
+  const mode = modeEl.value || "trivia";
+  const bucket = Number(bucketEl.value || 0);
+
+  const items = getExtraItems(mode, bucket);
+
+  statusEl.textContent = `表示：${mode === "fun" ? "お笑い" : "雑学"} / ${window.bucket10(bucket)}%（${items.length}件）`;
+  bodyEl.innerHTML = "";
+
+  if (!items.length) {
+    bodyEl.innerHTML = `<div class="muted">この条件の追加ネタはありません。</div>`;
+    return;
+  }
+
+  for (const it of items) {
+    const div = document.createElement("div");
+    div.className = "listItem";
+
+    const left = document.createElement("div");
+    const text = document.createElement("div");
+    text.className = "listText";
+    text.textContent = it.text;
+
+    const meta = document.createElement("div");
+    meta.className = "listMeta";
+    const dt = new Date(it.createdAt);
+    meta.textContent = `追加日: ${dt.toLocaleString()}`;
+
+    left.appendChild(text);
+    left.appendChild(meta);
+
+    const right = document.createElement("div");
+    const btn = document.createElement("button");
+    btn.className = "btnSmall";
+    btn.textContent = "削除";
+    btn.onclick = () => {
+      if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
+      removeExtraById(it.id);
+      renderExtraList(); // 一覧即更新
+      render();          // 表示にも影響するので更新
+    };
+    right.appendChild(btn);
+
+    div.appendChild(left);
+    div.appendChild(right);
+
+    bodyEl.appendChild(div);
+  }
 }
 
 // =========================
 // お天気アイコン（%の前）
 // 0–20: 🌤️ / 30–60: ☁️ / 70–100: 🌧️
-// ※表示は10刻みなので 20→🌤️、30→☁️、70→🌧️ が効く
 // =========================
 function iconForPop(roundedPop) {
   const p = Number(roundedPop);
@@ -157,7 +200,6 @@ function iconForPop(roundedPop) {
   if (p <= 60) return "☁️";
   return "🌧️";
 }
-
 function setIcon(slotKey, roundedPop) {
   const el = document.getElementById(`wx_${slotKey}`);
   if (!el) return;
@@ -166,10 +208,8 @@ function setIcon(slotKey, roundedPop) {
 }
 
 // =========================
-// A版：ネタ選択
-// ✅ 既存ネタ + 追加ネタを「固定割合なし」で混ぜる
-//   → 候補配列を結合して抽選（候補数と👍で自然に混ざる）
-// 👍が多いほど出やすい + 直前回避（同じbucket連発回避）
+// ネタ抽選（既存 + 追加 を混ぜる）
+// → 候補を結合して抽選（候補数と👍で自然に混ざる）
 // =========================
 const lastPickKey = {};
 
@@ -178,24 +218,20 @@ function getBaseTexts(mode, bucket) {
   const base = (mode === "trivia"
     ? (window.NETA_TRIVIA?.[bucket] ?? [])
     : (window.NETA?.[bucket] ?? []));
-  // 文字列の正規化
   return base.map(x => String(x || "").trim()).filter(Boolean);
 }
 
 function buildCandidatePool(mode, bucket) {
   const b = window.bucket10(bucket);
 
-  // 既存ネタ
   const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
-
-  // 追加ネタ（id付き）
   const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
 
-  // 結合＋同文重複排除（既存と追加で同文があっても1つにする）
+  // 同文重複排除（先勝ち）
   const out = [];
   const seen = new Set();
   for (const item of [...baseTexts, ...extras]) {
-    const key = item.text; // text重複は1つに（extraIdは保持できないので、重複時は先勝ち）
+    const key = item.text;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(item);
@@ -204,11 +240,10 @@ function buildCandidatePool(mode, bucket) {
 }
 
 function weightedPick(items) {
-  // 👍重み: likes+1（text単位）
   const weights = items.map(it => (likesData[it.text] || 0) + 1);
   const total = weights.reduce((a, b) => a + b, 0);
-
   let r = Math.random() * total;
+
   for (let i = 0; i < items.length; i++) {
     if (r < weights[i]) return items[i];
     r -= weights[i];
@@ -221,10 +256,10 @@ function pickMetaphor(mode, bucket) {
   const pool = buildCandidatePool(mode, b);
   if (!pool.length) return { text: "データなし", extraId: null };
 
-  // 直前回避：同じ mode+bucket で連続同文を避ける
   const key = `${mode}_${b}`;
   let picked = weightedPick(pool);
 
+  // 直前回避（同じバケットで同じ文が連続しにくい）
   if (pool.length > 1) {
     let attempts = 0;
     while (picked.text === lastPickKey[key] && attempts < 6) {
@@ -234,11 +269,11 @@ function pickMetaphor(mode, bucket) {
   }
   lastPickKey[key] = picked.text;
 
-  return picked; // {text, extraId}
+  return picked;
 }
 
 // =========================
-// いいねUI更新（既存を維持）
+// いいねUI
 // =========================
 function updateLikeUI(slot) {
   const phraseObj = state.currentPhrases[slot];
@@ -269,7 +304,7 @@ function updateLikeUI(slot) {
 }
 
 // =========================
-// 「このネタを削除」ボタン制御
+// 「このネタを削除」ボタン（表示中の追加ネタだけ）
 // =========================
 function updateDeleteUI(slotKey) {
   const btn = document.getElementById(`del_${slotKey}`);
@@ -287,14 +322,13 @@ function updateDeleteUI(slotKey) {
   btn.onclick = () => {
     if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
     removeExtraById(extraId);
-
-    // 削除したら再抽選して即反映
-    render();
+    renderExtraList(); // 一覧も更新
+    render();          // 表示も更新
   };
 }
 
 // =========================
-// UI helpers
+// UI helper
 // =========================
 function setStatus(text, kind="muted") {
   const el = document.getElementById("placeStatus");
@@ -341,16 +375,13 @@ function render() {
       return null;
     }
 
-    const rounded = bucket10(value); // 0,10,20,...に丸める
+    const rounded = bucket10(value);
     if (popEl) popEl.textContent = `${rounded}%`;
 
-    // ★アイコン（%の前）
     setIcon(slotKey, rounded);
 
-    // ★ネタ抽選（固定割合なしで混ぜる＝候補結合して抽選）
     const mode = getSelectedMode();
     const picked = pickMetaphor(mode, rounded);
-
     if (metaEl) metaEl.textContent = `${label}：${picked.text}`;
 
     state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId };
@@ -548,21 +579,27 @@ document.getElementById("search").onclick = async () => {
   }
 };
 
-// モード変更は render を呼ぶだけ（表示を更新したいので残す）
+// モード変更は render
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", render)
 );
 
-// 「同じ確率でも例えを変える」ボタン
+// 「同じ確率でも例えを変える」
 document.getElementById("refresh").onclick = () => render();
 
 // =========================
-// ネタ追加ボタン（localStorageへ保存）
+// 追加ネタ一覧パネル：イベント
+// =========================
+if ($("listMode")) $("listMode").addEventListener("change", renderExtraList);
+if ($("listBucket")) $("listBucket").addEventListener("change", renderExtraList);
+
+// =========================
+// ネタ追加
 // =========================
 document.getElementById("addPhraseBtn").onclick = () => {
   const statusEl = document.getElementById("addStatus");
-  const mode = getManageMode();
-  const bucket = getManageBucket();
+  const mode = ($("newPhraseMode")?.value ?? "trivia");
+  const bucket = Number($("newPhraseBucket")?.value ?? 0);
   const text = (document.getElementById("newPhrase")?.value ?? "").trim();
 
   const res = addExtraPhrase(mode, bucket, text);
@@ -570,15 +607,12 @@ document.getElementById("addPhraseBtn").onclick = () => {
   if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
   if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
 
-  // 追加後は表示も更新（追加ネタが混ざるので）
-  render();
+  renderExtraList(); // 一覧も更新
+  render();          // 表示も更新
 };
 
-// Service Worker登録（PWA）
-//if ("serviceWorker" in navigator) {
-//  navigator.serviceWorker.register("./sw.js", { scope: "./" });
-//}
-
+// 初期表示
+renderExtraList();
 render();
 
 // END
