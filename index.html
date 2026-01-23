@@ -238,6 +238,18 @@
       .pill{ font-size: 11px; padding: 5px 8px; }
       .listItem{ grid-template-columns: 1fr; }
     }
+    /* 例えモード（雑学・お笑い）のラジオボタン位置調整 */
+.example-mode label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.example-mode input[type="radio"] {
+  transform: translateY(1px); /* iPhone/Safari対策 */
+}
+
   </style>
 </head>
 
@@ -436,3 +448,4 @@
 
 </body>
 </html>
+
