@@ -1,13 +1,56 @@
 // script.js
-fetch("./data/metaphors.json")
-  .then(res => res.json())
-  .then(json => {
-    window.JSON_METAPHORS = json.items || [];
-  })
-  .catch(() => {
-    window.JSON_METAPHORS = [];
-  });
 
+// ==============================
+// 共有ネタ（GitHub PagesのJSON）
+// ※ 起動時に読み込んで抽選候補へ混ぜる
+// ==============================
+const SHARED_JSON_URL = "./data/metaphors.json";
+let sharedItems = []; // [{mode,bucket,text}, ...]
+
+// 互換用（過去に入れた人向け）: JSON items をここにも入れる
+window.JSON_METAPHORS = window.JSON_METAPHORS || [];
+
+async function loadSharedJSON() {
+  try {
+    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`shared json http ${res.status}`);
+
+    const json = await res.json();
+    const items = Array.isArray(json?.items) ? json.items : [];
+
+    sharedItems = items
+      .map(it => ({
+        mode: (it.mode === "fun" ? "fun" : "trivia"),
+        bucket: window.bucket10(Number(it.bucket)),
+        text: String(it.text || "").trim()
+      }))
+      .filter(it => it.text);
+
+    // 互換：window.JSON_METAPHORS にも反映
+    window.JSON_METAPHORS = items || [];
+  } catch (e) {
+    sharedItems = [];
+    window.JSON_METAPHORS = [];
+  }
+}
+
+function getSharedItems(mode, bucket) {
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = window.bucket10(bucket);
+
+  // sharedItems を優先。空なら window.JSON_METAPHORS もフォールバックで使う
+  const base = (sharedItems && sharedItems.length)
+    ? sharedItems
+    : (Array.isArray(window.JSON_METAPHORS) ? window.JSON_METAPHORS.map(it => ({
+        mode: (it?.mode === "fun" ? "fun" : "trivia"),
+        bucket: window.bucket10(Number(it?.bucket)),
+        text: String(it?.text || "").trim()
+      })).filter(x => x.text) : []);
+
+  return base.filter(x => x.mode === m && x.bucket === b);
+}
+
+// 旧キーの掃除（そのまま維持）
 ["addedPhrases"].forEach(k => localStorage.removeItem(k));
 
 // =========================
@@ -37,7 +80,7 @@ let state = {
 const $ = (id) => document.getElementById(id);
 
 // =========================
-// いいね
+// 📌 採用候補（旧: いいね）
 // =========================
 const LIKES_KEY = "metaphorLikes";
 
@@ -63,35 +106,6 @@ function incrementLike(phrase) {
 // 追加ネタ（localStorage）
 // ==============================
 const EXTRA_LS_KEY = "extra_phrases_v1";
-// ==============================
-// 共有ネタ（GitHub PagesのJSON）
-// ==============================
-const SHARED_JSON_URL = "./data/metaphors.json";
-let sharedItems = []; // [{mode,bucket,text}, ...]
-
-async function loadSharedJSON() {
-  try {
-    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`shared json http ${res.status}`);
-    const json = await res.json();
-    const items = Array.isArray(json?.items) ? json.items : [];
-    sharedItems = items
-      .map(it => ({
-        mode: (it.mode === "fun" ? "fun" : "trivia"),
-        bucket: window.bucket10(Number(it.bucket)),
-        text: String(it.text || "").trim()
-      }))
-      .filter(it => it.text);
-  } catch (e) {
-    sharedItems = [];
-  }
-}
-
-function getSharedItems(mode, bucket) {
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = window.bucket10(bucket);
-  return (sharedItems || []).filter(x => x.mode === m && x.bucket === b);
-}
 
 function genId() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
@@ -244,10 +258,9 @@ function setupToggleExtraPanel() {
     panel.style.display = open ? "block" : "none";
     btn.textContent = open ? "追加ネタ一覧を閉じる ▲" : "追加ネタ一覧を開く ▼";
     btn.dataset.open = open ? "1" : "0";
-    if (open) renderExtraList(); // 開いた瞬間に最新表示
+    if (open) renderExtraList();
   };
 
-  // 初期は閉じる
   setOpen(false);
 
   btn.onclick = () => {
@@ -274,7 +287,7 @@ function setIcon(slotKey, roundedPop) {
 }
 
 // =========================
-// ネタ抽選（既存 + 追加 を混ぜる）
+// ネタ抽選（既存 + 追加 + 共有(JSON) を混ぜる）
 // =========================
 const lastPickKey = {};
 
@@ -291,11 +304,12 @@ function buildCandidatePool(mode, bucket) {
 
   const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
   const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
-　const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null }));
+  const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null }));
 
   const out = [];
   const seen = new Set();
   for (const item of [...baseTexts, ...extras, ...shared]) {
+    if (!item?.text) continue;
     if (seen.has(item.text)) continue;
     seen.add(item.text);
     out.push(item);
@@ -336,7 +350,8 @@ function pickMetaphor(mode, bucket) {
 }
 
 // =========================
-// いいねUI
+// 📌 採用候補UI（旧: いいねUI）
+// - ボタン文言を変更
 // =========================
 function updateLikeUI(slot) {
   const phraseObj = state.currentPhrases[slot];
@@ -349,19 +364,23 @@ function updateLikeUI(slot) {
   if (!phrase) {
     if (countEl) countEl.textContent = "0";
     if (badgeEl) badgeEl.textContent = "";
-    if (btnEl) { btnEl.disabled = true; btnEl.onclick = null; }
+    if (btnEl) { btnEl.disabled = true; btnEl.onclick = null; btnEl.textContent = "📌 採用候補"; }
     return;
   }
 
   const count = getLikesFor(phrase);
   if (countEl) countEl.textContent = String(count);
-  if (badgeEl) badgeEl.textContent = count >= 5 ? "⭐人気！" : "";
+  if (badgeEl) badgeEl.textContent = count >= 5 ? "⭐候補！" : "";
 
   if (btnEl) {
     btnEl.disabled = false;
+    // ① 文言変更（誤解防止）
+    btnEl.textContent = "📌 採用候補";
     btnEl.onclick = () => {
       incrementLike(phrase);
       updateLikeUI(slot);
+      // ② 編集長パネルが開いていれば更新
+      renderEditorPanel();
     };
   }
 }
@@ -385,10 +404,157 @@ function updateDeleteUI(slotKey) {
   btn.onclick = () => {
     if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
     removeExtraById(extraId);
-    // 開いていれば一覧も更新
     renderExtraList();
+    renderEditorPanel();
     render();
   };
+}
+
+// =========================
+// ② 編集長パネル（採用候補ランキング）
+// - 現在の mode / bucket の候補だけ表示
+// - 👍数の多い順
+// - HTMLは触らなくても動く（無ければ自動生成）
+// =========================
+function ensureEditorPanelDOM() {
+  // すでにHTMLにあるならそれを使う
+  if (document.getElementById("editorPanel")) return;
+
+  const anchor =
+    document.getElementById("extraListPanel") ||
+    document.getElementById("metaphor") ||
+    document.body;
+
+  const wrap = document.createElement("div");
+  wrap.id = "editorPanel";
+  wrap.style.marginTop = "14px";
+
+  const btn = document.createElement("button");
+  btn.id = "toggleEditor";
+  btn.textContent = "編集長パネル（採用候補）を開く ▼";
+  btn.style.marginBottom = "8px";
+
+  const note = document.createElement("div");
+  note.className = "muted";
+  note.textContent = "※「採用候補」はこの端末内だけの編集メモです。公開はされません。";
+
+  const panel = document.createElement("div");
+  panel.id = "editorBody";
+  panel.style.display = "none";
+  panel.style.border = "1px solid rgba(15,23,42,0.12)";
+  panel.style.borderRadius = "14px";
+  panel.style.padding = "12px";
+  panel.style.marginTop = "8px";
+
+  const head = document.createElement("div");
+  head.id = "editorStatus";
+  head.className = "muted";
+  head.style.marginBottom = "10px";
+
+  const list = document.createElement("div");
+  list.id = "editorList";
+
+  panel.appendChild(head);
+  panel.appendChild(list);
+
+  wrap.appendChild(btn);
+  wrap.appendChild(note);
+  wrap.appendChild(panel);
+
+  // anchorの直後に置く（できるだけ既存UIを崩さない）
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+  } else {
+    document.body.appendChild(wrap);
+  }
+
+  btn.onclick = () => {
+    const open = panel.style.display !== "none";
+    panel.style.display = open ? "none" : "block";
+    btn.textContent = open ? "編集長パネル（採用候補）を開く ▼" : "編集長パネル（採用候補）を閉じる ▲";
+    if (!open) renderEditorPanel();
+  };
+}
+
+function renderEditorPanel() {
+  const body = document.getElementById("editorBody");
+  const statusEl = document.getElementById("editorStatus");
+  const listEl = document.getElementById("editorList");
+  if (!body || body.style.display === "none") return;
+  if (!statusEl || !listEl) return;
+
+  // 現在の表示条件：mode / bucket（朝昼夜どれでも同じ bucket が来るので、最大候補から推定）
+  const mode = getSelectedMode();
+  const bCandidates = [
+    state?.pops?.m, state?.pops?.d, state?.pops?.e
+  ].filter(v => typeof v === "number").map(v => window.bucket10(v));
+
+  // 取れてなければ 0 として扱う（一覧は空になるだけ）
+  const bucket = bCandidates.length ? bCandidates[0] : 0;
+
+  // 現在の候補プール（base+extra+shared）を作り、👍付きのみ抽出
+  const pool = buildCandidatePool(mode, bucket);
+  const liked = pool
+    .map(it => ({
+      text: it.text,
+      count: getLikesFor(it.text),
+      source: (it.extraId ? "追加" : "既存/共有"),
+      extraId: it.extraId || null
+    }))
+    .filter(x => x.count > 0)
+    .sort((a, b) => (b.count - a.count) || a.text.localeCompare(b.text, "ja"));
+
+  statusEl.textContent = `条件：${mode === "fun" ? "お笑い" : "雑学"} / ${bucket}%　採用候補：${liked.length}件（👍数順）`;
+  listEl.innerHTML = "";
+
+  if (!liked.length) {
+    listEl.innerHTML = `<div class="muted">この条件では「採用候補（📌）」がまだありません。</div>`;
+    return;
+  }
+
+  for (const x of liked) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.gap = "10px";
+    row.style.padding = "10px 8px";
+    row.style.borderTop = "1px solid rgba(15,23,42,0.08)";
+
+    const left = document.createElement("div");
+    const t = document.createElement("div");
+    t.textContent = x.text;
+    const m = document.createElement("div");
+    m.className = "muted";
+    m.style.fontSize = "12px";
+    m.textContent = `👍 ${x.count} / 種別: ${x.source}`;
+
+    left.appendChild(t);
+    left.appendChild(m);
+
+    const right = document.createElement("div");
+    right.style.display = "flex";
+    right.style.gap = "6px";
+    right.style.alignItems = "center";
+
+    // 追加ネタなら「削除」ボタンも出す（既存/共有は削除不可）
+    if (x.extraId) {
+      const del = document.createElement("button");
+      del.className = "btnSmall";
+      del.textContent = "追加ネタ削除";
+      del.onclick = () => {
+        if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
+        removeExtraById(x.extraId);
+        renderExtraList();
+        renderEditorPanel();
+        render();
+      };
+      right.appendChild(del);
+    }
+
+    row.appendChild(left);
+    row.appendChild(right);
+    listEl.appendChild(row);
+  }
 }
 
 // =========================
@@ -439,7 +605,7 @@ function render() {
       return null;
     }
 
-    const rounded = window.bucket10(value); // ★安全に統一
+    const rounded = window.bucket10(value);
     if (popEl) popEl.textContent = `${rounded}%`;
 
     setIcon(slotKey, rounded);
@@ -459,6 +625,8 @@ function render() {
     if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
     renderEmpty();
     if (footEl) footEl.textContent = "";
+    // 編集長パネル更新（開いている場合のみ）
+    renderEditorPanel();
     return;
   }
 
@@ -476,7 +644,10 @@ function render() {
     if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
   }
 
-  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ候補からランダム表示（👍が多いほど出やすい）";
+  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)候補からランダム表示（📌採用候補が多いほど出やすい）";
+
+  // 編集長パネル更新（開いている場合のみ）
+  renderEditorPanel();
 }
 
 function renderEmpty() {
@@ -667,14 +838,25 @@ document.getElementById("addPhraseBtn").onclick = () => {
   if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
   if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
 
-  // 開いていれば一覧も更新
   renderExtraList();
+  renderEditorPanel();
   render();
 };
 
+// ==============================
 // 初期化
+// - editor panel DOMを確保
+// - 共有JSONを読んでから再描画（先にrenderしてもOKだが、読み込み後に確実に反映）
+// ==============================
 setupToggleExtraPanel();
-render();
+ensureEditorPanelDOM();
+render(); // 先に描画しておく（体感が軽い）
+
+loadSharedJSON().then(() => {
+  // 共有読み込み後に確実に反映
+  render();
+  renderEditorPanel();
+});
 
 // ==============================
 // Theme (Gradient) by precipitation
