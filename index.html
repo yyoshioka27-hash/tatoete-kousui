@@ -238,33 +238,29 @@
       .pill{ font-size: 11px; padding: 5px 8px; }
       .listItem{ grid-template-columns: 1fr; }
     }
-    /* 例えモード（雑学・お笑い）のラジオボタン位置調整 */
-/* 例えモード（雑学・お笑い）ズレ修正：レイアウトを壊さない版 */
-.example-mode {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start; /* 左揃え固定 */
-  gap: 10px;
-}
 
-.example-mode label {
-  display: inline-flex;      /* ← flex じゃなく inline-flex が重要 */
-  align-items: center;       /* ○と文字の縦位置を揃える */
-  gap: 8px;                  /* ○と文字の間隔 */
-  width: fit-content;        /* ← 横幅100%にしない（崩れ防止） */
-  cursor: pointer;
-}
-
-.example-mode input[type="radio"] {
-  margin: 0;                 /* 余計なズレ防止 */
-  transform: translateY(1px);/* iPhone/Safari微調整 */
-}
-
-
-.example-mode input[type="radio"] {
-  transform: translateY(1px); /* iPhone/Safari対策 */
-}
-
+    /* =========================
+       例えモード（雑学・お笑い）ズレ修正
+       ※レイアウトを壊さない版（重複なし）
+    ========================= */
+    .example-mode .modeWrap{
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .example-mode label{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      cursor: pointer;
+    }
+    .example-mode input[type="radio"]{
+      margin: 0;
+      transform: translateY(1px); /* iPhone/Safari微調整 */
+    }
   </style>
 </head>
 
@@ -293,12 +289,17 @@
       </div>
     </div>
 
-    <div class="card">
+    <!-- ✅ ここだけ class を追加：card example-mode -->
+    <div class="card example-mode">
       <div class="small">例えモード（※A版は統合表示）</div>
-      <div style="margin-top:10px;">
+
+      <!-- ✅ ラジオ行のラッパーを追加（CSS適用点） -->
+      <div class="modeWrap">
         <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
-        <label style="margin-left:10px;"><input type="radio" name="mode" value="fun"> お笑い</label>
+        <!-- ✅ margin-left は削除 -->
+        <label><input type="radio" name="mode" value="fun"> お笑い</label>
       </div>
+
       <div class="muted" style="margin-top:10px;">
         ※同じ確率でも、毎回ちがうネタが出ます（👍で出やすくなります）
       </div>
@@ -463,5 +464,3 @@
 
 </body>
 </html>
-
-
