@@ -102,6 +102,33 @@ function incrementLike(phrase) {
   saveLikes(likesData);
 }
 
+// =========================
+// ✅ NEW: 本当の「採用候補ピン」管理（解除できる）
+// ※ 旧👍カウントは「出やすさ」等で引き続き利用
+// =========================
+const PIN_KEY = "metaphorPins_v1";
+
+function loadPins(){
+  try { return JSON.parse(localStorage.getItem(PIN_KEY) || "{}"); }
+  catch { return {}; }
+}
+function savePins(obj){ localStorage.setItem(PIN_KEY, JSON.stringify(obj)); }
+
+let pinData = loadPins();
+
+function isPinned(phrase){
+  return !!pinData[phrase];
+}
+function setPinned(phrase, pinned){
+  if (!phrase) return;
+  if (pinned) pinData[phrase] = 1;
+  else delete pinData[phrase];
+  savePins(pinData);
+}
+function togglePinned(phrase){
+  setPinned(phrase, !isPinned(phrase));
+}
+
 // ==============================
 // 追加ネタ（localStorage）
 // ==============================
@@ -222,20 +249,45 @@ function renderExtraList() {
     const meta = document.createElement("div");
     meta.className = "listMeta";
     const dt = new Date(it.createdAt);
-    meta.textContent = `追加日: ${dt.toLocaleString()}`;
+
+    // ✅ ピン状態も表示（わかりやすく）
+    const pinMark = isPinned(it.text) ? "　📌採用候補" : "";
+    meta.textContent = `追加日: ${dt.toLocaleString()}${pinMark}`;
 
     left.appendChild(text);
     left.appendChild(meta);
 
     const right = document.createElement("div");
+    right.style.display = "flex";
+    right.style.gap = "8px";
+    right.style.alignItems = "center";
+
+    // ✅ NEW: 📌採用候補ボタン（トグル）
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "btnSmall";
+    pinBtn.textContent = isPinned(it.text) ? "📌 解除" : "📌 採用候補";
+    pinBtn.onclick = () => {
+      togglePinned(it.text);
+      renderExtraList();
+      renderEditorPanel();  // 開いていれば反映
+      render();             // 下の注記など更新
+    };
+    right.appendChild(pinBtn);
+
+    // 削除ボタン（既存）
     const btn = document.createElement("button");
     btn.className = "btnSmall";
     btn.textContent = "削除";
     btn.onclick = () => {
       if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
+
+      // ✅ 削除時：そのネタがピンされてたらピンも解除（取り残し防止）
+      if (isPinned(it.text)) setPinned(it.text, false);
+
       removeExtraById(it.id);
       renderExtraList();
       render();
+      renderEditorPanel();
     };
     right.appendChild(btn);
 
@@ -318,7 +370,14 @@ function buildCandidatePool(mode, bucket) {
 }
 
 function weightedPick(items) {
-  const weights = items.map(it => (likesData[it.text] || 0) + 1);
+  // ✅ ピンは「採用候補なので出やすい」：重みを強めに加算
+  // ✅ 既存の👍もそのまま効かせる
+  const weights = items.map(it => {
+    const like = (likesData[it.text] || 0);
+    const pinBoost = isPinned(it.text) ? 8 : 0; // 強め（必要なら調整）
+    return like + pinBoost + 1;
+  });
+
   const total = weights.reduce((a, b) => a + b, 0);
   let r = Math.random() * total;
 
@@ -370,16 +429,27 @@ function updateLikeUI(slot) {
 
   const count = getLikesFor(phrase);
   if (countEl) countEl.textContent = String(count);
-  if (badgeEl) badgeEl.textContent = count >= 5 ? "⭐候補！" : "";
+
+  // ✅ ピンされてたらバッジ表示（既存⭐候補と共存）
+  const pinned = isPinned(phrase);
+  if (badgeEl) {
+    if (pinned) badgeEl.textContent = "📌候補";
+    else badgeEl.textContent = count >= 5 ? "⭐候補！" : "";
+  }
 
   if (btnEl) {
     btnEl.disabled = false;
-    // ① 文言変更（誤解防止）
-    btnEl.textContent = "📌 採用候補";
+
+    // ✅ ここを「ピンのトグル」にする（解除可能）
+    btnEl.textContent = pinned ? "📌 候補解除" : "📌 採用候補";
     btnEl.onclick = () => {
-      incrementLike(phrase);
+      togglePinned(phrase);
+
+      // 旧👍は残す（押した＝候補にした、という記録として1加算してもOK）
+      // ただし「解除」時に減らすのはしない（集計の意味が変わるので）
+      if (!pinned) incrementLike(phrase);
+
       updateLikeUI(slot);
-      // ② 編集長パネルが開いていれば更新
       renderEditorPanel();
     };
   }
@@ -403,6 +473,11 @@ function updateDeleteUI(slotKey) {
   btn.style.display = "inline-block";
   btn.onclick = () => {
     if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
+
+    // ✅ 表示中のテキストがピンされていたら解除もする
+    const txt = state.currentPhrases[slotKey]?.text;
+    if (txt && isPinned(txt)) setPinned(txt, false);
+
     removeExtraById(extraId);
     renderExtraList();
     renderEditorPanel();
@@ -413,7 +488,7 @@ function updateDeleteUI(slotKey) {
 // =========================
 // ② 編集長パネル（採用候補ランキング）
 // - 現在の mode / bucket の候補だけ表示
-// - 👍数の多い順
+// - 📌優先、同率なら👍数順
 // - HTMLは触らなくても動く（無ければ自動生成）
 // =========================
 function ensureEditorPanelDOM() {
@@ -492,27 +567,39 @@ function renderEditorPanel() {
   // 取れてなければ 0 として扱う（一覧は空になるだけ）
   const bucket = bCandidates.length ? bCandidates[0] : 0;
 
-  // 現在の候補プール（base+extra+shared）を作り、👍付きのみ抽出
+  // 現在の候補プール（base+extra+shared）を作り、📌 or 👍付きのみ抽出
   const pool = buildCandidatePool(mode, bucket);
-  const liked = pool
-    .map(it => ({
-      text: it.text,
-      count: getLikesFor(it.text),
-      source: (it.extraId ? "追加" : "既存/共有"),
-      extraId: it.extraId || null
-    }))
-    .filter(x => x.count > 0)
-    .sort((a, b) => (b.count - a.count) || a.text.localeCompare(b.text, "ja"));
 
-  statusEl.textContent = `条件：${mode === "fun" ? "お笑い" : "雑学"} / ${bucket}%　採用候補：${liked.length}件（👍数順）`;
+  const picked = pool
+    .map(it => {
+      const txt = it.text;
+      const pinned = isPinned(txt);
+      const count = getLikesFor(txt);
+      return {
+        text: txt,
+        pinned,
+        count,
+        source: (it.extraId ? "追加" : "既存/共有"),
+        extraId: it.extraId || null
+      };
+    })
+    .filter(x => x.pinned || x.count > 0) // 📌か👍が1以上
+    .sort((a, b) => {
+      // 📌優先 → 👍多い順 → あいうえお
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      if (b.count !== a.count) return b.count - a.count;
+      return a.text.localeCompare(b.text, "ja");
+    });
+
+  statusEl.textContent = `条件：${mode === "fun" ? "お笑い" : "雑学"} / ${bucket}%　採用候補：${picked.length}件（📌優先→👍数順）`;
   listEl.innerHTML = "";
 
-  if (!liked.length) {
+  if (!picked.length) {
     listEl.innerHTML = `<div class="muted">この条件では「採用候補（📌）」がまだありません。</div>`;
     return;
   }
 
-  for (const x of liked) {
+  for (const x of picked) {
     const row = document.createElement("div");
     row.style.display = "flex";
     row.style.justifyContent = "space-between";
@@ -523,10 +610,11 @@ function renderEditorPanel() {
     const left = document.createElement("div");
     const t = document.createElement("div");
     t.textContent = x.text;
+
     const m = document.createElement("div");
     m.className = "muted";
     m.style.fontSize = "12px";
-    m.textContent = `👍 ${x.count} / 種別: ${x.source}`;
+    m.textContent = `${x.pinned ? "📌" : "　"} 👍 ${x.count} / 種別: ${x.source}`;
 
     left.appendChild(t);
     left.appendChild(m);
@@ -536,6 +624,18 @@ function renderEditorPanel() {
     right.style.gap = "6px";
     right.style.alignItems = "center";
 
+    // ✅ ピン解除/再ピン
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "btnSmall";
+    pinBtn.textContent = x.pinned ? "📌解除" : "📌採用候補";
+    pinBtn.onclick = () => {
+      togglePinned(x.text);
+      renderEditorPanel();
+      renderExtraList();
+      render();
+    };
+    right.appendChild(pinBtn);
+
     // 追加ネタなら「削除」ボタンも出す（既存/共有は削除不可）
     if (x.extraId) {
       const del = document.createElement("button");
@@ -543,6 +643,9 @@ function renderEditorPanel() {
       del.textContent = "追加ネタ削除";
       del.onclick = () => {
         if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
+        // 削除対象がピンされてたら解除も
+        if (isPinned(x.text)) setPinned(x.text, false);
+
         removeExtraById(x.extraId);
         renderExtraList();
         renderEditorPanel();
