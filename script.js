@@ -1,4 +1,13 @@
 // script.js
+fetch("./data/metaphors.json")
+  .then(res => res.json())
+  .then(json => {
+    window.JSON_METAPHORS = json.items || [];
+  })
+  .catch(() => {
+    window.JSON_METAPHORS = [];
+  });
+
 ["addedPhrases"].forEach(k => localStorage.removeItem(k));
 
 // =========================
