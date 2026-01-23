@@ -282,10 +282,11 @@ function buildCandidatePool(mode, bucket) {
 
   const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
   const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
+　const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null }));
 
   const out = [];
   const seen = new Set();
-  for (const item of [...baseTexts, ...extras]) {
+  for (const item of [...baseTexts, ...extras, ...shared]) {
     if (seen.has(item.text)) continue;
     seen.add(item.text);
     out.push(item);
