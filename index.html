@@ -239,12 +239,27 @@
       .listItem{ grid-template-columns: 1fr; }
     }
     /* 例えモード（雑学・お笑い）のラジオボタン位置調整 */
-.example-mode label {
+/* 例えモード（雑学・お笑い）ズレ修正：レイアウトを壊さない版 */
+.example-mode {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start; /* 左揃え固定 */
+  gap: 10px;
+}
+
+.example-mode label {
+  display: inline-flex;      /* ← flex じゃなく inline-flex が重要 */
+  align-items: center;       /* ○と文字の縦位置を揃える */
+  gap: 8px;                  /* ○と文字の間隔 */
+  width: fit-content;        /* ← 横幅100%にしない（崩れ防止） */
   cursor: pointer;
 }
+
+.example-mode input[type="radio"] {
+  margin: 0;                 /* 余計なズレ防止 */
+  transform: translateY(1px);/* iPhone/Safari微調整 */
+}
+
 
 .example-mode input[type="radio"] {
   transform: translateY(1px); /* iPhone/Safari対策 */
@@ -448,4 +463,5 @@
 
 </body>
 </html>
+
 
