@@ -54,6 +54,35 @@ function incrementLike(phrase) {
 // 追加ネタ（localStorage）
 // ==============================
 const EXTRA_LS_KEY = "extra_phrases_v1";
+// ==============================
+// 共有ネタ（GitHub PagesのJSON）
+// ==============================
+const SHARED_JSON_URL = "./data/metaphors.json";
+let sharedItems = []; // [{mode,bucket,text}, ...]
+
+async function loadSharedJSON() {
+  try {
+    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`shared json http ${res.status}`);
+    const json = await res.json();
+    const items = Array.isArray(json?.items) ? json.items : [];
+    sharedItems = items
+      .map(it => ({
+        mode: (it.mode === "fun" ? "fun" : "trivia"),
+        bucket: window.bucket10(Number(it.bucket)),
+        text: String(it.text || "").trim()
+      }))
+      .filter(it => it.text);
+  } catch (e) {
+    sharedItems = [];
+  }
+}
+
+function getSharedItems(mode, bucket) {
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = window.bucket10(bucket);
+  return (sharedItems || []).filter(x => x.mode === m && x.bucket === b);
+}
 
 function genId() {
   if (window.crypto?.randomUUID) return crypto.randomUUID();
