@@ -1,6 +1,0 @@
-{
-  "version": 1,
-  "items": [
-    { "mode": "trivia", "bucket": 0, "text": "テスト用ネタ（JSONから読み込み）" }
-  ]
-}
