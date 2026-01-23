@@ -1,4 +1,5 @@
 // script.js
+["addedPhrases"].forEach(k => localStorage.removeItem(k));
 
 // =========================
 // 天気取得：Open-Meteo
