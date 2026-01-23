@@ -1,895 +1,433 @@
-// script.js
-
-// ==============================
-// 共有ネタ（GitHub PagesのJSON）
-// ※ 起動時に読み込んで抽選候補へ混ぜる
-// ==============================
-const SHARED_JSON_URL = "./data/metaphors.json";
-let sharedItems = []; // [{mode,bucket,text}, ...]
-
-// 互換用（過去に入れた人向け）: JSON items をここにも入れる
-window.JSON_METAPHORS = window.JSON_METAPHORS || [];
-
-async function loadSharedJSON() {
-  try {
-    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`shared json http ${res.status}`);
-
-    const json = await res.json();
-    const items = Array.isArray(json?.items) ? json.items : [];
-
-    sharedItems = items
-      .map(it => ({
-        mode: (it.mode === "fun" ? "fun" : "trivia"),
-        bucket: window.bucket10(Number(it.bucket)),
-        text: String(it.text || "").trim()
-      }))
-      .filter(it => it.text);
-
-    // 互換：window.JSON_METAPHORS にも反映
-    window.JSON_METAPHORS = items || [];
-  } catch (e) {
-    sharedItems = [];
-    window.JSON_METAPHORS = [];
-  }
-}
-
-function getSharedItems(mode, bucket) {
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = window.bucket10(bucket);
-
-  // sharedItems を優先。空なら window.JSON_METAPHORS もフォールバックで使う
-  const base = (sharedItems && sharedItems.length)
-    ? sharedItems
-    : (Array.isArray(window.JSON_METAPHORS) ? window.JSON_METAPHORS.map(it => ({
-        mode: (it?.mode === "fun" ? "fun" : "trivia"),
-        bucket: window.bucket10(Number(it?.bucket)),
-        text: String(it?.text || "").trim()
-      })).filter(x => x.text) : []);
-
-  return base.filter(x => x.mode === m && x.bucket === b);
-}
-
-// 旧キーの掃除（そのまま維持）
-["addedPhrases"].forEach(k => localStorage.removeItem(k));
-
-// =========================
-// 天気取得：Open-Meteo
-// =========================
-window.bucket10 = window.bucket10 || function (p) {
-  p = Math.max(0, Math.min(100, Number(p)));
-  const b = Math.round(p / 10) * 10;
-  return Math.max(0, Math.min(100, b));
-};
-
-const GEO = "https://geocoding-api.open-meteo.com/v1/search";
-const FC  = "https://api.open-meteo.com/v1/forecast";
-
-let state = {
-  pops: null,
-  placeLabel: null,
-  tz: null,
-  source: "API: 未接続",
-  currentPhrases: {
-    m: { text: null, extraId: null },
-    d: { text: null, extraId: null },
-    e: { text: null, extraId: null }
-  }
-};
-
-const $ = (id) => document.getElementById(id);
-
-// =========================
-// 📌 採用候補（旧: いいね）
-// =========================
-const LIKES_KEY = "metaphorLikes";
-
-function loadLikes() {
-  try { return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}'); }
-  catch { return {}; }
-}
-function saveLikes(obj) { localStorage.setItem(LIKES_KEY, JSON.stringify(obj)); }
-
-let likesData = loadLikes();
-
-function getSelectedMode() {
-  const el = document.querySelector('input[name="mode"]:checked');
-  return el ? el.value : "trivia";
-}
-function getLikesFor(phrase) { return likesData[phrase] || 0; }
-function incrementLike(phrase) {
-  likesData[phrase] = (likesData[phrase] || 0) + 1;
-  saveLikes(likesData);
-}
-
-// ==============================
-// 追加ネタ（localStorage）
-// ==============================
-const EXTRA_LS_KEY = "extra_phrases_v1";
-
-function genId() {
-  if (window.crypto?.randomUUID) return crypto.randomUUID();
-  return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function safeParseJSON(raw) {
-  try { return JSON.parse(raw); } catch { return null; }
-}
-
-function normalizeExtraList(list) {
-  const out = [];
-  const seen = new Set();
-
-  for (const item of (list || [])) {
-    if (!item) continue;
-
-    const mode = (item.mode === "fun" ? "fun" : "trivia");
-    const bucket = window.bucket10(Number(item.bucket));
-    const text = String(item.text || "").trim();
-    if (!text) continue;
-
-    const key = `${mode}__${bucket}__${text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    out.push({
-      id: String(item.id || genId()),
-      mode,
-      bucket,
-      text,
-      createdAt: Number(item.createdAt || Date.now())
-    });
-  }
-
-  out.sort((a, b) => (b.createdAt - a.createdAt));
-  return out;
-}
-
-function loadExtraStore() {
-  const raw = localStorage.getItem(EXTRA_LS_KEY);
-  if (!raw) return [];
-  const data = safeParseJSON(raw);
-  if (!Array.isArray(data)) return [];
-  return normalizeExtraList(data);
-}
-
-function saveExtraStore(list) {
-  const norm = normalizeExtraList(list);
-  localStorage.setItem(EXTRA_LS_KEY, JSON.stringify(norm));
-  return norm;
-}
-
-function addExtraPhrase(mode, bucket, text) {
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = window.bucket10(bucket);
-  const t = String(text || "").trim();
-  if (!t) return { ok: false, msg: "ネタが空です" };
-
-  let store = loadExtraStore();
-  store.unshift({ id: genId(), mode: m, bucket: b, text: t, createdAt: Date.now() });
-  saveExtraStore(store);
-  return { ok: true, msg: `追加しました（${m === "fun" ? "お笑い" : "雑学"} / ${b}%）` };
-}
-
-function removeExtraById(id) {
-  let store = loadExtraStore();
-  const before = store.length;
-  store = store.filter(x => x.id !== id);
-  saveExtraStore(store);
-  return { removed: before - store.length };
-}
-
-function getExtraItems(mode, bucket) {
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = window.bucket10(bucket);
-  const store = loadExtraStore();
-  return store.filter(x => x.mode === m && x.bucket === b);
-}
-
-// =========================
-// 追加ネタ一覧パネル（追加ネタだけ）
-// =========================
-function renderExtraList() {
-  const modeEl = $("listMode");
-  const bucketEl = $("listBucket");
-  const statusEl = $("listStatus");
-  const bodyEl = $("listBody");
-
-  if (!modeEl || !bucketEl || !statusEl || !bodyEl) return;
-
-  const mode = modeEl.value || "trivia";
-  const bucket = Number(bucketEl.value || 0);
-
-  const items = getExtraItems(mode, bucket);
-
-  statusEl.textContent = `表示：${mode === "fun" ? "お笑い" : "雑学"} / ${window.bucket10(bucket)}%（${items.length}件）`;
-  bodyEl.innerHTML = "";
-
-  if (!items.length) {
-    bodyEl.innerHTML = `<div class="muted">この条件の追加ネタはありません。</div>`;
-    return;
-  }
-
-  for (const it of items) {
-    const div = document.createElement("div");
-    div.className = "listItem";
-
-    const left = document.createElement("div");
-    const text = document.createElement("div");
-    text.className = "listText";
-    text.textContent = it.text;
-
-    const meta = document.createElement("div");
-    meta.className = "listMeta";
-    const dt = new Date(it.createdAt);
-    meta.textContent = `追加日: ${dt.toLocaleString()}`;
-
-    left.appendChild(text);
-    left.appendChild(meta);
-
-    const right = document.createElement("div");
-    const btn = document.createElement("button");
-    btn.className = "btnSmall";
-    btn.textContent = "削除";
-    btn.onclick = () => {
-      if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
-      removeExtraById(it.id);
-      renderExtraList();
-      render();
-    };
-    right.appendChild(btn);
-
-    div.appendChild(left);
-    div.appendChild(right);
-
-    bodyEl.appendChild(div);
-  }
-}
-
-// =========================
-// 開閉ボタン（追加ネタ一覧）
-// =========================
-function setupToggleExtraPanel() {
-  const btn = $("toggleExtraList");
-  const panel = $("extraListPanel");
-  if (!btn || !panel) return;
-
-  const setOpen = (open) => {
-    panel.style.display = open ? "block" : "none";
-    btn.textContent = open ? "追加ネタ一覧を閉じる ▲" : "追加ネタ一覧を開く ▼";
-    btn.dataset.open = open ? "1" : "0";
-    if (open) renderExtraList();
-  };
-
-  setOpen(false);
-
-  btn.onclick = () => {
-    const nowOpen = btn.dataset.open === "1";
-    setOpen(!nowOpen);
-  };
-}
-
-// =========================
-// お天気アイコン（%の前）
-// 0–20: 🌤️ / 30–60: ☁️ / 70–100: 🌧️
-// =========================
-function iconForPop(roundedPop) {
-  const p = Number(roundedPop);
-  if (p <= 20) return "🌤️";
-  if (p <= 60) return "☁️";
-  return "🌧️";
-}
-function setIcon(slotKey, roundedPop) {
-  const el = document.getElementById(`wx_${slotKey}`);
-  if (!el) return;
-  if (roundedPop == null) { el.textContent = "--"; return; }
-  el.textContent = iconForPop(roundedPop);
-}
-
-// =========================
-// ネタ抽選（既存 + 追加 + 共有(JSON) を混ぜる）
-// =========================
-const lastPickKey = {};
-
-function getBaseTexts(mode, bucket) {
-  bucket = Number(bucket);
-  const base = (mode === "trivia"
-    ? (window.NETA_TRIVIA?.[bucket] ?? [])
-    : (window.NETA?.[bucket] ?? []));
-  return base.map(x => String(x || "").trim()).filter(Boolean);
-}
-
-function buildCandidatePool(mode, bucket) {
-  const b = window.bucket10(bucket);
-
-  const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
-  const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
-  const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null }));
-
-  const out = [];
-  const seen = new Set();
-  for (const item of [...baseTexts, ...extras, ...shared]) {
-    if (!item?.text) continue;
-    if (seen.has(item.text)) continue;
-    seen.add(item.text);
-    out.push(item);
-  }
-  return out;
-}
-
-function weightedPick(items) {
-  const weights = items.map(it => (likesData[it.text] || 0) + 1);
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-
-  for (let i = 0; i < items.length; i++) {
-    if (r < weights[i]) return items[i];
-    r -= weights[i];
-  }
-  return items[0];
-}
-
-function pickMetaphor(mode, bucket) {
-  const b = window.bucket10(bucket);
-  const pool = buildCandidatePool(mode, b);
-  if (!pool.length) return { text: "データなし", extraId: null };
-
-  const key = `${mode}_${b}`;
-  let picked = weightedPick(pool);
-
-  if (pool.length > 1) {
-    let attempts = 0;
-    while (picked.text === lastPickKey[key] && attempts < 6) {
-      picked = weightedPick(pool);
-      attempts++;
-    }
-  }
-  lastPickKey[key] = picked.text;
-
-  return picked;
-}
-
-// =========================
-// 📌 採用候補UI（旧: いいねUI）
-// - ボタン文言を変更
-// =========================
-function updateLikeUI(slot) {
-  const phraseObj = state.currentPhrases[slot];
-  const phrase = phraseObj?.text;
-
-  const countEl = document.getElementById(`likeCount_${slot}`);
-  const badgeEl = document.getElementById(`badge_${slot}`);
-  const btnEl = document.getElementById(`like_${slot}`);
-
-  if (!phrase) {
-    if (countEl) countEl.textContent = "0";
-    if (badgeEl) badgeEl.textContent = "";
-    if (btnEl) { btnEl.disabled = true; btnEl.onclick = null; btnEl.textContent = "📌 採用候補"; }
-    return;
-  }
-
-  const count = getLikesFor(phrase);
-  if (countEl) countEl.textContent = String(count);
-  if (badgeEl) badgeEl.textContent = count >= 5 ? "⭐候補！" : "";
-
-  if (btnEl) {
-    btnEl.disabled = false;
-    // ① 文言変更（誤解防止）
-    btnEl.textContent = "📌 採用候補";
-    btnEl.onclick = () => {
-      incrementLike(phrase);
-      updateLikeUI(slot);
-      // ② 編集長パネルが開いていれば更新
-      renderEditorPanel();
-    };
-  }
-}
-
-// =========================
-// 「このネタを削除」（表示中の追加ネタだけ）
-// =========================
-function updateDeleteUI(slotKey) {
-  const btn = document.getElementById(`del_${slotKey}`);
-  if (!btn) return;
-
-  const extraId = state.currentPhrases[slotKey]?.extraId || null;
-
-  if (!extraId) {
-    btn.style.display = "none";
-    btn.onclick = null;
-    return;
-  }
-
-  btn.style.display = "inline-block";
-  btn.onclick = () => {
-    if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
-    removeExtraById(extraId);
-    renderExtraList();
-    renderEditorPanel();
-    render();
-  };
-}
-
-// =========================
-// ② 編集長パネル（採用候補ランキング）
-// - 現在の mode / bucket の候補だけ表示
-// - 👍数の多い順
-// - HTMLは触らなくても動く（無ければ自動生成）
-// =========================
-function ensureEditorPanelDOM() {
-  // すでにHTMLにあるならそれを使う
-  if (document.getElementById("editorPanel")) return;
-
-  const anchor =
-    document.getElementById("extraListPanel") ||
-    document.getElementById("metaphor") ||
-    document.body;
-
-  const wrap = document.createElement("div");
-  wrap.id = "editorPanel";
-  wrap.style.marginTop = "14px";
-
-  const btn = document.createElement("button");
-  btn.id = "toggleEditor";
-  btn.textContent = "編集長パネル（採用候補）を開く ▼";
-  btn.style.marginBottom = "8px";
-
-  const note = document.createElement("div");
-  note.className = "muted";
-  note.textContent = "※「採用候補」はこの端末内だけの編集メモです。公開はされません。";
-
-  const panel = document.createElement("div");
-  panel.id = "editorBody";
-  panel.style.display = "none";
-  panel.style.border = "1px solid rgba(15,23,42,0.12)";
-  panel.style.borderRadius = "14px";
-  panel.style.padding = "12px";
-  panel.style.marginTop = "8px";
-
-  const head = document.createElement("div");
-  head.id = "editorStatus";
-  head.className = "muted";
-  head.style.marginBottom = "10px";
-
-  const list = document.createElement("div");
-  list.id = "editorList";
-
-  panel.appendChild(head);
-  panel.appendChild(list);
-
-  wrap.appendChild(btn);
-  wrap.appendChild(note);
-  wrap.appendChild(panel);
-
-  // anchorの直後に置く（できるだけ既存UIを崩さない）
-  if (anchor && anchor.parentNode) {
-    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
-  } else {
-    document.body.appendChild(wrap);
-  }
-
-  btn.onclick = () => {
-    const open = panel.style.display !== "none";
-    panel.style.display = open ? "none" : "block";
-    btn.textContent = open ? "編集長パネル（採用候補）を開く ▼" : "編集長パネル（採用候補）を閉じる ▲";
-    if (!open) renderEditorPanel();
-  };
-}
-
-function renderEditorPanel() {
-  const body = document.getElementById("editorBody");
-  const statusEl = document.getElementById("editorStatus");
-  const listEl = document.getElementById("editorList");
-  if (!body || body.style.display === "none") return;
-  if (!statusEl || !listEl) return;
-
-  // 現在の表示条件：mode / bucket（朝昼夜どれでも同じ bucket が来るので、最大候補から推定）
-  const mode = getSelectedMode();
-  const bCandidates = [
-    state?.pops?.m, state?.pops?.d, state?.pops?.e
-  ].filter(v => typeof v === "number").map(v => window.bucket10(v));
-
-  // 取れてなければ 0 として扱う（一覧は空になるだけ）
-  const bucket = bCandidates.length ? bCandidates[0] : 0;
-
-  // 現在の候補プール（base+extra+shared）を作り、👍付きのみ抽出
-  const pool = buildCandidatePool(mode, bucket);
-  const liked = pool
-    .map(it => ({
-      text: it.text,
-      count: getLikesFor(it.text),
-      source: (it.extraId ? "追加" : "既存/共有"),
-      extraId: it.extraId || null
-    }))
-    .filter(x => x.count > 0)
-    .sort((a, b) => (b.count - a.count) || a.text.localeCompare(b.text, "ja"));
-
-  statusEl.textContent = `条件：${mode === "fun" ? "お笑い" : "雑学"} / ${bucket}%　採用候補：${liked.length}件（👍数順）`;
-  listEl.innerHTML = "";
-
-  if (!liked.length) {
-    listEl.innerHTML = `<div class="muted">この条件では「採用候補（📌）」がまだありません。</div>`;
-    return;
-  }
-
-  for (const x of liked) {
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.justifyContent = "space-between";
-    row.style.gap = "10px";
-    row.style.padding = "10px 8px";
-    row.style.borderTop = "1px solid rgba(15,23,42,0.08)";
-
-    const left = document.createElement("div");
-    const t = document.createElement("div");
-    t.textContent = x.text;
-    const m = document.createElement("div");
-    m.className = "muted";
-    m.style.fontSize = "12px";
-    m.textContent = `👍 ${x.count} / 種別: ${x.source}`;
-
-    left.appendChild(t);
-    left.appendChild(m);
-
-    const right = document.createElement("div");
-    right.style.display = "flex";
-    right.style.gap = "6px";
-    right.style.alignItems = "center";
-
-    // 追加ネタなら「削除」ボタンも出す（既存/共有は削除不可）
-    if (x.extraId) {
-      const del = document.createElement("button");
-      del.className = "btnSmall";
-      del.textContent = "追加ネタ削除";
-      del.onclick = () => {
-        if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
-        removeExtraById(x.extraId);
-        renderExtraList();
-        renderEditorPanel();
-        render();
-      };
-      right.appendChild(del);
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+
+  <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
+
+  <style>
+    /* =========================
+       Pro UI Base
+    ========================= */
+    :root{
+      --bg1:#ffffff;
+      --bg2:#ffffff;
+      --accent:#2563eb;
+      --text:#0f172a;
+      --sub:#475569;
+
+      --card: rgba(255,255,255,0.86);
+      --card-border: rgba(15, 23, 42, 0.08);
+      --shadow: 0 12px 28px rgba(2,6,23,0.10);
+
+      --radius: 18px;
+      --radius2: 14px;
+
+      --space: 18px;
+      --space2: 12px;
+
+      --tap: 44px;
     }
 
-    row.appendChild(left);
-    row.appendChild(right);
-    listEl.appendChild(row);
-  }
-}
-
-// =========================
-// UI helper
-// =========================
-function setStatus(text, kind="muted") {
-  const el = document.getElementById("placeStatus");
-  if (!el) return;
-  el.className = kind;
-  el.textContent = text;
-}
-
-function normalizePlaceName(input) {
-  return input
-    .replace(/[ 　]+/g, " ")
-    .replace(/(都|道|府|県|市|区|町|村)$/g, "")
-    .replace(/(都|道|府|県|市|区|町|村)/g, "")
-    .trim();
-}
-
-// =========================
-// render
-// =========================
-function render() {
-  const hintEl = document.getElementById("popHint");
-  const sourceTag = document.getElementById("sourceTag");
-  const tzTag = document.getElementById("tzTag");
-
-  const metaAll = document.getElementById("metaphor");
-  const footEl = document.getElementById("metaFoot");
-
-  if (sourceTag) sourceTag.textContent = state.source;
-  if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
-
-  const setSlot = (slotKey, value, label) => {
-    const popEl = document.getElementById(`pop_${slotKey}`);
-    const metaEl = document.getElementById(`meta_${slotKey}`);
-
-    if (value == null) {
-      if (popEl) popEl.textContent = "--%";
-      if (metaEl) metaEl.textContent = "データなし";
-
-      setIcon(slotKey, null);
-
-      state.currentPhrases[slotKey] = { text: null, extraId: null };
-      updateLikeUI(slotKey);
-      updateDeleteUI(slotKey);
-      return null;
+    body{
+      margin:0;
+      padding: 18px;
+      font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      background: linear-gradient(180deg, var(--bg1), var(--bg2));
+      color: var(--text);
     }
 
-    const rounded = window.bucket10(value);
-    if (popEl) popEl.textContent = `${rounded}%`;
-
-    setIcon(slotKey, rounded);
-
-    const mode = getSelectedMode();
-    const picked = pickMetaphor(mode, rounded);
-    if (metaEl) metaEl.textContent = `${label}：${picked.text}`;
-
-    state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId };
-    updateLikeUI(slotKey);
-    updateDeleteUI(slotKey);
-
-    return { value: rounded, text: picked.text, label };
-  };
-
-  if (!state.pops) {
-    if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
-    renderEmpty();
-    if (footEl) footEl.textContent = "";
-    // 編集長パネル更新（開いている場合のみ）
-    renderEditorPanel();
-    return;
-  }
-
-  if (hintEl) hintEl.textContent = state.placeLabel ? `地点：${state.placeLabel}` : "地点：--";
-
-  const a = setSlot("m", state.pops.m, "朝");
-  const b = setSlot("d", state.pops.d, "昼");
-  const c = setSlot("e", state.pops.e, "夜");
-
-  const candidates = [a, b, c].filter(Boolean);
-  if (!candidates.length) {
-    if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
-  } else {
-    const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
-    if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
-  }
-
-  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)候補からランダム表示（📌採用候補が多いほど出やすい）";
-
-  // 編集長パネル更新（開いている場合のみ）
-  renderEditorPanel();
-}
-
-function renderEmpty() {
-  const metaAll = document.getElementById("metaphor");
-
-  ["m","d","e"].forEach(k => {
-    const popEl = document.getElementById(`pop_${k}`);
-    const metaEl = document.getElementById(`meta_${k}`);
-
-    if (popEl) popEl.textContent = "--%";
-    if (metaEl) metaEl.textContent = "データなし";
-
-    setIcon(k, null);
-
-    state.currentPhrases[k] = { text: null, extraId: null };
-    updateLikeUI(k);
-    updateDeleteUI(k);
-  });
-
-  if (metaAll) metaAll.textContent = "地点を選んでください";
-}
-
-// =========================
-// API
-// =========================
-async function geocode(name) {
-  const url = new URL(GEO);
-  url.searchParams.set("name", name);
-  url.searchParams.set("count", "10");
-  url.searchParams.set("language", "ja");
-  url.searchParams.set("format", "json");
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error("地点検索に失敗しました");
-  return await res.json();
-}
-
-async function fetchPopsBySlots(lat, lon) {
-  const url = new URL(FC);
-  url.searchParams.set("latitude", String(lat));
-  url.searchParams.set("longitude", String(lon));
-  url.searchParams.set("hourly", "precipitation_probability");
-  url.searchParams.set("timezone", "auto");
-  url.searchParams.set("forecast_days", "2");
-
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error("天気取得に失敗しました");
-  const data = await res.json();
-
-  const times = data.hourly?.time || [];
-  const pops  = data.hourly?.precipitation_probability || [];
-  const tz    = data.timezone || null;
-
-  const today = (times[0] || "").slice(0, 10);
-  const bucket = { m: [], d: [], e: [] };
-
-  for (let i = 0; i < Math.min(times.length, pops.length); i++) {
-    const t = times[i];
-    const p = pops[i];
-    if (typeof p !== "number") continue;
-    if (!t || t.slice(0, 10) !== today) continue;
-
-    const hour = Number(t.slice(11, 13));
-    if (hour >= 6 && hour <= 11) bucket.m.push(p);
-    else if (hour >= 12 && hour <= 17) bucket.d.push(p);
-    else if (hour >= 18 && hour <= 23) bucket.e.push(p);
-  }
-
-  const maxOrNull = (arr) => arr.length ? Math.round(Math.max(...arr)) : null;
-
-  return {
-    pops: {
-      m: maxOrNull(bucket.m),
-      d: maxOrNull(bucket.d),
-      e: maxOrNull(bucket.e),
-    },
-    tz
-  };
-}
-
-// =========================
-// UI: 検索→候補表示
-// =========================
-document.getElementById("search").onclick = async () => {
-  const raw = document.getElementById("place").value.trim();
-  const q = normalizePlaceName(raw);
-
-  const sel = document.getElementById("candidates");
-  sel.innerHTML = "";
-  sel.disabled = true;
-
-  if (!q) {
-    setStatus("地点名を入力してください", "ng");
-    return;
-  }
-
-  setStatus("検索中…", "muted");
-
-  try {
-    let g = await geocode(q);
-    let results = g.results || [];
-
-    if (!results.length && raw !== q) {
-      g = await geocode(raw);
-      results = g.results || [];
+    .container{
+      max-width: 860px;
+      margin: 0 auto;
     }
 
-    if (!results.length) {
-      setStatus("候補が見つかりませんでした。別の書き方で試してください。（例：Sendai）", "ng");
-      return;
+    h1{
+      margin: 0 0 14px;
+      font-size: 26px;
+      letter-spacing: -0.2px;
+      line-height: 1.25;
+    }
+    .subtitle{
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--sub);
     }
 
-    results.forEach((r, idx) => {
-      const labelParts = [r.name, r.admin1, r.country].filter(Boolean);
-      const label = labelParts.join(" / ");
-      const opt = document.createElement("option");
-      opt.value = String(idx);
-      opt.textContent = label;
-      opt.dataset.lat = r.latitude;
-      opt.dataset.lon = r.longitude;
-      sel.appendChild(opt);
-    });
+    .card{
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 12px 0;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
 
-    sel.disabled = false;
-    setStatus("候補を選ぶと天気を取得します", "ok");
+    .small{
+      color: var(--sub);
+      font-size: 13px;
+      line-height: 1.4;
+    }
 
-    sel.onchange = async () => {
-      const opt = sel.options[sel.selectedIndex];
-      const lat = Number(opt.dataset.lat);
-      const lon = Number(opt.dataset.lon);
+    .big{
+      font-size: 52px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
 
-      state.placeLabel = opt.textContent;
-      state.source = "API: Open-Meteo";
-      render();
-      setStatus("天気取得中…", "muted");
+    input, select, textarea{
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(15,23,42,0.10);
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 16px;
+      background: rgba(255,255,255,0.90);
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(37,99,235,0.55);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+    }
 
-      try {
-        const out = await fetchPopsBySlots(lat, lon);
-        state.pops = out.pops;
-        state.tz = out.tz;
+    button{
+      min-height: var(--tap);
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(15,23,42,0.10);
+      background: #fff;
+      cursor: pointer;
+      font-size: 16px;
+      transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease;
+      box-shadow: 0 8px 18px rgba(2,6,23,0.06);
+    }
+    button:hover{
+      border-color: rgba(37,99,235,0.35);
+      box-shadow: 0 10px 24px rgba(2,6,23,0.10);
+    }
+    button:active{ transform: translateY(1px); }
+    button:disabled{ opacity: .55; cursor: not-allowed; }
 
-        const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
-        if (!any) {
-          setStatus("降水確率が取得できませんでした（別地点で試してください）", "ng");
-          state.source = "API: 取得失敗";
-          state.pops = null;
-        } else {
-          setStatus("取得しました", "ok");
-        }
+    .btnPrimary{
+      background: var(--accent);
+      border-color: rgba(37,99,235,0.55);
+      color: #fff;
+      box-shadow: 0 14px 28px rgba(37,99,235,0.18);
+    }
+    .btnPrimary:hover{
+      box-shadow: 0 16px 34px rgba(37,99,235,0.22);
+    }
 
-        render();
-      } catch (e) {
-        setStatus(e.message || "天気取得エラー", "ng");
-        state.source = "API: エラー";
-        state.pops = null;
-        render();
-      }
-    };
+    .row{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
 
-    sel.selectedIndex = 0;
-    sel.onchange();
+    .muted{ color:#64748b; font-size:12px; }
+    .ok{ color:#059669; font-size:12px; }
+    .ng{ color:#dc2626; font-size:12px; }
 
-  } catch (e) {
-    setStatus(e.message || "検索エラー", "ng");
-  }
-};
+    .pill{
+      display:inline-block;
+      padding: 6px 10px;
+      border: 1px solid rgba(15,23,42,0.10);
+      border-radius: 999px;
+      font-size:12px;
+      margin-right: 6px;
+      background: rgba(255,255,255,0.80);
+    }
 
-// モード変更は render
-document.querySelectorAll('input[name="mode"]').forEach(r =>
-  r.addEventListener("change", render)
-);
+    .slot{
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: var(--radius2);
+      padding: 14px;
+      margin-top: 12px;
+      background: rgba(255,255,255,0.72);
+    }
+    .slot .big{ font-size: 34px; }
+    .slot .small{ margin-top: 6px; }
 
-// 「同じ確率でも例えを変える」
-document.getElementById("refresh").onclick = () => render();
+    #meta_m, #meta_d, #meta_e{
+      margin-top: 8px;
+      font-size: 16px;
+      color: #1f2937;
+      line-height: 1.65;
+      font-weight: 500;
+    }
 
-// 一覧フィルタ変更
-if ($("listMode")) $("listMode").addEventListener("change", renderExtraList);
-if ($("listBucket")) $("listBucket").addEventListener("change", renderExtraList);
+    #metaphor{
+      margin-top: 8px;
+      font-size: 24px;
+      line-height: 1.7;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
 
-// ネタ追加
-document.getElementById("addPhraseBtn").onclick = () => {
-  const statusEl = document.getElementById("addStatus");
-  const mode = ($("newPhraseMode")?.value ?? "trivia");
-  const bucket = Number($("newPhraseBucket")?.value ?? 0);
-  const text = (document.getElementById("newPhrase")?.value ?? "").trim();
+    .listItem{
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin: 8px 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      background: rgba(255,255,255,0.75);
+    }
+    .listText{ color:#0f172a; line-height:1.5; }
+    .listMeta{ color:#64748b; font-size:12px; margin-top:4px; }
+    .btnSmall{
+      min-height: 36px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
 
-  const res = addExtraPhrase(mode, bucket, text);
+    .actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 12px;
+    }
 
-  if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
-  if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
+    .footer{
+      margin: 18px 0 8px;
+      color: var(--sub);
+      font-size: 12px;
+      text-align: center;
+      opacity: 0.9;
+    }
 
-  renderExtraList();
-  renderEditorPanel();
-  render();
-};
+    @media (max-width: 600px){
+      body{ padding: 12px; }
+      h1{ font-size: 22px; }
+      .subtitle{ font-size: 13px; }
+      .card{ padding: 12px; }
+      .row{ grid-template-columns: 1fr; }
+      #metaphor{ font-size: 20px; }
+      #meta_m, #meta_d, #meta_e{ font-size: 15px; }
+      .pill{ font-size: 11px; padding: 5px 8px; }
+      .listItem{ grid-template-columns: 1fr; }
+    }
 
-// ==============================
-// 初期化
-// - editor panel DOMを確保
-// - 共有JSONを読んでから再描画（先にrenderしてもOKだが、読み込み後に確実に反映）
-// ==============================
-setupToggleExtraPanel();
-ensureEditorPanelDOM();
-render(); // 先に描画しておく（体感が軽い）
+    /* =========================
+       例えモード（雑学・お笑い）ズレ修正
+       ※レイアウトを壊さない版（重複なし）
+    ========================= */
+    .example-mode .modeWrap{
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .example-mode label{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      cursor: pointer;
+      white-space: nowrap; /* ← 横書き固定（改行しない） */
+    }
+    .example-mode input[type="radio"]{
+      margin: 0;
+      transform: translateY(1px);
+    }
+  </style>
+</head>
 
-loadSharedJSON().then(() => {
-  // 共有読み込み後に確実に反映
-  render();
-  renderEditorPanel();
-});
+<body>
+  <div class="container">
 
-// ==============================
-// Theme (Gradient) by precipitation
-// ==============================
-function themeFromPercent(p){
-  if (p <= 10)  return { bg1:"#fff7d6", bg2:"#ffffff", accent:"#f59e0b" };
-  if (p <= 30)  return { bg1:"#e8f6ff", bg2:"#ffffff", accent:"#38bdf8" };
-  if (p <= 50)  return { bg1:"#eaf0ff", bg2:"#f8fafc", accent:"#60a5fa" };
-  if (p <= 70)  return { bg1:"#dbeafe", bg2:"#eff6ff", accent:"#2563eb" };
-  if (p <= 90)  return { bg1:"#c7d2fe", bg2:"#e0e7ff", accent:"#1d4ed8" };
-  return          { bg1:"#e9d5ff", bg2:"#0b1220", accent:"#a855f7" }; // 100%
-}
+    <h1>「たとえて、降水確率」
+      <div class="subtitle">－降水確率を“別の確率”で例えてみた。</div>
+    </h1>
 
-function applyTheme(p){
-  const t = themeFromPercent(Number(p));
-  const root = document.documentElement;
+    <div class="card">
+      <div class="small">天気予報を知りたい地点</div>
+      <div class="row" style="margin-top:10px;">
+        <input id="place" placeholder="例：仙台市 / Sendai / 仙台駅 / 仙台市青葉区" />
+        <button id="search" class="btnPrimary">検索</button>
+      </div>
 
-  root.style.setProperty("--bg1", t.bg1);
-  root.style.setProperty("--bg2", t.bg2);
-  root.style.setProperty("--accent", t.accent);
+      <div style="margin-top:10px;">
+        <select id="candidates" disabled>
+          <option>検索結果がここに出ます</option>
+        </select>
+        <div id="placeStatus" class="muted" style="margin-top:8px;">
+          地点を入力して「検索」してください（APIキー不要）
+        </div>
+      </div>
+    </div>
 
-  // 100%のときだけ暗め背景 → 文字を白寄りに
-  if (Number(p) >= 100) {
-    root.style.setProperty("--text", "#f9fafb");
-    root.style.setProperty("--sub", "rgba(249,250,251,0.75)");
-    root.style.setProperty("--card", "rgba(17,24,39,0.55)");
-    root.style.setProperty("--shadow", "0 14px 30px rgba(0,0,0,0.45)");
-  } else {
-    root.style.setProperty("--text", "#0f172a");
-    root.style.setProperty("--sub", "#475569");
-    root.style.setProperty("--card", "rgba(255,255,255,0.86)");
-    root.style.setProperty("--shadow", "0 10px 26px rgba(0,0,0,0.10)");
-  }
-}
+    <div class="card example-mode">
+      <div class="small">例えモード（※A版は統合表示）</div>
 
-// # END
+      <div class="modeWrap">
+        <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
+        <label><input type="radio" name="mode" value="fun"> お笑い</label>
+      </div>
+
+      <div class="muted" style="margin-top:10px;">
+        ※同じ確率でも、毎回ちがうネタが出ます（👍で出やすくなります）
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="small">今日の降水確率（朝/昼/夜）</div>
+      <div class="small" id="popHint">地点を選ぶと自動取得します</div>
+
+      <div class="slot">
+        <div class="small">朝（6–11時）</div>
+        <div class="big">
+          <span id="wx_m" style="margin-right:8px;">--</span>
+          <span id="pop_m">--%</span>
+        </div>
+        <div class="small" id="meta_m"></div>
+
+        <div class="actions">
+          <button id="del_m" style="display:none;">このネタを削除</button>
+          <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
+          <span id="badge_m" style="margin-left:6px;font-size:20px;"></span>
+        </div>
+      </div>
+
+      <div class="slot">
+        <div class="small">昼（12–17時）</div>
+        <div class="big">
+          <span id="wx_d" style="margin-right:8px;">--</span>
+          <span id="pop_d">--%</span>
+        </div>
+        <div class="small" id="meta_d"></div>
+
+        <div class="actions">
+          <button id="del_d" style="display:none;">このネタを削除</button>
+          <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
+          <span id="badge_d" style="margin-left:6px;font-size:20px;"></span>
+        </div>
+      </div>
+
+      <div class="slot">
+        <div class="small">夜（18–23時）</div>
+        <div class="big">
+          <span id="wx_e" style="margin-right:8px;">--</span>
+          <span id="pop_e">--%</span>
+        </div>
+        <div class="small" id="meta_e"></div>
+
+        <div class="actions">
+          <button id="del_e" style="display:none;">このネタを削除</button>
+          <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
+          <span id="badge_e" style="margin-left:6px;font-size:20px;"></span>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <span class="pill" id="sourceTag">API: 未接続</span>
+        <span class="pill" id="tzTag">TZ: --</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="small">人間向け翻訳（毎回ランダム）</div>
+      <div class="big" id="metaphor">地点を選んでください</div>
+      <div class="muted" id="metaFoot" style="margin-top:10px;"></div>
+
+      <div class="actions">
+        <button id="refresh" class="btnPrimary">同じ確率でも例えを変える</button>
+      </div>
+    </div>
+
+    <div class="card" id="addSection">
+      <div class="small"><b>ネタ追加（この端末に保存）</b></div>
+
+      <div class="actions" style="margin-top:10px;">
+        <label class="small">モード：</label>
+        <select id="newPhraseMode" style="max-width: 220px;">
+          <option value="trivia">雑学</option>
+          <option value="fun">お笑い</option>
+        </select>
+
+        <label class="small">確率：</label>
+        <select id="newPhraseBucket" style="max-width: 140px;">
+          <option value="0">0%</option>
+          <option value="10">10%</option>
+          <option value="20">20%</option>
+          <option value="30">30%</option>
+          <option value="40">40%</option>
+          <option value="50">50%</option>
+          <option value="60">60%</option>
+          <option value="70">70%</option>
+          <option value="80">80%</option>
+          <option value="90">90%</option>
+          <option value="100">100%</option>
+        </select>
+
+        <button id="addPhraseBtn" class="btnPrimary">追加</button>
+      </div>
+
+      <div style="margin-top:10px;">
+        <textarea id="newPhrase" rows="3" placeholder="例：日本の識字率は99％（約100％）"></textarea>
+      </div>
+
+      <div class="muted" id="addStatus" style="margin-top:10px;"></div>
+
+      <div class="actions" style="margin-top:12px;">
+        <button id="toggleExtraList">追加ネタ一覧を開く ▼</button>
+        <div class="muted" style="margin-top:0;">
+          ※この一覧は「この端末（このブラウザ）」だけに保存された追加ネタです
+        </div>
+      </div>
+
+      <div id="extraListPanel" style="display:none; margin-top:12px;">
+        <div class="small"><b>追加ネタ一覧（この端末）</b></div>
+
+        <div class="actions" style="margin-top:10px;">
+          <label class="small">モード：</label>
+          <select id="listMode" style="max-width: 220px;">
+            <option value="trivia">雑学</option>
+            <option value="fun">お笑い</option>
+          </select>
+
+          <label class="small">確率：</label>
+          <select id="listBucket" style="max-width: 140px;">
+            <option value="0">0%</option>
+            <option value="10">10%</option>
+            <option value="20">20%</option>
+            <option value="30">30%</option>
+            <option value="40">40%</option>
+            <option value="50">50%</option>
+            <option value="60">60%</option>
+            <option value="70">70%</option>
+            <option value="80">80%</option>
+            <option value="90">90%</option>
+            <option value="100">100%</option>
+          </select>
+        </div>
+
+        <div class="muted" id="listStatus" style="margin-top:10px;"></div>
+        <div id="listBody" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      API: Open-Meteo / PWA対応（ホーム画面に追加OK）
+    </div>
+
+  </div>
+
+  <script src="metaphors.js?v=4"></script>
+  <script src="shared-metaphors.js?v=1"></script>
+  <script defer src="script.js?v=4"></script>
+
+</body>
+</html>
