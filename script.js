@@ -6,6 +6,29 @@ window.bucket10 = window.bucket10 || function (p) {
   const b = Math.round(p / 10) * 10;
   return Math.max(0, Math.min(100, b));
 };
+// ==============================
+// 追加ネタ 永続保存（localStorage）
+// ==============================
+const LS_KEY_EXTRA = "extra_phrases_v1";
+
+function loadExtraPhrases() {
+  try {
+    const raw = localStorage.getItem(LS_KEY_EXTRA);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveExtraPhrases(list) {
+  try {
+    localStorage.setItem(LS_KEY_EXTRA, JSON.stringify(list));
+  } catch (e) {
+    console.warn("saveExtraPhrases failed:", e);
+  }
+}
 
 const GEO = "https://geocoding-api.open-meteo.com/v1/search";
 const FC  = "https://api.open-meteo.com/v1/forecast";
