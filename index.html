@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="./manifest.webmanifest" />
 
-  <!-- ✅ タイトルのカッコ修正（[ が混ざってた） -->
   <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
 
   <style>
@@ -16,7 +15,7 @@
     :root{
       --bg1:#ffffff;
       --bg2:#ffffff;
-      --accent:#2563eb;   /* ここが主役色 */
+      --accent:#2563eb;
       --text:#0f172a;
       --sub:#475569;
 
@@ -33,7 +32,6 @@
       --tap: 44px;
     }
 
-    /* 画面全体グラデ背景（②） */
     body{
       margin:0;
       padding: 18px;
@@ -42,13 +40,11 @@
       color: var(--text);
     }
 
-    /* ✅ 画面を“アプリっぽく”中央寄せ */
     .container{
       max-width: 860px;
       margin: 0 auto;
     }
 
-    /* 見出し */
     h1{
       margin: 0 0 14px;
       font-size: 26px;
@@ -62,7 +58,6 @@
       color: var(--sub);
     }
 
-    /* カード */
     .card{
       border-radius: var(--radius);
       padding: 16px;
@@ -73,14 +68,12 @@
       backdrop-filter: blur(8px);
     }
 
-    /* 小見出し */
     .small{
       color: var(--sub);
       font-size: 13px;
       line-height: 1.4;
     }
 
-    /* 文字（％を主役に） */
     .big{
       font-size: 52px;
       font-weight: 900;
@@ -88,7 +81,6 @@
       line-height: 1;
     }
 
-    /* 入力UI */
     input, select, textarea{
       padding: 12px 14px;
       border-radius: 14px;
@@ -104,7 +96,6 @@
       box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
     }
 
-    /* ボタン */
     button{
       min-height: var(--tap);
       padding: 11px 14px;
@@ -123,7 +114,6 @@
     button:active{ transform: translateY(1px); }
     button:disabled{ opacity: .55; cursor: not-allowed; }
 
-    /* 強調ボタン（検索・更新など） */
     .btnPrimary{
       background: var(--accent);
       border-color: rgba(37,99,235,0.55);
@@ -134,7 +124,6 @@
       box-shadow: 0 16px 34px rgba(37,99,235,0.22);
     }
 
-    /* Row */
     .row{
       display: grid;
       grid-template-columns: 1fr auto;
@@ -142,12 +131,10 @@
       align-items: center;
     }
 
-    /* 状態表示 */
     .muted{ color:#64748b; font-size:12px; }
     .ok{ color:#059669; font-size:12px; }
     .ng{ color:#dc2626; font-size:12px; }
 
-    /* pill */
     .pill{
       display:inline-block;
       padding: 6px 10px;
@@ -158,7 +145,6 @@
       background: rgba(255,255,255,0.80);
     }
 
-    /* slots */
     .slot{
       border: 1px solid rgba(15,23,42,0.08);
       border-radius: var(--radius2);
@@ -169,7 +155,6 @@
     .slot .big{ font-size: 34px; }
     .slot .small{ margin-top: 6px; }
 
-    /* 例え文（朝・昼・夜） */
     #meta_m, #meta_d, #meta_e{
       margin-top: 8px;
       font-size: 16px;
@@ -178,7 +163,6 @@
       font-weight: 500;
     }
 
-    /* 人間向け翻訳 */
     #metaphor{
       margin-top: 8px;
       font-size: 24px;
@@ -187,7 +171,6 @@
       letter-spacing: -0.2px;
     }
 
-    /* 追加ネタ一覧 */
     .listItem{
       border: 1px solid rgba(15,23,42,0.08);
       border-radius: 14px;
@@ -208,7 +191,6 @@
       font-size: 13px;
     }
 
-    /* 下の固定的な操作エリア */
     .actions{
       display:flex;
       gap: 10px;
@@ -217,7 +199,6 @@
       margin-top: 12px;
     }
 
-    /* Footer */
     .footer{
       margin: 18px 0 8px;
       color: var(--sub);
@@ -226,7 +207,6 @@
       opacity: 0.9;
     }
 
-    /* ✅ スマホ最適化 */
     @media (max-width: 600px){
       body{ padding: 12px; }
       h1{ font-size: 22px; }
@@ -250,21 +230,17 @@
       gap: 10px;
       margin-top: 10px;
     }
-    /* 例えモードの文字を横書きに固定 */
-　　.example-mode label {
-　  white-space: nowrap;   /* ← 改行させない（重要） */
-　　}
-
     .example-mode label{
       display: inline-flex;
       align-items: center;
       gap: 8px;
       width: fit-content;
       cursor: pointer;
+      white-space: nowrap; /* ← 横書き固定（改行しない） */
     }
     .example-mode input[type="radio"]{
       margin: 0;
-      transform: translateY(1px); /* iPhone/Safari微調整 */
+      transform: translateY(1px);
     }
   </style>
 </head>
@@ -280,7 +256,6 @@
       <div class="small">天気予報を知りたい地点</div>
       <div class="row" style="margin-top:10px;">
         <input id="place" placeholder="例：仙台市 / Sendai / 仙台駅 / 仙台市青葉区" />
-        <!-- ✅ 検索ボタンをプロっぽく -->
         <button id="search" class="btnPrimary">検索</button>
       </div>
 
@@ -294,14 +269,11 @@
       </div>
     </div>
 
-    <!-- ✅ ここだけ class を追加：card example-mode -->
     <div class="card example-mode">
       <div class="small">例えモード（※A版は統合表示）</div>
 
-      <!-- ✅ ラジオ行のラッパーを追加（CSS適用点） -->
       <div class="modeWrap">
         <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
-        <!-- ✅ margin-left は削除 -->
         <label><input type="radio" name="mode" value="fun"> お笑い</label>
       </div>
 
@@ -314,7 +286,6 @@
       <div class="small">今日の降水確率（朝/昼/夜）</div>
       <div class="small" id="popHint">地点を選ぶと自動取得します</div>
 
-      <!-- 朝 -->
       <div class="slot">
         <div class="small">朝（6–11時）</div>
         <div class="big">
@@ -325,13 +296,11 @@
 
         <div class="actions">
           <button id="del_m" style="display:none;">このネタを削除</button>
-
           <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
           <span id="badge_m" style="margin-left:6px;font-size:20px;"></span>
         </div>
       </div>
 
-      <!-- 昼 -->
       <div class="slot">
         <div class="small">昼（12–17時）</div>
         <div class="big">
@@ -342,13 +311,11 @@
 
         <div class="actions">
           <button id="del_d" style="display:none;">このネタを削除</button>
-
           <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
           <span id="badge_d" style="margin-left:6px;font-size:20px;"></span>
         </div>
       </div>
 
-      <!-- 夜 -->
       <div class="slot">
         <div class="small">夜（18–23時）</div>
         <div class="big">
@@ -359,7 +326,6 @@
 
         <div class="actions">
           <button id="del_e" style="display:none;">このネタを削除</button>
-
           <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
           <span id="badge_e" style="margin-left:6px;font-size:20px;"></span>
         </div>
@@ -377,12 +343,10 @@
       <div class="muted" id="metaFoot" style="margin-top:10px;"></div>
 
       <div class="actions">
-        <!-- ✅ “更新”も主ボタンへ -->
         <button id="refresh" class="btnPrimary">同じ確率でも例えを変える</button>
       </div>
     </div>
 
-    <!-- ✅ ネタ追加（保存） -->
     <div class="card" id="addSection">
       <div class="small"><b>ネタ追加（この端末に保存）</b></div>
 
@@ -417,7 +381,6 @@
 
       <div class="muted" id="addStatus" style="margin-top:10px;"></div>
 
-      <!-- ✅ 開閉ボタン -->
       <div class="actions" style="margin-top:12px;">
         <button id="toggleExtraList">追加ネタ一覧を開く ▼</button>
         <div class="muted" style="margin-top:0;">
@@ -425,7 +388,6 @@
         </div>
       </div>
 
-      <!-- ✅ 開閉対象 -->
       <div id="extraListPanel" style="display:none; margin-top:12px;">
         <div class="small"><b>追加ネタ一覧（この端末）</b></div>
 
@@ -461,12 +423,10 @@
       API: Open-Meteo / PWA対応（ホーム画面に追加OK）
     </div>
 
-  </div><!-- /.container -->
+  </div>
 
-  <!-- 外部ネタ -->
   <script src="metaphors.js?v=4"></script>
   <script defer src="script.js?v=4"></script>
 
 </body>
 </html>
-
