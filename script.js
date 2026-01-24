@@ -1,5 +1,22 @@
 // script.js
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+
+// ==============================
+// 承認待ち投稿（Workers）
+// ==============================
+async function submitToPending(mode, bucket, text){
+  const res = await fetch(`${API_BASE}/api/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode, bucket, text, from: "mobile" })
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || `submit failed ${res.status}`);
+  }
+  return data;
+}
+
 async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   const params = new URLSearchParams();
   if (mode) params.set("mode", mode);
