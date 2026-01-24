@@ -65,8 +65,8 @@ function getSharedItems(mode, bucket) {
 }
 
 // ==============================
-// ✅ NEW: 共有ネタ（Cloudflare Workers /api/public）
-// - public を抽選候補へ混ぜる（最小差分）
+// ✅ 共有ネタ（Cloudflare Workers /api/public）
+// - public を抽選候補へ混ぜる
 // - mode×bucket のキャッシュ
 // ==============================
 const publicCache = new Map(); // key: "mode_bucket" => [text,...]
@@ -152,8 +152,7 @@ function incrementLike(phrase) {
 }
 
 // =========================
-// ✅ NEW: 本当の「採用候補ピン」管理（解除できる）
-// ※ 旧👍カウントは「出やすさ」等で引き続き利用
+// ✅ 本当の「採用候補ピン」管理（解除できる）
 // =========================
 const PIN_KEY = "metaphorPins_v1";
 
@@ -299,7 +298,6 @@ function renderExtraList() {
     meta.className = "listMeta";
     const dt = new Date(it.createdAt);
 
-    // ✅ ピン状態も表示（わかりやすく）
     const pinMark = isPinned(it.text) ? "　📌採用候補" : "";
     meta.textContent = `追加日: ${dt.toLocaleString()}${pinMark}`;
 
@@ -311,26 +309,22 @@ function renderExtraList() {
     right.style.gap = "8px";
     right.style.alignItems = "center";
 
-    // ✅ NEW: 📌採用候補ボタン（トグル）
     const pinBtn = document.createElement("button");
     pinBtn.className = "btnSmall";
     pinBtn.textContent = isPinned(it.text) ? "📌 解除" : "📌 採用候補";
     pinBtn.onclick = () => {
       togglePinned(it.text);
       renderExtraList();
-      renderEditorPanel();  // 開いていれば反映
-      render();             // 下の注記など更新
+      renderEditorPanel();
+      render();
     };
     right.appendChild(pinBtn);
 
-    // 削除ボタン（既存）
     const btn = document.createElement("button");
     btn.className = "btnSmall";
     btn.textContent = "削除";
     btn.onclick = () => {
       if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
-
-      // ✅ 削除時：そのネタがピンされてたらピンも解除（取り残し防止）
       if (isPinned(it.text)) setPinned(it.text, false);
 
       removeExtraById(it.id);
@@ -406,11 +400,11 @@ function buildCandidatePool(mode, bucket) {
   const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
   const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
   const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null }));
-  const pub    = getPublicItems(mode, b); // ✅ NEW: /api/public
+  const pub    = getPublicItems(mode, b);
 
   const out = [];
   const seen = new Set();
-  for (const item of [...baseTexts, ...extras, ...shared, ...pub]) { // ✅ NEW
+  for (const item of [...baseTexts, ...extras, ...shared, ...pub]) {
     if (!item?.text) continue;
     if (seen.has(item.text)) continue;
     seen.add(item.text);
@@ -419,12 +413,28 @@ function buildCandidatePool(mode, bucket) {
   return out;
 }
 
+// ✅ NEW: 表示用に「共有◯件」を作る（public / json の件数を返す）
+function getShareCounts(mode, bucket) {
+  const b = window.bucket10(bucket);
+
+  const jsonSet = new Set(
+    getSharedItems(mode, b).map(x => String(x.text || "").trim()).filter(Boolean)
+  );
+
+  const pubSet = new Set(
+    getPublicItems(mode, b).map(x => String(x.text || "").trim()).filter(Boolean)
+  );
+
+  return {
+    json: jsonSet.size,
+    pub: pubSet.size
+  };
+}
+
 function weightedPick(items) {
-  // ✅ ピンは「採用候補なので出やすい」：重みを強めに加算
-  // ✅ 既存の👍もそのまま効かせる
   const weights = items.map(it => {
     const like = (likesData[it.text] || 0);
-    const pinBoost = isPinned(it.text) ? 8 : 0; // 強め（必要なら調整）
+    const pinBoost = isPinned(it.text) ? 8 : 0;
     return like + pinBoost + 1;
   });
 
@@ -459,8 +469,7 @@ function pickMetaphor(mode, bucket) {
 }
 
 // =========================
-// 📌 採用候補UI（旧: いいねUI）
-// - ボタン文言を変更
+// 📌 採用候補UI
 // =========================
 function updateLikeUI(slot) {
   const phraseObj = state.currentPhrases[slot];
@@ -480,7 +489,6 @@ function updateLikeUI(slot) {
   const count = getLikesFor(phrase);
   if (countEl) countEl.textContent = String(count);
 
-  // ✅ ピンされてたらバッジ表示（既存⭐候補と共存）
   const pinned = isPinned(phrase);
   if (badgeEl) {
     if (pinned) badgeEl.textContent = "📌候補";
@@ -490,13 +498,9 @@ function updateLikeUI(slot) {
   if (btnEl) {
     btnEl.disabled = false;
 
-    // ✅ ここを「ピンのトグル」にする（解除可能）
     btnEl.textContent = pinned ? "📌 候補解除" : "📌 採用候補";
     btnEl.onclick = () => {
       togglePinned(phrase);
-
-      // 旧👍は残す（押した＝候補にした、という記録として1加算してもOK）
-      // ただし「解除」時に減らすのはしない（集計の意味が変わるので）
       if (!pinned) incrementLike(phrase);
 
       updateLikeUI(slot);
@@ -524,7 +528,6 @@ function updateDeleteUI(slotKey) {
   btn.onclick = () => {
     if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
 
-    // ✅ 表示中のテキストがピンされていたら解除もする
     const txt = state.currentPhrases[slotKey]?.text;
     if (txt && isPinned(txt)) setPinned(txt, false);
 
@@ -537,12 +540,8 @@ function updateDeleteUI(slotKey) {
 
 // =========================
 // ② 編集長パネル（採用候補ランキング）
-// - 現在の mode / bucket の候補だけ表示
-// - 📌優先、同率なら👍数順
-// - HTMLは触らなくても動く（無ければ自動生成）
 // =========================
 function ensureEditorPanelDOM() {
-  // すでにHTMLにあるならそれを使う
   if (document.getElementById("editorPanel")) return;
 
   const anchor =
@@ -586,7 +585,6 @@ function ensureEditorPanelDOM() {
   wrap.appendChild(note);
   wrap.appendChild(panel);
 
-  // anchorの直後に置く（できるだけ既存UIを崩さない）
   if (anchor && anchor.parentNode) {
     anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
   } else {
@@ -608,16 +606,13 @@ function renderEditorPanel() {
   if (!body || body.style.display === "none") return;
   if (!statusEl || !listEl) return;
 
-  // 現在の表示条件：mode / bucket（朝昼夜どれでも同じ bucket が来るので、最大候補から推定）
   const mode = getSelectedMode();
   const bCandidates = [
     state?.pops?.m, state?.pops?.d, state?.pops?.e
   ].filter(v => typeof v === "number").map(v => window.bucket10(v));
 
-  // 取れてなければ 0 として扱う（一覧は空になるだけ）
   const bucket = bCandidates.length ? bCandidates[0] : 0;
 
-  // 現在の候補プール（base+extra+shared+public）を作り、📌 or 👍付きのみ抽出
   const pool = buildCandidatePool(mode, bucket);
 
   const picked = pool
@@ -633,9 +628,8 @@ function renderEditorPanel() {
         extraId: it.extraId || null
       };
     })
-    .filter(x => x.pinned || x.count > 0) // 📌か👍が1以上
+    .filter(x => x.pinned || x.count > 0)
     .sort((a, b) => {
-      // 📌優先 → 👍多い順 → あいうえお
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       if (b.count !== a.count) return b.count - a.count;
       return a.text.localeCompare(b.text, "ja");
@@ -674,7 +668,6 @@ function renderEditorPanel() {
     right.style.gap = "6px";
     right.style.alignItems = "center";
 
-    // ✅ ピン解除/再ピン
     const pinBtn = document.createElement("button");
     pinBtn.className = "btnSmall";
     pinBtn.textContent = x.pinned ? "📌解除" : "📌採用候補";
@@ -686,14 +679,12 @@ function renderEditorPanel() {
     };
     right.appendChild(pinBtn);
 
-    // 追加ネタなら「削除」ボタンも出す（既存/共有は削除不可）
     if (x.extraId) {
       const del = document.createElement("button");
       del.className = "btnSmall";
       del.textContent = "追加ネタ削除";
       del.onclick = () => {
         if (!confirm("この追加ネタを削除します。よろしいですか？")) return;
-        // 削除対象がピンされてたら解除も
         if (isPinned(x.text)) setPinned(x.text, false);
 
         removeExtraById(x.extraId);
@@ -729,7 +720,7 @@ function normalizePlaceName(input) {
 }
 
 // =========================
-// render
+// render  ← ここが「表示ボタンで例文を決めて出す」本体
 // =========================
 function render() {
   const hintEl = document.getElementById("popHint");
@@ -765,7 +756,12 @@ function render() {
 
     const mode = getSelectedMode();
     const picked = pickMetaphor(mode, rounded);
-    if (metaEl) metaEl.textContent = `${label}：${picked.text}`;
+
+    // ✅ NEW: 共有件数の見える化（public / json）
+    const sc = getShareCounts(mode, rounded);
+    const shareHint = `（共有public:${sc.pub}件 / 共有JSON:${sc.json}件）`;
+
+    if (metaEl) metaEl.textContent = `${label}：${picked.text} ${shareHint}`;
 
     state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId };
     updateLikeUI(slotKey);
@@ -778,7 +774,6 @@ function render() {
     if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
     renderEmpty();
     if (footEl) footEl.textContent = "";
-    // 編集長パネル更新（開いている場合のみ）
     renderEditorPanel();
     return;
   }
@@ -797,9 +792,9 @@ function render() {
     if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
   }
 
-  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)＋共有(public)候補からランダム表示（📌採用候補が多いほど出やすい）";
+  if (footEl) footEl.textContent =
+    "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)＋共有(public)候補からランダム表示（📌採用候補が多いほど出やすい）";
 
-  // 編集長パネル更新（開いている場合のみ）
   renderEditorPanel();
 }
 
@@ -941,7 +936,7 @@ document.getElementById("search").onclick = async () => {
         state.pops = out.pops;
         state.tz = out.tz;
 
-        // ✅ NEW: public を先読み（朝昼夜 bucket分）
+        // ✅ public を先読み（朝昼夜 bucket分）
         await Promise.all([
           warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
           warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
@@ -988,7 +983,7 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   })
 );
 
-// 「同じ確率でも例えを変える」＝表示ボタン（ここは render が例文決定）
+// 「同じ確率でも例えを変える」＝表示ボタン
 document.getElementById("refresh").onclick = () => render();
 
 // 一覧フィルタ変更
@@ -1014,15 +1009,12 @@ document.getElementById("addPhraseBtn").onclick = () => {
 
 // ==============================
 // 初期化
-// - editor panel DOMを確保
-// - 共有JSONを読んでから再描画（先にrenderしてもOKだが、読み込み後に確実に反映）
 // ==============================
 setupToggleExtraPanel();
 ensureEditorPanelDOM();
-render(); // 先に描画しておく（体感が軽い）
+render();
 
 loadSharedJSON().then(() => {
-  // 共有読み込み後に確実に反映
   render();
   renderEditorPanel();
 });
@@ -1047,7 +1039,6 @@ function applyTheme(p){
   root.style.setProperty("--bg2", t.bg2);
   root.style.setProperty("--accent", t.accent);
 
-  // 100%のときだけ暗め背景 → 文字を白寄りに
   if (Number(p) >= 100) {
     root.style.setProperty("--text", "#f9fafb");
     root.style.setProperty("--sub", "rgba(249,250,251,0.75)");
