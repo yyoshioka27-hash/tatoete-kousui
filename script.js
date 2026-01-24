@@ -146,7 +146,7 @@ let state = {
 const $ = (id) => document.getElementById(id);
 
 // =========================
-// 📌 採用候補（旧: いいね）
+// 📌 公開準備（旧: いいね）
 // =========================
 const LIKES_KEY = "metaphorLikes";
 
@@ -169,7 +169,7 @@ function incrementLike(phrase) {
 }
 
 // =========================
-// ✅ 本当の「採用候補ピン」管理（解除できる）
+// ✅ 本当の「公開準備ピン」管理（解除できる）
 // =========================
 const PIN_KEY = "metaphorPins_v1";
 
@@ -315,7 +315,7 @@ function renderExtraList() {
     meta.className = "listMeta";
     const dt = new Date(it.createdAt);
 
-    const pinMark = isPinned(it.text) ? "　📌採用候補" : "";
+    const pinMark = isPinned(it.text) ? "　📌公開準備" : "";
     meta.textContent = `追加日: ${dt.toLocaleString()}${pinMark}`;
 
     left.appendChild(text);
@@ -328,7 +328,7 @@ function renderExtraList() {
 
     const pinBtn = document.createElement("button");
     pinBtn.className = "btnSmall";
-    pinBtn.textContent = isPinned(it.text) ? "📌 解除" : "📌 採用候補";
+    pinBtn.textContent = isPinned(it.text) ? "📌 解除" : "📌 公開準備";
     pinBtn.onclick = () => {
       togglePinned(it.text);
       renderExtraList();
@@ -480,7 +480,7 @@ function pickMetaphor(mode, bucket) {
 }
 
 // =========================
-// 📌 採用候補UI
+// 📌 公開準備UI
 // =========================
 function updateLikeUI(slot) {
   const phraseObj = state.currentPhrases[slot];
@@ -493,7 +493,7 @@ function updateLikeUI(slot) {
   if (!phrase) {
     if (countEl) countEl.textContent = "0";
     if (badgeEl) badgeEl.textContent = "";
-    if (btnEl) { btnEl.disabled = true; btnEl.onclick = null; btnEl.textContent = "📌 採用候補"; }
+    if (btnEl) { btnEl.disabled = true; btnEl.onclick = null; btnEl.textContent = "📌 公開準備"; }
     return;
   }
 
@@ -508,7 +508,7 @@ function updateLikeUI(slot) {
 
   if (btnEl) {
     btnEl.disabled = false;
-    btnEl.textContent = pinned ? "📌 候補解除" : "📌 採用候補";
+    btnEl.textContent = pinned ? "📌 候補解除" : "📌 公開準備";
     btnEl.onclick = () => {
       togglePinned(phrase);
       if (!pinned) incrementLike(phrase);
@@ -548,7 +548,7 @@ function updateDeleteUI(slotKey) {
 }
 
 // =========================
-// ② 編集長パネル（採用候補ランキング）
+// ② 編集長パネル（公開準備ランキング）
 // =========================
 function ensureEditorPanelDOM() {
   if (document.getElementById("editorPanel")) return;
@@ -564,12 +564,12 @@ function ensureEditorPanelDOM() {
 
   const btn = document.createElement("button");
   btn.id = "toggleEditor";
-  btn.textContent = "編集長パネル（採用候補）を開く ▼";
+  btn.textContent = "編集長パネル（公開準備）を開く ▼";
   btn.style.marginBottom = "8px";
 
   const note = document.createElement("div");
   note.className = "muted";
-  note.textContent = "※「採用候補」はこの端末内だけの編集メモです。公開はされません。";
+  note.textContent = "※「公開準備」はこの端末内だけの編集メモです。公開はされません。";
 
   const panel = document.createElement("div");
   panel.id = "editorBody";
@@ -603,7 +603,7 @@ function ensureEditorPanelDOM() {
   btn.onclick = () => {
     const open = panel.style.display !== "none";
     panel.style.display = open ? "none" : "block";
-    btn.textContent = open ? "編集長パネル（採用候補）を開く ▼" : "編集長パネル（採用候補）を閉じる ▲";
+    btn.textContent = open ? "編集長パネル（公開準備）を開く ▼" : "編集長パネル（公開準備）を閉じる ▲";
     if (!open) renderEditorPanel();
   };
 }
@@ -644,11 +644,11 @@ function renderEditorPanel() {
       return a.text.localeCompare(b.text, "ja");
     });
 
-  statusEl.textContent = `条件：${mode === "fun" ? "お笑い" : "雑学"} / ${bucket}%　採用候補：${picked.length}件（📌優先→👍数順）`;
+  statusEl.textContent = `条件：${mode === "fun" ? "お笑い" : "雑学"} / ${bucket}%　公開準備：${picked.length}件（📌優先→👍数順）`;
   listEl.innerHTML = "";
 
   if (!picked.length) {
-    listEl.innerHTML = `<div class="muted">この条件では「採用候補（📌）」がまだありません。</div>`;
+    listEl.innerHTML = `<div class="muted">この条件では「公開準備（📌）」がまだありません。</div>`;
     return;
   }
 
@@ -679,7 +679,7 @@ function renderEditorPanel() {
 
     const pinBtn = document.createElement("button");
     pinBtn.className = "btnSmall";
-    pinBtn.textContent = x.pinned ? "📌解除" : "📌採用候補";
+    pinBtn.textContent = x.pinned ? "📌解除" : "📌公開準備";
     pinBtn.onclick = () => {
       togglePinned(x.text);
       renderEditorPanel();
@@ -801,7 +801,7 @@ function render() {
   }
 
   if (footEl) footEl.textContent =
-    "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)＋共有(public)候補からランダム表示（📌採用候補が多いほど出やすい）";
+    "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)＋共有(public)候補からランダム表示（📌公開準備が多いほど出やすい）";
 
   renderEditorPanel();
 }
