@@ -18,7 +18,8 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // 共有ネタ（GitHub PagesのJSON）
 // ※ 起動時に読み込んで抽選候補へ混ぜる
 // ==============================
-const SHARED_JSON_URL = "./data/metaphors.json";
+const SHARED_JSON_URL = "./metaphors.json";
+
 let sharedItems = []; // [{mode,bucket,text}, ...]
 
 // 互換用（過去に入れた人向け）: JSON items をここにも入れる
