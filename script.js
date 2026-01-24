@@ -1008,8 +1008,8 @@ document.getElementById("refresh").onclick = () => render();
 if ($("listMode")) $("listMode").addEventListener("change", renderExtraList);
 if ($("listBucket")) $("listBucket").addEventListener("change", renderExtraList);
 
-// ネタ追加
-document.getElementById("addPhraseBtn").onclick = () => {
+// ネタ追加（✅ 承認待ち送信を追加：最小差分）
+document.getElementById("addPhraseBtn").onclick = async () => {
   const statusEl = document.getElementById("addStatus");
   const mode = ($("newPhraseMode")?.value ?? "trivia");
   const bucket = Number($("newPhraseBucket")?.value ?? 0);
@@ -1019,6 +1019,17 @@ document.getElementById("addPhraseBtn").onclick = () => {
 
   if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
   if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
+
+  // ✅ 承認待ちに送る（公開はされない。管理者承認で初めてpublicに出る）
+  if (res.ok) {
+    try {
+      await submitToPending(mode, bucket, text);
+      if (statusEl) statusEl.textContent += " ／ 📨 承認待ちに送信しました";
+    } catch (e) {
+      if (statusEl) statusEl.textContent += " ／ ⚠️ 承認待ち送信に失敗";
+      console.error(e);
+    }
+  }
 
   renderExtraList();
   renderEditorPanel();
