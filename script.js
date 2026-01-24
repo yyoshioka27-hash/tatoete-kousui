@@ -146,7 +146,7 @@ let state = {
 const $ = (id) => document.getElementById(id);
 
 // =========================
-// 📌 公開準備（旧: いいね）
+// 📌 公開準備（ローカル）
 // =========================
 const LIKES_KEY = "metaphorLikes";
 
@@ -328,11 +328,10 @@ function renderExtraList() {
 
     const pinBtn = document.createElement("button");
     pinBtn.className = "btnSmall";
-    pinBtn.textContent = isPinned(it.text) ? "📌 解除" : "📌 公開準備";
+    pinBtn.textContent = isPinned(it.text) ? "📌 公開準備を解除" : "📌 公開準備";
     pinBtn.onclick = () => {
       togglePinned(it.text);
       renderExtraList();
-      renderEditorPanel();
       render();
     };
     right.appendChild(pinBtn);
@@ -347,7 +346,6 @@ function renderExtraList() {
       removeExtraById(it.id);
       renderExtraList();
       render();
-      renderEditorPanel();
     };
     right.appendChild(btn);
 
@@ -480,7 +478,7 @@ function pickMetaphor(mode, bucket) {
 }
 
 // =========================
-// 📌 公開準備UI
+// 📌 公開準備UI（表示中の3つ）
 // =========================
 function updateLikeUI(slot) {
   const phraseObj = state.currentPhrases[slot];
@@ -502,18 +500,19 @@ function updateLikeUI(slot) {
 
   const pinned = isPinned(phrase);
   if (badgeEl) {
-    if (pinned) badgeEl.textContent = "📌候補";
+    if (pinned) badgeEl.textContent = "📌公開準備";
     else badgeEl.textContent = count >= 5 ? "⭐候補！" : "";
   }
 
   if (btnEl) {
     btnEl.disabled = false;
-    btnEl.textContent = pinned ? "📌 候補解除" : "📌 公開準備";
+    btnEl.textContent = pinned ? "📌 公開準備を解除" : "📌 公開準備";
     btnEl.onclick = () => {
       togglePinned(phrase);
-      if (!pinned) incrementLike(phrase);
+      if (!pinned) incrementLike(phrase); // 公開準備にしたときだけカウント
       updateLikeUI(slot);
-      renderEditorPanel();
+      renderExtraList();
+      render();
     };
   }
 }
@@ -542,11 +541,9 @@ function updateDeleteUI(slotKey) {
 
     removeExtraById(extraId);
     renderExtraList();
-    renderEditorPanel();
     render();
   };
 }
-
 
 // =========================
 // UI helper
@@ -620,7 +617,6 @@ function render() {
     if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
     renderEmpty();
     if (footEl) footEl.textContent = "";
-    renderEditorPanel();
     return;
   }
 
@@ -640,8 +636,6 @@ function render() {
 
   if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)＋共有(public)候補からランダム表示（📌公開準備が多いほど出やすい）";
-
-  renderEditorPanel();
 }
 
 function renderEmpty() {
@@ -825,12 +819,12 @@ document.getElementById("refresh").onclick = () => render();
 if ($("listMode")) $("listMode").addEventListener("change", renderExtraList);
 if ($("listBucket")) $("listBucket").addEventListener("change", renderExtraList);
 
-// ネタ追加（✅ 承認待ち送信を “必ず見える形で” 表示：最小差分）
+// ネタ追加（承認待ち送信を “必ず見える形で” 表示）
 document.getElementById("addPhraseBtn").onclick = async () => {
   const statusEl = document.getElementById("addStatus");
   const mode = ($("newPhraseMode")?.value ?? "trivia");
   const bucketRaw = Number($("newPhraseBucket")?.value ?? 0);
-  const bucket = window.bucket10(bucketRaw);               // ✅ PATCH: 正規化
+  const bucket = window.bucket10(bucketRaw);
   const text = (document.getElementById("newPhrase")?.value ?? "").trim();
 
   const res = addExtraPhrase(mode, bucket, text);
@@ -838,21 +832,20 @@ document.getElementById("addPhraseBtn").onclick = async () => {
   if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
   if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
 
-  // ✅ 承認待ち送信（表示を“確実”に出す）
+  // 承認待ち送信（公開のための準備）
   if (res.ok) {
-    if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 承認待ちへ送信中…`;   // ✅ PATCH
+    if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 公開のために承認待ちへ送信中…`;
     try {
       await submitToPending(mode, bucket, text);
-      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 承認待ちに送信しました`; // ✅ PATCH
+      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 承認待ちに送信しました（管理画面で承認すると公開されます）`;
     } catch (e) {
       const msg = (e && e.message) ? e.message : "unknown error";
-      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n⚠️ 承認待ち送信に失敗：${msg}`; // ✅ PATCH
+      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n⚠️ 承認待ち送信に失敗：${msg}`;
       console.error(e);
     }
   }
 
   renderExtraList();
-  renderEditorPanel();
   render();
 };
 
@@ -860,12 +853,10 @@ document.getElementById("addPhraseBtn").onclick = async () => {
 // 初期化
 // ==============================
 setupToggleExtraPanel();
-ensureEditorPanelDOM();
 render();
 
 loadSharedJSON().then(() => {
   render();
-  renderEditorPanel();
 });
 
 // ==============================
