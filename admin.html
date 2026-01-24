@@ -3,108 +3,45 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>承認待ち（管理者）</title>
+  <title>たとえて降水確率 / 管理（承認）</title>
   <style>
-    body{ font-family: system-ui; padding:16px; }
-    input,button{ padding:10px 12px; border-radius:10px; border:1px solid #ddd; }
-    button{ cursor:pointer; }
-    .row{ display:flex; justify-content:space-between; gap:10px; padding:10px; border-top:1px solid #eee; }
-    .muted{ color:#64748b; font-size:12px; }
-    .text{ white-space:pre-wrap; }
+    body { font-family: -apple-system, system-ui, sans-serif; margin: 20px; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    input { padding:10px 12px; border:1px solid #ddd; border-radius:10px; }
+    button { padding:10px 12px; border:1px solid #ddd; border-radius:10px; background:#fff; cursor:pointer; }
+    button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+    button.danger { background:#ef4444; color:#fff; border-color:#ef4444; }
+    .card { border:1px solid #e5e7eb; border-radius:14px; padding:12px; margin:12px 0; }
+    .meta { color:#64748b; font-size:12px; }
+    .text { font-size:16px; margin-top:6px; white-space:pre-wrap; }
+    .hr { height:1px; background:#eee; margin:14px 0; }
+    .ok { color:#16a34a; }
+    .ng { color:#ef4444; }
+    code { background:#f1f5f9; padding:2px 6px; border-radius:8px; }
   </style>
 </head>
 <body>
-  <h2>承認待ち一覧</h2>
+  <h1>管理（承認待ち）</h1>
 
-  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-    <input id="key" placeholder="管理者キー（x-admin-key）" style="min-width:260px;">
-    <button id="reload">更新</button>
-    <span id="status" class="muted"></span>
+  <div class="row">
+    <label>API_BASE:
+      <input id="apiBase" size="55" placeholder="https://xxxx.workers.dev" />
+    </label>
   </div>
 
-  <div id="list" style="margin-top:14px;"></div>
+  <div class="row" style="margin-top:10px;">
+    <label>ADMIN_KEY:
+      <input id="adminKey" size="20" placeholder="例: 2355" />
+    </label>
+    <button id="saveKey" class="primary">保存</button>
+    <button id="refresh">一覧更新</button>
+    <span id="status" class="meta"></span>
+  </div>
 
-<script>
-const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+  <div class="hr"></div>
 
-const $ = (id)=>document.getElementById(id);
-function setStatus(t){ $("status").textContent = t; }
+  <div id="list"></div>
 
-async function api(path, method="GET", body=null){
-  const key = $("key").value.trim();
-  const opt = { method, headers: { "Content-Type":"application/json", "x-admin-key": key } };
-  if (body) opt.body = JSON.stringify(body);
-  const res = await fetch(API_BASE + path, opt);
-  const data = await res.json().catch(()=>null);
-  if (!res.ok) throw new Error(data?.error || ("HTTP " + res.status));
-  if (!data?.ok) throw new Error("not ok");
-  return data;
-}
-
-async function load(){
-  setStatus("取得中…");
-  const out = await api("/api/pending");
-  const items = out.items || [];
-  setStatus(`承認待ち：${items.length}件`);
-  const list = $("list");
-  list.innerHTML = "";
-
-  if (!items.length){
-    list.innerHTML = `<div class="muted">承認待ちはありません。</div>`;
-    return;
-  }
-
-  for (const it of items){
-    const row = document.createElement("div");
-    row.className = "row";
-
-    const left = document.createElement("div");
-    left.style.flex = "1";
-
-    const t = document.createElement("div");
-    t.className = "text";
-    t.textContent = it.text;
-
-    const m = document.createElement("div");
-    m.className = "muted";
-    m.textContent = `mode:${it.mode} / bucket:${it.bucket}% / from:${it.from||"-"} / ${new Date(it.createdAt||0).toLocaleString()} / id:${it.id}`;
-
-    left.appendChild(t);
-    left.appendChild(m);
-
-    const right = document.createElement("div");
-    right.style.display = "flex";
-    right.style.gap = "8px";
-    right.style.alignItems = "center";
-
-    const ok = document.createElement("button");
-    ok.textContent = "✅ 承認";
-    ok.onclick = async ()=>{
-      if(!confirm("承認して公開します。よろしいですか？")) return;
-      await api("/api/approve", "POST", { id: it.id });
-      await load();
-    };
-
-    const ng = document.createElement("button");
-    ng.textContent = "❌ 却下";
-    ng.onclick = async ()=>{
-      if(!confirm("却下して削除します。よろしいですか？")) return;
-      await api("/api/reject", "POST", { id: it.id });
-      await load();
-    };
-
-    right.appendChild(ok);
-    right.appendChild(ng);
-
-    row.appendChild(left);
-    row.appendChild(right);
-    list.appendChild(row);
-  }
-}
-
-$("reload").onclick = ()=>load();
-
-setStatus("管理者キーを入れて「更新」");
-</script>
+  <script src="./admin.js"></script>
 </body>
 </html>
