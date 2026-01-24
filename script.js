@@ -7,13 +7,11 @@ const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.work
 async function submitToPending(mode, bucket, text){
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type":"application/json" },
     body: JSON.stringify({ mode, bucket, text, from: "mobile" })
   });
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data?.ok) {
-    throw new Error(data?.error || `submit failed ${res.status}`);
-  }
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `submit failed ${res.status}`);
   return data;
 }
 
@@ -384,7 +382,6 @@ function setupToggleExtraPanel() {
 
 // =========================
 // お天気アイコン（%の前）
-// 0–20: 🌤️ / 30–60: ☁️ / 70–100: 🌧️
 // =========================
 function iconForPop(roundedPop) {
   const p = Number(roundedPop);
@@ -431,7 +428,6 @@ function buildCandidatePool(mode, bucket) {
   return out;
 }
 
-// ✅ NEW: 表示用に「共有◯件」を作る（public / json の件数を返す）
 function getShareCounts(mode, bucket) {
   const b = window.bucket10(bucket);
 
@@ -443,10 +439,7 @@ function getShareCounts(mode, bucket) {
     getPublicItems(mode, b).map(x => String(x.text || "").trim()).filter(Boolean)
   );
 
-  return {
-    json: jsonSet.size,
-    pub: pubSet.size
-  };
+  return { json: jsonSet.size, pub: pubSet.size };
 }
 
 function weightedPick(items) {
@@ -482,7 +475,6 @@ function pickMetaphor(mode, bucket) {
     }
   }
   lastPickKey[key] = picked.text;
-
   return picked;
 }
 
@@ -515,12 +507,10 @@ function updateLikeUI(slot) {
 
   if (btnEl) {
     btnEl.disabled = false;
-
     btnEl.textContent = pinned ? "📌 候補解除" : "📌 採用候補";
     btnEl.onclick = () => {
       togglePinned(phrase);
       if (!pinned) incrementLike(phrase);
-
       updateLikeUI(slot);
       renderEditorPanel();
     };
@@ -738,7 +728,7 @@ function normalizePlaceName(input) {
 }
 
 // =========================
-// render  ← ここが「表示ボタンで例文を決めて出す」本体
+// render
 // =========================
 function render() {
   const hintEl = document.getElementById("popHint");
@@ -775,7 +765,6 @@ function render() {
     const mode = getSelectedMode();
     const picked = pickMetaphor(mode, rounded);
 
-    // ✅ NEW: 共有件数の見える化（public / json）
     const sc = getShareCounts(mode, rounded);
     const shareHint = `（共有public:${sc.pub}件 / 共有JSON:${sc.json}件）`;
 
@@ -884,11 +873,7 @@ async function fetchPopsBySlots(lat, lon) {
   const maxOrNull = (arr) => arr.length ? Math.round(Math.max(...arr)) : null;
 
   return {
-    pops: {
-      m: maxOrNull(bucket.m),
-      d: maxOrNull(bucket.d),
-      e: maxOrNull(bucket.e),
-    },
+    pops: { m: maxOrNull(bucket.m), d: maxOrNull(bucket.d), e: maxOrNull(bucket.e) },
     tz
   };
 }
@@ -904,10 +889,7 @@ document.getElementById("search").onclick = async () => {
   sel.innerHTML = "";
   sel.disabled = true;
 
-  if (!q) {
-    setStatus("地点名を入力してください", "ng");
-    return;
-  }
+  if (!q) { setStatus("地点名を入力してください", "ng"); return; }
 
   setStatus("検索中…", "muted");
 
@@ -954,7 +936,6 @@ document.getElementById("search").onclick = async () => {
         state.pops = out.pops;
         state.tz = out.tz;
 
-        // ✅ public を先読み（朝昼夜 bucket分）
         await Promise.all([
           warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
           warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
@@ -987,7 +968,6 @@ document.getElementById("search").onclick = async () => {
   }
 };
 
-// モード変更は render（+ public 先読み）
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
     if (state?.pops) {
@@ -1001,18 +981,17 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   })
 );
 
-// 「同じ確率でも例えを変える」＝表示ボタン
 document.getElementById("refresh").onclick = () => render();
 
-// 一覧フィルタ変更
 if ($("listMode")) $("listMode").addEventListener("change", renderExtraList);
 if ($("listBucket")) $("listBucket").addEventListener("change", renderExtraList);
 
-// ネタ追加（✅ 承認待ち送信を追加：最小差分）
+// ネタ追加（✅ 承認待ち送信を “必ず見える形で” 表示：最小差分）
 document.getElementById("addPhraseBtn").onclick = async () => {
   const statusEl = document.getElementById("addStatus");
   const mode = ($("newPhraseMode")?.value ?? "trivia");
-  const bucket = Number($("newPhraseBucket")?.value ?? 0);
+  const bucketRaw = Number($("newPhraseBucket")?.value ?? 0);
+  const bucket = window.bucket10(bucketRaw);               // ✅ PATCH: 正規化
   const text = (document.getElementById("newPhrase")?.value ?? "").trim();
 
   const res = addExtraPhrase(mode, bucket, text);
@@ -1020,13 +999,15 @@ document.getElementById("addPhraseBtn").onclick = async () => {
   if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
   if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
 
-  // ✅ 承認待ちに送る（公開はされない。管理者承認で初めてpublicに出る）
+  // ✅ 承認待ち送信（表示を“確実”に出す）
   if (res.ok) {
+    if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 承認待ちへ送信中…`;   // ✅ PATCH
     try {
       await submitToPending(mode, bucket, text);
-      if (statusEl) statusEl.textContent += " ／ 📨 承認待ちに送信しました";
+      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 承認待ちに送信しました`; // ✅ PATCH
     } catch (e) {
-      if (statusEl) statusEl.textContent += " ／ ⚠️ 承認待ち送信に失敗";
+      const msg = (e && e.message) ? e.message : "unknown error";
+      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n⚠️ 承認待ち送信に失敗：${msg}`; // ✅ PATCH
       console.error(e);
     }
   }
