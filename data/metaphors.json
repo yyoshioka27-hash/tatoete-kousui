@@ -1,8 +1,8 @@
 {
-  "version": 1,
   "items": [
-    { "mode": "trivia", "bucket": 0, "text": "テスト用ネタ（JSONから読み込み）" },
-    { "mode": "trivia", "bucket": 50, "text": "世界人口のうち毎日インターネットを利用する人は約54%" }
+    { "mode": "trivia", "bucket": 40, "text": "共有テスト：40%（雑学）" },
+    { "mode": "fun",    "bucket": 40, "text": "共有テスト：40%（お笑い）" },
+    { "mode": "trivia", "bucket": 20, "text": "共有テスト：20%（雑学）" }
   ]
 }
 
