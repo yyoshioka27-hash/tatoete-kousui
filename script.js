@@ -1,4 +1,18 @@
 // script.js
+const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
+  const params = new URLSearchParams();
+  if (mode) params.set("mode", mode);
+  if (Number.isFinite(bucket)) params.set("bucket", String(bucket));
+  params.set("limit", String(limit));
+
+  const url = `${API_BASE}/api/public?${params.toString()}`;
+  const res = await fetch(url, { method: "GET" });
+  if (!res.ok) throw new Error(`public fetch failed: ${res.status}`);
+  const data = await res.json();
+  if (!data?.ok) throw new Error("public not ok");
+  return (data.items || []).map(x => x.text).filter(Boolean);
+}
 
 // ==============================
 // 共有ネタ（GitHub PagesのJSON）
@@ -48,6 +62,41 @@ function getSharedItems(mode, bucket) {
       })).filter(x => x.text) : []);
 
   return base.filter(x => x.mode === m && x.bucket === b);
+}
+
+// ==============================
+// ✅ NEW: 共有ネタ（Cloudflare Workers /api/public）
+// - public を抽選候補へ混ぜる（最小差分）
+// - mode×bucket のキャッシュ
+// ==============================
+const publicCache = new Map(); // key: "mode_bucket" => [text,...]
+
+function keyMB(mode, bucket){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = window.bucket10(bucket);
+  return `${m}_${b}`;
+}
+
+async function warmPublicCache(mode, bucket){
+  const k = keyMB(mode, bucket);
+  if (publicCache.has(k)) return;
+
+  try{
+    const texts = await fetchPublicMetaphors({
+      mode: (mode === "fun" ? "fun" : "trivia"),
+      bucket: window.bucket10(bucket),
+      limit: 200
+    });
+    publicCache.set(k, texts);
+  }catch{
+    publicCache.set(k, []); // 失敗時も空で確定（無限リトライ防止）
+  }
+}
+
+function getPublicItems(mode, bucket){
+  const k = keyMB(mode, bucket);
+  const arr = publicCache.get(k) || [];
+  return arr.map(t => ({ text: String(t || "").trim(), extraId: null })).filter(x => x.text);
 }
 
 // 旧キーの掃除（そのまま維持）
@@ -339,7 +388,7 @@ function setIcon(slotKey, roundedPop) {
 }
 
 // =========================
-// ネタ抽選（既存 + 追加 + 共有(JSON) を混ぜる）
+// ネタ抽選（既存 + 追加 + 共有(JSON) + 共有(public) を混ぜる）
 // =========================
 const lastPickKey = {};
 
@@ -357,10 +406,11 @@ function buildCandidatePool(mode, bucket) {
   const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
   const extras = getExtraItems(mode, b).map(x => ({ text: x.text, extraId: x.id }));
   const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null }));
+  const pub    = getPublicItems(mode, b); // ✅ NEW: /api/public
 
   const out = [];
   const seen = new Set();
-  for (const item of [...baseTexts, ...extras, ...shared]) {
+  for (const item of [...baseTexts, ...extras, ...shared, ...pub]) { // ✅ NEW
     if (!item?.text) continue;
     if (seen.has(item.text)) continue;
     seen.add(item.text);
@@ -567,7 +617,7 @@ function renderEditorPanel() {
   // 取れてなければ 0 として扱う（一覧は空になるだけ）
   const bucket = bCandidates.length ? bCandidates[0] : 0;
 
-  // 現在の候補プール（base+extra+shared）を作り、📌 or 👍付きのみ抽出
+  // 現在の候補プール（base+extra+shared+public）を作り、📌 or 👍付きのみ抽出
   const pool = buildCandidatePool(mode, bucket);
 
   const picked = pool
@@ -747,7 +797,7 @@ function render() {
     if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
   }
 
-  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)候補からランダム表示（📌採用候補が多いほど出やすい）";
+  if (footEl) footEl.textContent = "※降水確率を0/10/…/100%に丸め、既存ネタ＋追加ネタ＋共有(JSON)＋共有(public)候補からランダム表示（📌採用候補が多いほど出やすい）";
 
   // 編集長パネル更新（開いている場合のみ）
   renderEditorPanel();
@@ -891,6 +941,13 @@ document.getElementById("search").onclick = async () => {
         state.pops = out.pops;
         state.tz = out.tz;
 
+        // ✅ NEW: public を先読み（朝昼夜 bucket分）
+        await Promise.all([
+          warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
+          warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
+          warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
+        ]);
+
         const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
         if (!any) {
           setStatus("降水確率が取得できませんでした（別地点で試してください）", "ng");
@@ -917,12 +974,21 @@ document.getElementById("search").onclick = async () => {
   }
 };
 
-// モード変更は render
+// モード変更は render（+ public 先読み）
 document.querySelectorAll('input[name="mode"]').forEach(r =>
-  r.addEventListener("change", render)
+  r.addEventListener("change", async () => {
+    if (state?.pops) {
+      await Promise.all([
+        warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
+        warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
+        warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
+      ]);
+    }
+    render();
+  })
 );
 
-// 「同じ確率でも例えを変える」
+// 「同じ確率でも例えを変える」＝表示ボタン（ここは render が例文決定）
 document.getElementById("refresh").onclick = () => render();
 
 // 一覧フィルタ変更
