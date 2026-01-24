@@ -1,6 +1,7 @@
 // script.js
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
+
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
