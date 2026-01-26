@@ -3,144 +3,464 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>たとえて、降水確率。</title>
-
+  <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="./manifest.webmanifest" />
 
+  <!-- ✅ タイトルのカッコ修正（[ が混ざってた） -->
+  <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
+
   <style>
+    /* =========================
+       Pro UI Base
+    ========================= */
     :root{
       --bg1:#ffffff;
       --bg2:#ffffff;
-      --accent:#2563eb;
+      --accent:#2563eb;   /* ここが主役色 */
       --text:#0f172a;
       --sub:#475569;
+
       --card: rgba(255,255,255,0.86);
+      --card-border: rgba(15, 23, 42, 0.08);
       --shadow: 0 12px 28px rgba(2,6,23,0.10);
+
+      --radius: 18px;
+      --radius2: 14px;
+
+      --space: 18px;
+      --space2: 12px;
+
+      --tap: 44px;
     }
+
+    /* 画面全体グラデ背景（②） */
     body{
       margin:0;
-      font-family:-apple-system,system-ui,"Noto Sans JP",sans-serif;
-      background:linear-gradient(180deg,var(--bg1),var(--bg2));
-      color:var(--text);
+      padding: 18px;
+      font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      background: linear-gradient(180deg, var(--bg1), var(--bg2));
+      color: var(--text);
     }
-    .wrap{
-      max-width:900px;
-      margin:0 auto;
-      padding:18px 14px 40px;
+
+    /* ✅ 画面を“アプリっぽく”中央寄せ */
+    .container{
+      max-width: 860px;
+      margin: 0 auto;
     }
+
+    /* 見出し */
     h1{
-      font-size:26px;
-      margin:6px 0 2px;
+      margin: 0 0 14px;
+      font-size: 26px;
+      letter-spacing: -0.2px;
+      line-height: 1.25;
     }
-    .sub{
-      color:var(--sub);
-      font-size:13px;
-      margin-bottom:12px;
+    .subtitle{
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--sub);
     }
+
+    /* カード */
     .card{
-      background:var(--card);
-      border-radius:16px;
-      box-shadow:var(--shadow);
-      padding:16px;
-      margin:12px 0;
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 12px 0;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
     }
-    input,select,button{
-      padding:10px 12px;
-      border-radius:10px;
-      border:1px solid #ddd;
-      font-size:14px;
+
+    /* 小見出し */
+    .small{
+      color: var(--sub);
+      font-size: 13px;
+      line-height: 1.4;
     }
-    button{
-      cursor:pointer;
-      background:#fff;
-    }
-    .row{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
+
+    /* 文字（％を主役に） */
     .big{
-      font-size:38px;
-      font-weight:700;
+      font-size: 52px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1;
     }
-    .meta{
-      font-size:14px;
-      margin-top:6px;
+
+    /* 入力UI */
+    input, select, textarea{
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(15,23,42,0.10);
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 16px;
+      background: rgba(255,255,255,0.90);
+      outline: none;
     }
-    .muted{
-      color:var(--sub);
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(37,99,235,0.55);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+    }
+
+    /* ボタン */
+    button{
+      min-height: var(--tap);
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(15,23,42,0.10);
+      background: #fff;
+      cursor: pointer;
+      font-size: 16px;
+      transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease;
+      box-shadow: 0 8px 18px rgba(2,6,23,0.06);
+    }
+    button:hover{
+      border-color: rgba(37,99,235,0.35);
+      box-shadow: 0 10px 24px rgba(2,6,23,0.10);
+    }
+    button:active{ transform: translateY(1px); }
+    button:disabled{ opacity: .55; cursor: not-allowed; }
+
+    /* 強調ボタン（検索・更新など） */
+    .btnPrimary{
+      background: var(--accent);
+      border-color: rgba(37,99,235,0.55);
+      color: #fff;
+      box-shadow: 0 14px 28px rgba(37,99,235,0.18);
+    }
+    .btnPrimary:hover{
+      box-shadow: 0 16px 34px rgba(37,99,235,0.22);
+    }
+
+    /* Row */
+    .row{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* 状態表示 */
+    .muted{ color:#64748b; font-size:12px; }
+    .ok{ color:#059669; font-size:12px; }
+    .ng{ color:#dc2626; font-size:12px; }
+
+    /* pill */
+    .pill{
+      display:inline-block;
+      padding: 6px 10px;
+      border: 1px solid rgba(15,23,42,0.10);
+      border-radius: 999px;
       font-size:12px;
+      margin-right: 6px;
+      background: rgba(255,255,255,0.80);
     }
+
+    /* slots */
     .slot{
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: var(--radius2);
+      padding: 14px;
+      margin-top: 12px;
+      background: rgba(255,255,255,0.72);
+    }
+    .slot .big{ font-size: 34px; }
+    .slot .small{ margin-top: 6px; }
+
+    /* 例え文（朝・昼・夜） */
+    #meta_m, #meta_d, #meta_e{
+      margin-top: 8px;
+      font-size: 16px;
+      color: #1f2937;
+      line-height: 1.65;
+      font-weight: 500;
+    }
+
+    /* 人間向け翻訳 */
+    #metaphor{
+      margin-top: 8px;
+      font-size: 24px;
+      line-height: 1.7;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+
+    /* 追加ネタ一覧 */
+    .listItem{
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      margin: 8px 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      background: rgba(255,255,255,0.75);
+    }
+    .listText{ color:#0f172a; line-height:1.5; }
+    .listMeta{ color:#64748b; font-size:12px; margin-top:4px; }
+    .btnSmall{
+      min-height: 36px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    /* 下の固定的な操作エリア */
+    .actions{
       display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-      margin:8px 0;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 12px;
     }
-    .slot span{
-      font-size:22px;
-      font-weight:600;
-    }
+
+    /* Footer */
     .footer{
-      margin-top:18px;
-      font-size:12px;
-      color:var(--sub);
+      margin: 18px 0 8px;
+      color: var(--sub);
+      font-size: 12px;
+      text-align: center;
+      opacity: 0.9;
+    }
+
+    /* ✅ スマホ最適化 */
+    @media (max-width: 600px){
+      body{ padding: 12px; }
+      h1{ font-size: 22px; }
+      .subtitle{ font-size: 13px; }
+      .card{ padding: 12px; }
+      .row{ grid-template-columns: 1fr; }
+      #metaphor{ font-size: 20px; }
+      #meta_m, #meta_d, #meta_e{ font-size: 15px; }
+      .pill{ font-size: 11px; padding: 5px 8px; }
+      .listItem{ grid-template-columns: 1fr; }
+    }
+
+    /* =========================
+       例えモード（雑学・お笑い）ズレ修正
+       ※レイアウトを壊さない版（重複なし）
+    ========================= */
+    .example-mode .modeWrap{
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .example-mode label{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      cursor: pointer;
+    }
+    .example-mode input[type="radio"]{
+      margin: 0;
+      transform: translateY(1px); /* iPhone/Safari微調整 */
     }
   </style>
 </head>
 
 <body>
-  <div class="wrap">
-    <h1>たとえて、降水確率。</h1>
-    <div class="sub">降水確率を「別の確率」で例えてみるアプリ</div>
+  <div class="container">
+
+    <h1>「たとえて、降水確率」
+      <div class="subtitle">－降水確率を“別の確率”で例えてみた。</div>
+    </h1>
 
     <div class="card">
-      <div class="row">
-        <input id="place" placeholder="地点（例：仙台）" />
-        <button id="search">検索</button>
+      <div class="small">天気予報を知りたい地点</div>
+      <div class="row" style="margin-top:10px;">
+        <input id="place" placeholder="例：仙台市 / Sendai / 仙台駅 / 仙台市青葉区" />
+        <!-- ✅ 検索ボタンをプロっぽく -->
+        <button id="search" class="btnPrimary">検索</button>
       </div>
-      <div class="row" style="margin-top:6px;">
-        <select id="candidates" disabled></select>
-      </div>
-      <div id="placeStatus" class="muted" style="margin-top:6px;">地点を入力してください</div>
-    </div>
 
-    <div class="card">
-      <div class="slot">
-        <span>🌅 朝</span>
-        <div>
-          <div id="pop_m" class="big">--%</div>
-          <div id="meta_m" class="meta muted">---</div>
-        </div>
-      </div>
-      <div class="slot">
-        <span>🌞 昼</span>
-        <div>
-          <div id="pop_d" class="big">--%</div>
-          <div id="meta_d" class="meta muted">---</div>
-        </div>
-      </div>
-      <div class="slot">
-        <span>🌙 夜</span>
-        <div>
-          <div id="pop_e" class="big">--%</div>
-          <div id="meta_e" class="meta muted">---</div>
+      <div style="margin-top:10px;">
+        <select id="candidates" disabled>
+          <option>検索結果がここに出ます</option>
+        </select>
+        <div id="placeStatus" class="muted" style="margin-top:8px;">
+          地点を入力して「検索」してください（APIキー不要）
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <div id="metaphor" class="big">地点を選んでください</div>
-      <div class="footer">
-        ※ Open-Meteo API を使用<br>
-        ※ 0/10/20…100% に丸めて表示
+    <!-- ✅ ここだけ class を追加：card example-mode -->
+    <div class="card example-mode">
+      <div class="small">例えモード（※A版は統合表示）</div>
+
+      <!-- ✅ ラジオ行のラッパーを追加（CSS適用点） -->
+      <div class="modeWrap">
+        <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
+        <!-- ✅ margin-left は削除 -->
+        <label><input type="radio" name="mode" value="fun"> お笑い</label>
+      </div>
+
+      <div class="muted" style="margin-top:10px;">
+        ※同じ確率でも、毎回ちがうネタが出ます（👍で出やすくなります）
       </div>
     </div>
-  </div>
 
-  <script src="./metaphors.js"></script>
-  <script src="./script.js"></script>
+    <div class="card">
+      <div class="small">今日の降水確率（朝/昼/夜）</div>
+      <div class="small" id="popHint">地点を選ぶと自動取得します</div>
+
+      <!-- 朝 -->
+      <div class="slot">
+        <div class="small">朝（6–11時）</div>
+        <div class="big">
+          <span id="wx_m" style="margin-right:8px;">--</span>
+          <span id="pop_m">--%</span>
+        </div>
+        <div class="small" id="meta_m"></div>
+
+        <div class="actions">
+          <button id="del_m" style="display:none;">このネタを削除</button>
+
+          <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
+          <span id="badge_m" style="margin-left:6px;font-size:20px;"></span>
+        </div>
+      </div>
+
+      <!-- 昼 -->
+      <div class="slot">
+        <div class="small">昼（12–17時）</div>
+        <div class="big">
+          <span id="wx_d" style="margin-right:8px;">--</span>
+          <span id="pop_d">--%</span>
+        </div>
+        <div class="small" id="meta_d"></div>
+
+        <div class="actions">
+          <button id="del_d" style="display:none;">このネタを削除</button>
+
+          <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
+          <span id="badge_d" style="margin-left:6px;font-size:20px;"></span>
+        </div>
+      </div>
+
+      <!-- 夜 -->
+      <div class="slot">
+        <div class="small">夜（18–23時）</div>
+        <div class="big">
+          <span id="wx_e" style="margin-right:8px;">--</span>
+          <span id="pop_e">--%</span>
+        </div>
+        <div class="small" id="meta_e"></div>
+
+        <div class="actions">
+          <button id="del_e" style="display:none;">このネタを削除</button>
+
+          <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
+          <span id="badge_e" style="margin-left:6px;font-size:20px;"></span>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <span class="pill" id="sourceTag">API: 未接続</span>
+        <span class="pill" id="tzTag">TZ: --</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="small">人間向け翻訳（毎回ランダム）</div>
+      <div class="big" id="metaphor">地点を選んでください</div>
+      <div class="muted" id="metaFoot" style="margin-top:10px;"></div>
+
+      <div class="actions">
+        <!-- ✅ “更新”も主ボタンへ -->
+        <button id="refresh" class="btnPrimary">同じ確率でも例えを変える</button>
+      </div>
+    </div>
+
+    <!-- ✅ ネタ追加（保存） -->
+    <div class="card" id="addSection">
+      <div class="small"><b>ネタ追加（この端末に保存）</b></div>
+
+      <div class="actions" style="margin-top:10px;">
+        <label class="small">モード：</label>
+        <select id="newPhraseMode" style="max-width: 220px;">
+          <option value="trivia">雑学</option>
+          <option value="fun">お笑い</option>
+        </select>
+
+        <label class="small">確率：</label>
+        <select id="newPhraseBucket" style="max-width: 140px;">
+          <option value="0">0%</option>
+          <option value="10">10%</option>
+          <option value="20">20%</option>
+          <option value="30">30%</option>
+          <option value="40">40%</option>
+          <option value="50">50%</option>
+          <option value="60">60%</option>
+          <option value="70">70%</option>
+          <option value="80">80%</option>
+          <option value="90">90%</option>
+          <option value="100">100%</option>
+        </select>
+
+        <button id="addPhraseBtn" class="btnPrimary">追加</button>
+      </div>
+
+      <div style="margin-top:10px;">
+        <textarea id="newPhrase" rows="3" placeholder="例：日本の識字率は99％（約100％）"></textarea>
+      </div>
+
+      <div class="muted" id="addStatus" style="margin-top:10px;"></div>
+
+      <!-- ✅ 開閉ボタン -->
+      <div class="actions" style="margin-top:12px;">
+        <button id="toggleExtraList">追加ネタ一覧を開く ▼</button>
+        <div class="muted" style="margin-top:0;">
+          ※この一覧は「この端末（このブラウザ）」だけに保存された追加ネタです
+        </div>
+      </div>
+
+      <!-- ✅ 開閉対象 -->
+      <div id="extraListPanel" style="display:none; margin-top:12px;">
+        <div class="small"><b>追加ネタ一覧（この端末）</b></div>
+
+        <div class="actions" style="margin-top:10px;">
+          <label class="small">モード：</label>
+          <select id="listMode" style="max-width: 220px;">
+            <option value="trivia">雑学</option>
+            <option value="fun">お笑い</option>
+          </select>
+
+          <label class="small">確率：</label>
+          <select id="listBucket" style="max-width: 140px;">
+            <option value="0">0%</option>
+            <option value="10">10%</option>
+            <option value="20">20%</option>
+            <option value="30">30%</option>
+            <option value="40">40%</option>
+            <option value="50">50%</option>
+            <option value="60">60%</option>
+            <option value="70">70%</option>
+            <option value="80">80%</option>
+            <option value="90">90%</option>
+            <option value="100">100%</option>
+          </select>
+        </div>
+
+        <div class="muted" id="listStatus" style="margin-top:10px;"></div>
+        <div id="listBody" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      API: Open-Meteo / PWA対応（ホーム画面に追加OK）
+    </div>
+
+  </div><!-- /.container -->
+
+  <!-- 外部ネタ -->
+  <script src="metaphors.js?v=4"></script>
+  <script defer src="script.js?v=4"></script>
+
 </body>
 </html>
