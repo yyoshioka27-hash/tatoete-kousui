@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!doctype html>
 <html lang="ja">
 <head>
@@ -20,7 +21,7 @@
     :root{
       --bg1:#ffffff;
       --bg2:#ffffff;
-      --accent:#2563eb;   /* ここが主役色 */
+      --accent:#2563eb;
       --text:#0f172a;
       --sub:#475569;
 
@@ -31,13 +32,9 @@
       --radius: 18px;
       --radius2: 14px;
 
-      --space: 18px;
-      --space2: 12px;
-
       --tap: 44px;
     }
 
-    /* 画面全体グラデ背景 */
     body{
       margin:0;
       padding: 18px;
@@ -46,13 +43,11 @@
       color: var(--text);
     }
 
-    /* 画面を“アプリっぽく”中央寄せ */
     .container{
       max-width: 860px;
       margin: 0 auto;
     }
 
-    /* 見出し */
     h1{
       margin: 0 0 14px;
       font-size: 26px;
@@ -66,7 +61,6 @@
       color: var(--sub);
     }
 
-    /* カード */
     .card{
       border-radius: var(--radius);
       padding: 16px;
@@ -77,14 +71,12 @@
       backdrop-filter: blur(8px);
     }
 
-    /* 小見出し */
     .small{
       color: var(--sub);
       font-size: 13px;
       line-height: 1.4;
     }
 
-    /* 文字（％を主役に） */
     .big{
       font-size: 52px;
       font-weight: 900;
@@ -92,7 +84,6 @@
       line-height: 1;
     }
 
-    /* 入力UI */
     input, select, textarea{
       padding: 12px 14px;
       border-radius: 14px;
@@ -108,7 +99,6 @@
       box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
     }
 
-    /* ボタン */
     button{
       min-height: var(--tap);
       padding: 11px 14px;
@@ -127,7 +117,6 @@
     button:active{ transform: translateY(1px); }
     button:disabled{ opacity: .55; cursor: not-allowed; }
 
-    /* 強調ボタン（検索・更新など） */
     .btnPrimary{
       background: var(--accent);
       border-color: rgba(37,99,235,0.55);
@@ -138,7 +127,6 @@
       box-shadow: 0 16px 34px rgba(37,99,235,0.22);
     }
 
-    /* Row */
     .row{
       display: grid;
       grid-template-columns: 1fr auto;
@@ -146,12 +134,7 @@
       align-items: center;
     }
 
-    /* 状態表示 */
     .muted{ color:#64748b; font-size:12px; }
-    .ok{ color:#059669; font-size:12px; }
-    .ng{ color:#dc2626; font-size:12px; }
-
-    /* pill */
     .pill{
       display:inline-block;
       padding: 6px 10px;
@@ -162,7 +145,6 @@
       background: rgba(255,255,255,0.80);
     }
 
-    /* slots */
     .slot{
       border: 1px solid rgba(15,23,42,0.08);
       border-radius: var(--radius2);
@@ -173,7 +155,6 @@
     .slot .big{ font-size: 34px; }
     .slot .small{ margin-top: 6px; }
 
-    /* 例え文（朝・昼・夜） */
     #meta_m, #meta_d, #meta_e{
       margin-top: 8px;
       font-size: 16px;
@@ -182,7 +163,6 @@
       font-weight: 500;
     }
 
-    /* 人間向け翻訳 */
     #metaphor{
       margin-top: 8px;
       font-size: 24px;
@@ -191,28 +171,6 @@
       letter-spacing: -0.2px;
     }
 
-    /* 追加ネタ一覧 */
-    .listItem{
-      border: 1px solid rgba(15,23,42,0.08);
-      border-radius: 14px;
-      padding: 10px 12px;
-      margin: 8px 0;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-      background: rgba(255,255,255,0.75);
-    }
-    .listText{ color:#0f172a; line-height:1.5; }
-    .listMeta{ color:#64748b; font-size:12px; margin-top:4px; }
-    .btnSmall{
-      min-height: 36px;
-      padding: 8px 10px;
-      border-radius: 12px;
-      font-size: 13px;
-    }
-
-    /* 下の固定的な操作エリア */
     .actions{
       display:flex;
       gap: 10px;
@@ -221,7 +179,6 @@
       margin-top: 12px;
     }
 
-    /* Footer */
     .footer{
       margin: 18px 0 8px;
       color: var(--sub);
@@ -230,7 +187,6 @@
       opacity: 0.9;
     }
 
-    /* スマホ最適化 */
     @media (max-width: 600px){
       body{ padding: 12px; }
       h1{ font-size: 22px; }
@@ -240,12 +196,10 @@
       #metaphor{ font-size: 20px; }
       #meta_m, #meta_d, #meta_e{ font-size: 15px; }
       .pill{ font-size: 11px; padding: 5px 8px; }
-      .listItem{ grid-template-columns: 1fr; }
     }
 
     /* =========================
        例えモード（雑学・お笑い）ズレ修正
-       ※レイアウトを壊さない版（重複なし）
     ========================= */
     .example-mode .modeWrap{
       display: flex;
@@ -260,11 +214,11 @@
       gap: 8px;
       width: fit-content;
       cursor: pointer;
-       white-space: nowrap;
+      white-space: nowrap;
     }
     .example-mode input[type="radio"]{
       margin: 0;
-      transform: translateY(1px); /* iPhone/Safari微調整 */
+      transform: translateY(1px);
     }
   </style>
 </head>
@@ -294,7 +248,7 @@
     </div>
 
     <div class="card example-mode">
-      <div class="small">例えモード（※A版は統合表示）</div>
+      <div class="small">例えモード</div>
 
       <div class="modeWrap">
         <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
@@ -374,9 +328,12 @@
       </div>
     </div>
 
-    <!-- ネタ追加（保存） -->
+    <!-- ✅ ネタ追加（承認待ちへ送信 一本化） -->
     <div class="card" id="addSection">
-      <div class="small"><b>ネタ追加（この端末に保存）</b></div>
+      <div class="small"><b>ネタ追加（承認待ちへ送信）</b></div>
+      <div class="muted" style="margin-top:8px;">
+        ※送信すると「管理画面（admin.html）」の承認待ちに出ます。承認されると全員に公開されます。
+      </div>
 
       <div class="actions" style="margin-top:10px;">
         <label class="small">モード：</label>
@@ -400,7 +357,8 @@
           <option value="100">100%</option>
         </select>
 
-        <button id="addPhraseBtn" class="btnPrimary">追加</button>
+        <!-- ✅ 送信ボタン（script.js側で /api/submit を叩く） -->
+        <button id="submitPendingBtn" class="btnPrimary">承認待ちへ送信</button>
       </div>
 
       <div style="margin-top:10px;">
@@ -410,40 +368,8 @@
       <div class="muted" id="addStatus" style="margin-top:10px;"></div>
 
       <div class="actions" style="margin-top:12px;">
-        <button id="toggleExtraList">追加ネタ一覧を開く ▼</button>
-        <div class="muted" style="margin-top:0;">
-          ※この一覧は「この端末（このブラウザ）」だけに保存された追加ネタです
-        </div>
-      </div>
-
-      <div id="extraListPanel" style="display:none; margin-top:12px;">
-        <div class="small"><b>追加ネタ一覧（この端末）</b></div>
-
-        <div class="actions" style="margin-top:10px;">
-          <label class="small">モード：</label>
-          <select id="listMode" style="max-width: 220px;">
-            <option value="trivia">雑学</option>
-            <option value="fun">お笑い</option>
-          </select>
-
-          <label class="small">確率：</label>
-          <select id="listBucket" style="max-width: 140px;">
-            <option value="0">0%</option>
-            <option value="10">10%</option>
-            <option value="20">20%</option>
-            <option value="30">30%</option>
-            <option value="40">40%</option>
-            <option value="50">50%</option>
-            <option value="60">60%</option>
-            <option value="70">70%</option>
-            <option value="80">80%</option>
-            <option value="90">90%</option>
-            <option value="100">100%</option>
-          </select>
-        </div>
-
-        <div class="muted" id="listStatus" style="margin-top:10px;"></div>
-        <div id="listBody" style="margin-top:10px;"></div>
+        <!-- ✅ 直接管理画面へ行く導線（任意） -->
+        <button id="goAdminBtn">管理画面を開く</button>
       </div>
     </div>
 
@@ -457,9 +383,6 @@
   <script src="metaphors.js?v=11"></script>
   <script defer src="script.js?v=11"></script>
 
+  <!-- # END -->
 </body>
 </html>
-
-
-
-
