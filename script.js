@@ -1033,5 +1033,253 @@ function applyTheme(p){
     root.style.setProperty("--shadow", "0 10px 26px rgba(0,0,0,0.10)");
   }
 }
+// ==============================
+// ネタ一覧（公開）表示 & ローカル非表示 & サーバ削除（任意）
+// 既存機能は触らず、UIだけ増やす
+// ==============================
+(() => {
+  const LS_HIDE_KEY = "hidden_public_ids_v1";
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function loadHidden() {
+    try {
+      const raw = localStorage.getItem(LS_HIDE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? new Set(arr) : new Set();
+    } catch {
+      return new Set();
+    }
+  }
+  function saveHidden(set) {
+    localStorage.setItem(LS_HIDE_KEY, JSON.stringify([...set]));
+  }
+
+  // 既存のUIに差し込む（なければbody末尾に作る）
+  function ensurePanel() {
+    let panel = document.getElementById("metaphorListPanel");
+    if (panel) return panel;
+
+    panel = document.createElement("section");
+    panel.id = "metaphorListPanel";
+    panel.style.marginTop = "14px";
+    panel.style.padding = "14px";
+    panel.style.border = "1px solid rgba(15,23,42,0.12)";
+    panel.style.borderRadius = "16px";
+    panel.style.background = "rgba(255,255,255,0.86)";
+
+    panel.innerHTML = `
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <div style="font-weight:700;">📚 公開ネタ一覧</div>
+        <button id="btnReloadPublic" style="padding:10px 12px; border-radius:12px; border:1px solid rgba(15,23,42,0.16); background:#fff; cursor:pointer;">
+          再読み込み
+        </button>
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#475569;">
+          <input type="checkbox" id="chkShowHidden" />
+          非表示も表示
+        </label>
+        <input id="adminKeyInput" placeholder="（任意）管理キー x-admin-key"
+          style="padding:10px 12px; border-radius:12px; border:1px solid rgba(15,23,42,0.16); background:#fff; min-width:260px;"/>
+      </div>
+
+      <div style="margin-top:10px; font-size:12px; color:#64748b;">
+        ・「非表示」はこの端末だけ。全員から消すには管理キー＋削除APIが必要。
+      </div>
+
+      <div id="publicListStatus" style="margin-top:10px; color:#475569; font-size:13px;"></div>
+      <div id="publicListBox" style="margin-top:10px; display:grid; gap:10px;"></div>
+    `;
+
+    // どこに入れるか：#app があればその中、なければ body 末尾
+    const host = document.getElementById("app") || document.body;
+    host.appendChild(panel);
+    return panel;
+  }
+
+  // 既存の「今選択中の mode / bucket」を取れたら取る（なければ全部）
+  function guessCurrentModeBucket() {
+    // ここはあなたの既存UIに合わせて調整しやすいように「推測」で書いてます
+    // 例：modeラジオ: input[name="mode"]:checked, bucketセレクト: #bucketSelect
+    const modeEl = document.querySelector('input[name="mode"]:checked');
+    const bucketEl = document.getElementById("bucketSelect") || document.querySelector('select[name="bucket"]');
+    const mode = modeEl ? modeEl.value : null;
+    const bucket = bucketEl ? Number(bucketEl.value) : null;
+    return { mode, bucket: Number.isFinite(bucket) ? bucket : null };
+  }
+
+  async function fetchPublicList({ mode, bucket, limit = 200 } = {}) {
+    // すでにあなたの script.js にある fetchPublicMetaphors() が使えるならそれを優先
+    if (typeof fetchPublicMetaphors === "function") {
+      return await fetchPublicMetaphors({ mode, bucket, limit });
+    }
+
+    // ない場合のフォールバック（API_BASE は既存定義を想定）
+    const params = new URLSearchParams();
+    if (mode) params.set("mode", mode);
+    if (Number.isFinite(bucket)) params.set("bucket", String(bucket));
+    params.set("limit", String(limit));
+    const url = `${API_BASE}/api/public?${params.toString()}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `public fetch failed ${res.status}`);
+    return data.items || [];
+  }
+
+  async function adminDeletePublic({ id, adminKey }) {
+    // Workers側に /api/admin/delete を追加してある前提（後述）
+    const res = await fetch(`${API_BASE}/api/admin/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey || "",
+      },
+      body: JSON.stringify({ id }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `delete failed ${res.status}`);
+    return data;
+  }
+
+  function renderItems(items, { showHidden, hiddenSet, adminKey } = {}) {
+    const box = document.getElementById("publicListBox");
+    if (!box) return;
+
+    box.innerHTML = "";
+
+    // 並び：新しい順っぽく（createdAtがあるなら）
+    const sorted = [...items].sort((a, b) => {
+      const ta = Number(a?.createdAt || 0);
+      const tb = Number(b?.createdAt || 0);
+      return tb - ta;
+    });
+
+    const view = sorted.filter(it => {
+      const id = it?.id ?? it?._id ?? it?.key ?? it?.text; // idが無い場合の保険
+      const isHidden = hiddenSet.has(String(id));
+      return showHidden ? true : !isHidden;
+    });
+
+    if (view.length === 0) {
+      box.innerHTML = `<div style="color:#64748b; font-size:13px;">表示できるネタがありません。</div>`;
+      return;
+    }
+
+    for (const it of view) {
+      const id = it?.id ?? it?._id ?? it?.key ?? it?.text;
+      const text = it?.text ?? "";
+      const mode = it?.mode ?? "";
+      const bucket = (it?.bucket ?? it?.prob ?? "");
+      const createdAt = it?.createdAt ? new Date(it.createdAt).toLocaleString("ja-JP") : "";
+
+      const isHidden = hiddenSet.has(String(id));
+
+      const card = document.createElement("div");
+      card.style.border = "1px solid rgba(15,23,42,0.10)";
+      card.style.borderRadius = "14px";
+      card.style.padding = "12px";
+      card.style.background = "rgba(255,255,255,0.95)";
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:14px; line-height:1.5; color:#0f172a; word-break:break-word;">
+              ${escapeHtml(text)}
+            </div>
+            <div style="margin-top:6px; font-size:12px; color:#64748b;">
+              ${escapeHtml(mode)} / ${escapeHtml(bucket)} ${createdAt ? " / " + escapeHtml(createdAt) : ""}
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <button data-action="hide" data-id="${escapeHtml(String(id))}"
+              style="padding:9px 10px; border-radius:12px; border:1px solid rgba(15,23,42,0.16); background:#fff; cursor:pointer;">
+              ${isHidden ? "非表示解除" : "非表示"}
+            </button>
+            <button data-action="delete" data-id="${escapeHtml(String(id))}"
+              style="padding:9px 10px; border-radius:12px; border:1px solid rgba(15,23,42,0.16); background:#fff; cursor:pointer; display:${adminKey ? "inline-block" : "none"};">
+              管理削除
+            </button>
+          </div>
+        </div>
+      `;
+
+      // ボタン動作
+      card.addEventListener("click", async (ev) => {
+        const btn = ev.target?.closest("button");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const cid = btn.dataset.id;
+
+        if (action === "hide") {
+          if (hiddenSet.has(cid)) hiddenSet.delete(cid);
+          else hiddenSet.add(cid);
+          saveHidden(hiddenSet);
+          // 即反映
+          const chk = document.getElementById("chkShowHidden");
+          const showHidden2 = !!chk?.checked;
+          renderItems(items, { showHidden: showHidden2, hiddenSet, adminKey });
+        }
+
+        if (action === "delete") {
+          if (!adminKey) {
+            alert("管理キーが未入力です。");
+            return;
+          }
+          const ok = confirm("このネタをサーバから削除します。全員から見えなくなります。よろしいですか？");
+          if (!ok) return;
+
+          try {
+            btn.disabled = true;
+            btn.textContent = "削除中…";
+            await adminDeletePublic({ id: cid, adminKey });
+            // 成功したらローカル一覧からも除外するため再読込
+            await reload();
+          } catch (e) {
+            alert(`削除に失敗: ${e?.message || e}`);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = "管理削除";
+          }
+        }
+      });
+
+      box.appendChild(card);
+    }
+  }
+
+  async function reload() {
+    const status = document.getElementById("publicListStatus");
+    const chk = document.getElementById("chkShowHidden");
+    const keyInput = document.getElementById("adminKeyInput");
+
+    const { mode, bucket } = guessCurrentModeBucket();
+    const showHidden = !!chk?.checked;
+    const adminKey = (keyInput?.value || "").trim();
+    const hiddenSet = loadHidden();
+
+    try {
+      if (status) status.textContent = "読み込み中…";
+      const items = await fetchPublicList({ mode, bucket, limit: 200 });
+      if (status) status.textContent = `公開ネタ：${items.length}件（${mode ?? "全モード"} / ${bucket ?? "全バケット"}）`;
+      renderItems(items, { showHidden, hiddenSet, adminKey });
+    } catch (e) {
+      if (status) status.textContent = `読み込み失敗: ${e?.message || e}`;
+    }
+  }
+
+  // init
+  ensurePanel();
+  document.getElementById("btnReloadPublic")?.addEventListener("click", reload);
+  document.getElementById("chkShowHidden")?.addEventListener("change", reload);
+  // 管理キー入力は即時反映しなくてOK（再読み込みで反映）
+  reload();
+})();
 
 // # END
