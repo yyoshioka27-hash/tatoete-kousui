@@ -3,45 +3,435 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>たとえて降水確率 / 管理（承認）</title>
+  <title>管理（承認待ち）</title>
   <style>
-    body { font-family: -apple-system, system-ui, sans-serif; margin: 20px; }
-    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    input { padding:10px 12px; border:1px solid #ddd; border-radius:10px; }
-    button { padding:10px 12px; border:1px solid #ddd; border-radius:10px; background:#fff; cursor:pointer; }
-    button.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
-    button.danger { background:#ef4444; color:#fff; border-color:#ef4444; }
-    .card { border:1px solid #e5e7eb; border-radius:14px; padding:12px; margin:12px 0; }
-    .meta { color:#64748b; font-size:12px; }
-    .text { font-size:16px; margin-top:6px; white-space:pre-wrap; }
-    .hr { height:1px; background:#eee; margin:14px 0; }
-    .ok { color:#16a34a; }
-    .ng { color:#ef4444; }
-    code { background:#f1f5f9; padding:2px 6px; border-radius:8px; }
+    :root{
+      --bg:#ffffff;
+      --text:#0f172a;
+      --sub:#64748b;
+      --line:rgba(15,23,42,.12);
+      --card:#ffffff;
+      --shadow:0 10px 24px rgba(2,6,23,.08);
+      --blue:#2563eb;
+      --red:#ef4444;
+      --green:#16a34a;
+      --btn:#0f172a;
+      --btnText:#fff;
+      --mutedBg:rgba(15,23,42,.04);
+    }
+    body{
+      margin:0;
+      font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+    .wrap{
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 18px 16px 40px;
+    }
+    h1{
+      font-size: 28px;
+      margin: 8px 0 18px;
+    }
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .field{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin: 6px 0;
+    }
+    label{
+      font-size: 13px;
+      color:var(--sub);
+      width: 84px;
+    }
+    input{
+      border:1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      min-width: 360px;
+      max-width: 100%;
+    }
+    button{
+      border:1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor:pointer;
+      background: var(--btn);
+      color: var(--btnText);
+    }
+    button.secondary{
+      background:#fff;
+      color:var(--text);
+      border-color:var(--line);
+    }
+    button.blue{ background: var(--blue); }
+    button.red{ background: var(--red); }
+    button:disabled{
+      opacity:.6;
+      cursor:not-allowed;
+    }
+    .statusbar{
+      margin-top: 10px;
+      padding: 10px 12px;
+      border:1px solid var(--line);
+      border-radius: 12px;
+      background: var(--mutedBg);
+      color: var(--sub);
+      font-size: 13px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--sub);
+      font-size: 12px;
+    }
+    .pill.ok{ color: var(--green); border-color: rgba(22,163,74,.35); }
+    .pill.ng{ color: var(--red); border-color: rgba(239,68,68,.35); }
+
+    .list{
+      margin-top: 14px;
+      border-top:1px solid var(--line);
+      padding-top: 12px;
+    }
+    .card{
+      border:1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+      margin: 10px 0;
+    }
+    .meta{
+      font-size: 12px;
+      color: var(--sub);
+      margin-bottom: 8px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .text{
+      font-size: 16px;
+      line-height: 1.5;
+      margin: 0 0 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .hint{
+      font-size: 12px;
+      color: var(--sub);
+      margin-top: 6px;
+    }
+    .danger{
+      color: var(--red);
+      font-size: 13px;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+    .small{
+      font-size: 12px;
+      color: var(--sub);
+    }
+    .top-actions{
+      margin-left:auto;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
   </style>
 </head>
+
 <body>
-  <h1>管理（承認待ち）</h1>
+  <div class="wrap">
+    <h1>管理（承認待ち）</h1>
 
-  <div class="row">
-    <label>API_BASE:
-      <input id="apiBase" size="55" placeholder="https://xxxx.workers.dev" />
-    </label>
+    <div class="row">
+      <div style="flex:1; min-width: 520px;">
+        <div class="field">
+          <label for="apiBase">API_BASE:</label>
+          <input id="apiBase" type="text" value="https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev" />
+        </div>
+        <div class="field">
+          <label for="adminKey">ADMIN_KEY:</label>
+          <input id="adminKey" type="password" placeholder="例: 2355" />
+          <button class="blue" id="btnSave">保存</button>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button class="secondary" id="btnHealth">health</button>
+        <button class="secondary" id="btnRefresh">一覧更新</button>
+      </div>
+    </div>
+
+    <div class="statusbar">
+      <div>
+        <span class="pill" id="pillHealth">health: 未確認</span>
+        <span class="pill" id="pillAdmin">admin: 未確認</span>
+      </div>
+      <div class="small">
+        承認待ち: <strong id="count">0</strong> 件
+      </div>
+    </div>
+
+    <div class="danger" id="errBox" style="display:none;"></div>
+
+    <div class="list" id="pendingList">
+      <p class="small">「一覧更新」を押すと、承認待ちが表示されます。</p>
+    </div>
+
+    <p class="hint">
+      ※ 取得は <code>/api/pending</code>、承認は <code>/api/approve</code>、却下は <code>/api/reject</code> を呼びます。<br>
+      ※ Worker の返却が <code>{ ok:true, items:[...] }</code> の前提です。
+    </p>
   </div>
 
-  <div class="row" style="margin-top:10px;">
-    <label>ADMIN_KEY:
-      <input id="adminKey" size="20" placeholder="例: 2355" />
-    </label>
-    <button id="saveKey" class="primary">保存</button>
-    <button id="refresh">一覧更新</button>
-    <span id="status" class="meta"></span>
-  </div>
+  <script>
+    // ===========================
+    // admin.html (pending manager)
+    // ===========================
 
-  <div class="hr"></div>
+    const LS_API_BASE  = "tatoete_admin_api_base_v1";
+    const LS_ADMIN_KEY = "tatoete_admin_key_v1";
 
-  <div id="list"></div>
+    const $ = (id) => document.getElementById(id);
 
-  <script src="./admin.js"></script>
+    function setErr(msg) {
+      const box = $("errBox");
+      if (!msg) {
+        box.style.display = "none";
+        box.textContent = "";
+        return;
+      }
+      box.style.display = "block";
+      box.textContent = String(msg);
+    }
+
+    function setPill(el, text, ok=null) {
+      el.textContent = text;
+      el.classList.remove("ok","ng");
+      if (ok === true) el.classList.add("ok");
+      if (ok === false) el.classList.add("ng");
+    }
+
+    function loadSaved() {
+      const api = localStorage.getItem(LS_API_BASE);
+      const key = localStorage.getItem(LS_ADMIN_KEY);
+      if (api) $("apiBase").value = api;
+      if (key) $("adminKey").value = key;
+    }
+
+    function saveInputs() {
+      localStorage.setItem(LS_API_BASE, $("apiBase").value.trim());
+      localStorage.setItem(LS_ADMIN_KEY, $("adminKey").value);
+    }
+
+    function getApiBase() {
+      return $("apiBase").value.trim().replace(/\/+$/,"");
+    }
+
+    function getAdminKey() {
+      return $("adminKey").value;
+    }
+
+    function fmtTime(ms) {
+      const d = new Date(Number(ms || 0));
+      if (Number.isNaN(d.getTime())) return "";
+      const yy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      const hh = String(d.getHours()).padStart(2,"0");
+      const mi = String(d.getMinutes()).padStart(2,"0");
+      const ss = String(d.getSeconds()).padStart(2,"0");
+      return `${yy}/${mm}/${dd} ${hh}:${mi}:${ss}`;
+    }
+
+    async function apiGet(path, admin=false) {
+      const url = `${getApiBase()}${path}`;
+      const headers = {};
+      if (admin) headers["x-admin-key"] = getAdminKey();
+
+      const res = await fetch(url, { headers });
+      const data = await res.json().catch(() => null);
+      return { res, data };
+    }
+
+    async function apiPost(path, body, admin=false) {
+      const url = `${getApiBase()}${path}`;
+      const headers = { "Content-Type":"application/json" };
+      if (admin) headers["x-admin-key"] = getAdminKey();
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body || {})
+      });
+      const data = await res.json().catch(() => null);
+      return { res, data };
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function renderPending(items) {
+      const list = $("pendingList");
+      list.innerHTML = "";
+
+      const arr = Array.isArray(items) ? items : [];
+      $("count").textContent = String(arr.length);
+
+      if (arr.length === 0) {
+        list.innerHTML = `<p class="small">承認待ちはありません。</p>`;
+        return;
+      }
+
+      for (const it of arr) {
+        const id = it?.id || "";
+        const mode = it?.mode ?? "";
+        const bucket = it?.bucket ?? "";
+        const from = it?.from ? `from: ${it.from}` : "";
+        const at = it?.createdAt ? fmtTime(it.createdAt) : "";
+        const text = it?.text ?? "";
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+          <div class="meta">
+            <span>ID: <code>${escapeHtml(id)}</code></span>
+            <span>mode: <code>${escapeHtml(mode)}</code></span>
+            <span>bucket: <code>${escapeHtml(bucket)}</code></span>
+            ${from ? `<span>${escapeHtml(from)}</span>` : ""}
+            ${at ? `<span>at: ${escapeHtml(at)}</span>` : ""}
+          </div>
+
+          <p class="text">${escapeHtml(text)}</p>
+
+          <div class="actions">
+            <button class="blue" data-act="approve" data-id="${escapeHtml(id)}">承認</button>
+            <button class="red"  data-act="reject"  data-id="${escapeHtml(id)}">却下</button>
+          </div>
+        `;
+
+        list.appendChild(card);
+      }
+
+      // event delegation
+      list.querySelectorAll("button[data-act]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const act = btn.getAttribute("data-act");
+          const id  = btn.getAttribute("data-id");
+
+          if (!id) return;
+
+          btn.disabled = true;
+          setErr("");
+
+          try {
+            if (act === "approve") {
+              const { res, data } = await apiPost("/api/approve", { id }, true);
+              if (!res.ok || !data?.ok) throw new Error(data?.error || `approve failed ${res.status}`);
+            } else if (act === "reject") {
+              const { res, data } = await apiPost("/api/reject", { id }, true);
+              if (!res.ok || !data?.ok) throw new Error(data?.error || `reject failed ${res.status}`);
+            }
+            await fetchPending(); // refresh
+          } catch (e) {
+            setErr(e?.message || String(e));
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function checkHealth() {
+      setErr("");
+      try {
+        const { res, data } = await apiGet("/api/health", false);
+        if (!res.ok || !data?.ok) {
+          setPill($("pillHealth"), "health: NG", false);
+          throw new Error(data?.error || `health failed ${res.status}`);
+        }
+        setPill($("pillHealth"), `health: OK (kv:${data.kv ? "true":"false"})`, true);
+        return true;
+      } catch (e) {
+        setErr(e?.message || String(e));
+        return false;
+      }
+    }
+
+    async function fetchPending() {
+      setErr("");
+
+      // admin check (pending取得できるか)
+      try {
+        const { res, data } = await apiGet("/api/pending", true);
+        if (!res.ok || !data?.ok) {
+          setPill($("pillAdmin"), "admin: NG", false);
+          throw new Error(data?.error || `pending failed ${res.status}`);
+        }
+        setPill($("pillAdmin"), "admin: OK", true);
+
+        // ★ ここがキモ：data.items を全部描画
+        renderPending(data.items);
+
+      } catch (e) {
+        setErr(e?.message || String(e));
+        renderPending([]);
+      }
+    }
+
+    // bind
+    $("btnSave").addEventListener("click", () => {
+      saveInputs();
+      setErr("");
+    });
+
+    $("btnHealth").addEventListener("click", async () => {
+      await checkHealth();
+    });
+
+    $("btnRefresh").addEventListener("click", async () => {
+      await fetchPending();
+    });
+
+    // init
+    loadSaved();
+    // ページ開いたら軽くhealthだけ確認（邪魔なら外してOK）
+    checkHealth();
+
+  </script>
+
+  <!-- END -->
 </body>
 </html>
