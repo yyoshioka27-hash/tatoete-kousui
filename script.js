@@ -1117,22 +1117,20 @@ function applyTheme(p){
   }
 
   async function fetchPublicList({ mode, bucket, limit = 200 } = {}) {
-    // すでにあなたの script.js にある fetchPublicMetaphors() が使えるならそれを優先
-    if (typeof fetchPublicMetaphors === "function") {
-      return await fetchPublicMetaphors({ mode, bucket, limit });
-    }
+  // ✅ 公開一覧は「text配列」ではなく「items（オブジェクト）」が必要
+  const params = new URLSearchParams();
+  if (mode) params.set("mode", mode);
+  if (Number.isFinite(bucket)) params.set("bucket", String(bucket));
+  params.set("limit", String(limit));
 
-    // ない場合のフォールバック（API_BASE は既存定義を想定）
-    const params = new URLSearchParams();
-    if (mode) params.set("mode", mode);
-    if (Number.isFinite(bucket)) params.set("bucket", String(bucket));
-    params.set("limit", String(limit));
-    const url = `${API_BASE}/api/public?${params.toString()}`;
-    const res = await fetch(url);
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.ok) throw new Error(data?.error || `public fetch failed ${res.status}`);
-    return data.items || [];
-  }
+  const url = `${API_BASE}/api/public?${params.toString()}`;
+  const res = await fetch(url, { method: "GET" });
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `public fetch failed ${res.status}`);
+  return Array.isArray(data.items) ? data.items : [];
+}
+
 
   async function adminDeletePublic({ id, adminKey }) {
     // Workers側に /api/admin/delete を追加してある前提（後述）
