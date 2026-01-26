@@ -15,9 +15,6 @@
   <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
 
   <style>
-    /* =========================
-       Pro UI Base
-    ========================= */
     :root{
       --bg1:#ffffff;
       --bg2:#ffffff;
@@ -198,9 +195,7 @@
       .pill{ font-size: 11px; padding: 5px 8px; }
     }
 
-    /* =========================
-       例えモード（雑学・お笑い）ズレ修正
-    ========================= */
+    /* 例えモード（雑学・お笑い）ズレ修正 */
     .example-mode .modeWrap{
       display: flex;
       flex-direction: column;
@@ -332,7 +327,7 @@
     <div class="card" id="addSection">
       <div class="small"><b>ネタ追加（承認待ちへ送信）</b></div>
       <div class="muted" style="margin-top:8px;">
-        ※送信すると「管理画面（admin.html）」の承認待ちに出ます。承認されると全員に公開されます。
+        ※送信すると承認待ちに入ります。承認されると全員に公開されます。
       </div>
 
       <div class="actions" style="margin-top:10px;">
@@ -366,11 +361,6 @@
       </div>
 
       <div class="muted" id="addStatus" style="margin-top:10px;"></div>
-
-      <div class="actions" style="margin-top:12px;">
-        <!-- ✅ 直接管理画面へ行く導線（任意） -->
-        <button id="goAdminBtn">管理画面を開く</button>
-      </div>
     </div>
 
     <div class="footer">
