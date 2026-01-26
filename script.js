@@ -1,5 +1,6 @@
 // script.js
 // ✅ API_BASE 修正（ここが原因）
+// script.js（先頭だけ直す）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
 
