@@ -4,9 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="降水確率を“別の確率”で例えてみる。雑学/お笑いの2モード対応。PWAでホーム画面に追加OK。" />
   <link rel="manifest" href="./manifest.webmanifest" />
 
-  <!-- ✅ タイトルのカッコ修正（[ が混ざってた） -->
+  <!-- （任意）PWAアイコンがあるなら有効化 -->
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+
   <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
 
   <style>
@@ -33,7 +37,7 @@
       --tap: 44px;
     }
 
-    /* 画面全体グラデ背景（②） */
+    /* 画面全体グラデ背景 */
     body{
       margin:0;
       padding: 18px;
@@ -42,7 +46,7 @@
       color: var(--text);
     }
 
-    /* ✅ 画面を“アプリっぽく”中央寄せ */
+    /* 画面を“アプリっぽく”中央寄せ */
     .container{
       max-width: 860px;
       margin: 0 auto;
@@ -226,7 +230,7 @@
       opacity: 0.9;
     }
 
-    /* ✅ スマホ最適化 */
+    /* スマホ最適化 */
     @media (max-width: 600px){
       body{ padding: 12px; }
       h1{ font-size: 22px; }
@@ -267,7 +271,7 @@
 <body>
   <div class="container">
 
-    <h1>「たとえて、降水確率」
+    <h1>たとえて、降水確率。
       <div class="subtitle">－降水確率を“別の確率”で例えてみた。</div>
     </h1>
 
@@ -275,7 +279,6 @@
       <div class="small">天気予報を知りたい地点</div>
       <div class="row" style="margin-top:10px;">
         <input id="place" placeholder="例：仙台市 / Sendai / 仙台駅 / 仙台市青葉区" />
-        <!-- ✅ 検索ボタンをプロっぽく -->
         <button id="search" class="btnPrimary">検索</button>
       </div>
 
@@ -289,14 +292,11 @@
       </div>
     </div>
 
-    <!-- ✅ ここだけ class を追加：card example-mode -->
     <div class="card example-mode">
       <div class="small">例えモード（※A版は統合表示）</div>
 
-      <!-- ✅ ラジオ行のラッパーを追加（CSS適用点） -->
       <div class="modeWrap">
         <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
-        <!-- ✅ margin-left は削除 -->
         <label><input type="radio" name="mode" value="fun"> お笑い</label>
       </div>
 
@@ -320,7 +320,6 @@
 
         <div class="actions">
           <button id="del_m" style="display:none;">このネタを削除</button>
-
           <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
           <span id="badge_m" style="margin-left:6px;font-size:20px;"></span>
         </div>
@@ -337,7 +336,6 @@
 
         <div class="actions">
           <button id="del_d" style="display:none;">このネタを削除</button>
-
           <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
           <span id="badge_d" style="margin-left:6px;font-size:20px;"></span>
         </div>
@@ -354,7 +352,6 @@
 
         <div class="actions">
           <button id="del_e" style="display:none;">このネタを削除</button>
-
           <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
           <span id="badge_e" style="margin-left:6px;font-size:20px;"></span>
         </div>
@@ -372,12 +369,11 @@
       <div class="muted" id="metaFoot" style="margin-top:10px;"></div>
 
       <div class="actions">
-        <!-- ✅ “更新”も主ボタンへ -->
         <button id="refresh" class="btnPrimary">同じ確率でも例えを変える</button>
       </div>
     </div>
 
-    <!-- ✅ ネタ追加（保存） -->
+    <!-- ネタ追加（保存） -->
     <div class="card" id="addSection">
       <div class="small"><b>ネタ追加（この端末に保存）</b></div>
 
@@ -412,7 +408,6 @@
 
       <div class="muted" id="addStatus" style="margin-top:10px;"></div>
 
-      <!-- ✅ 開閉ボタン -->
       <div class="actions" style="margin-top:12px;">
         <button id="toggleExtraList">追加ネタ一覧を開く ▼</button>
         <div class="muted" style="margin-top:0;">
@@ -420,7 +415,6 @@
         </div>
       </div>
 
-      <!-- ✅ 開閉対象 -->
       <div id="extraListPanel" style="display:none; margin-top:12px;">
         <div class="small"><b>追加ネタ一覧（この端末）</b></div>
 
@@ -459,8 +453,8 @@
   </div><!-- /.container -->
 
   <!-- 外部ネタ -->
-  <script src="metaphors.js?v=4"></script>
-  <script defer src="script.js?v=4"></script>
+  <script src="metaphors.js?v=6"></script>
+  <script defer src="script.js?v=6"></script>
 
 </body>
 </html>
