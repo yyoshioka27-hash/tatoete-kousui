@@ -65,6 +65,11 @@ self.addEventListener("activate", (event) => {
   );
   self.clients.claim();
 });
+// API は常にネットワーク（キャッシュしない）
+if (req.url.startsWith("https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev/")) {
+  event.respondWith(fetch(req, { cache: "no-store" }));
+  return;
+}
 
 // ------------------------------
 // fetch 戦略
@@ -112,3 +117,4 @@ self.addEventListener("fetch", (event) => {
 });
 
 // # END
+
