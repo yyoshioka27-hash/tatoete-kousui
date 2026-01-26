@@ -1281,5 +1281,33 @@ function applyTheme(p){
   // 管理キー入力は即時反映しなくてOK（再読み込みで反映）
   reload();
 })();
+// ==============================
+// ✅ クリック不能（鉛筆/ボタンが押せない）対策：強制前面化
+// - 既存機能は一切触らない
+// - 被せ要素が原因でも押せる確率を上げる
+// ==============================
+(() => {
+  if (document.getElementById("__force_click_fix__")) return;
+
+  const st = document.createElement("style");
+  st.id = "__force_click_fix__";
+  st.textContent = `
+    /* ボタン類は必ずクリック可能に */
+    button, a, input, label { pointer-events: auto !important; }
+
+    /* 追加ネタ一覧のボタン/小ボタンも前面に */
+    .btnSmall, .btnPrimary { position: relative !important; z-index: 9999 !important; }
+
+    /* 公開ネタ一覧パネルのボタンを前面に */
+    #metaphorListPanel button { position: relative !important; z-index: 9999 !important; }
+
+    /* 何かがカードの上に被っていても“ボタン上”は拾えるように */
+    #publicListBox, #publicListBox * { pointer-events: auto !important; }
+
+    /* 不要な疑似要素がクリックを奪う事故を防ぐ */
+    #publicListBox *::before, #publicListBox *::after { pointer-events: none !important; }
+  `;
+  document.head.appendChild(st);
+})();
 
 // # END
