@@ -2,14 +2,16 @@
 // ★ 更新するたびに数字を上げる（tatoete-v7: Workers API素通し版）
 const CACHE_NAME = "tatoete-v8";
 
+// ✅ キャッシュしたい「同一オリジンの静的ファイル」だけを入れる
+// ※ 存在しないファイルが混ざっても install が落ちないように、後で1件ずつ追加する
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./metaphors.js",
-  "./script.js",            // ✅ 追加（実体ファイル名がscript.jsならOK）
-  "./shared-metaphors.js",  // ✅ もし存在するならキャッシュ（無くても動く）
-  "./detect.js"             // ✅ もし存在するならキャッシュ（無くても動く）
+  "./script.js",            // ✅ 実体がscript.jsならOK
+  "./shared-metaphors.js",  // ✅ 存在するならOK（無くても問題なし）
+  "./detect.js"             // ✅ 存在するならOK（無くても問題なし）
 ];
 
 // ------------------------------
@@ -19,7 +21,7 @@ function isHtmlRequest(req) {
   return req.headers.get("accept")?.includes("text/html");
 }
 
-// ✅ ここが本丸：Workers APIはService Workerが触らない（必ずネットに出す）
+// ✅ Workers API は常にネットワーク（SWキャッシュに触れさせない）
 function isWorkersApi(req) {
   try {
     const url = new URL(req.url);
@@ -29,26 +31,39 @@ function isWorkersApi(req) {
   }
 }
 
-// ついでに：Open-Meteoなど外部APIも素通し（キャッシュ汚染防止）
-function isExternalApi(req) {
+// ✅ Open-Meteo 等の外部 API もキャッシュしない（汚染防止）
+function isExternal(req) {
   try {
     const url = new URL(req.url);
-    // GitHub Pages（同一オリジン）以外は基本キャッシュしない方針
-    return url.origin !== self.location.origin;
+    return url.origin !== self.location.origin; // 同一オリジン以外
   } catch {
     return false;
   }
 }
 
 // ------------------------------
-// install：必要最低限だけキャッシュ
+// install：必要最低限だけキャッシュ（1件ずつ入れて失敗しても続行）
 // ------------------------------
 self.addEventListener("install", (event) => {
   self.skipWaiting();
+
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).catch(() => {
-      // addAll で1つでも落ちると全部失敗するので、失敗してもアプリは動くようにする
-    })
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+
+      // addAll は「1件でも404があると全滅」なので使わない
+      await Promise.all(
+        ASSETS.map(async (path) => {
+          try {
+            const req = new Request(path, { cache: "reload" });
+            const res = await fetch(req);
+            if (res && res.ok) await cache.put(req, res);
+          } catch {
+            // 無視（ファイルが無い/ネット不調でもSW自体は動かす）
+          }
+        })
+      );
+    })()
   );
 });
 
@@ -57,19 +72,13 @@ self.addEventListener("install", (event) => {
 // ------------------------------
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      )
-    )
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
-// API は常にネットワーク（キャッシュしない）
-if (req.url.startsWith("https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev/")) {
-  event.respondWith(fetch(req, { cache: "no-store" }));
-  return;
-}
 
 // ------------------------------
 // fetch 戦略
@@ -77,44 +86,47 @@ if (req.url.startsWith("https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka2
 self.addEventListener("fetch", (event) => {
   const req = event.request;
 
-  // ✅ 1) Workers API / 外部API は「完全に素通し」
-  // 　→ public / submit / pending / approve / reject が必ずネットに出る
-  if (isWorkersApi(req) || isExternalApi(req)) {
-    // respondWith しない＝SWが介入しない（通常のfetchに任せる）
-    return;
+  // ✅ 1) 外部（Workers/Open-Meteo等）は SW が一切介入しない（完全に素通し）
+  // → public/submit も天気APIも常に最新
+  if (isExternal(req) || isWorkersApi(req)) {
+    return; // respondWithしない＝通常のブラウザfetchに任せる
   }
 
-  // ✅ 2) HTMLは常にネットワーク優先（最新を取りに行く）
+  // ✅ 2) HTML はネットワーク優先（最新を取りに行く）
   if (isHtmlRequest(req)) {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
+      (async () => {
+        try {
+          const res = await fetch(req);
           const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(req, copy);
           return res;
-        })
-        .catch(() => caches.match(req))
+        } catch {
+          const cached = await caches.match(req);
+          return cached || new Response("offline", { status: 503 });
+        }
+      })()
     );
     return;
   }
 
-  // ✅ 3) それ以外（同一オリジンの静的ファイル）はキャッシュ優先
+  // ✅ 3) 同一オリジンの静的ファイルはキャッシュ優先
   event.respondWith(
-    caches.match(req).then((cached) => {
+    (async () => {
+      const cached = await caches.match(req);
       if (cached) return cached;
 
-      return fetch(req).then((res) => {
-        // 成功した同一オリジンのみキャッシュ
-        // （opaqueやエラーは入れない）
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-        }
-        return res;
-      });
-    })
+      const res = await fetch(req);
+      // 成功したものだけキャッシュ
+      if (res && res.ok) {
+        const copy = res.clone();
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(req, copy);
+      }
+      return res;
+    })()
   );
 });
 
 // # END
-
