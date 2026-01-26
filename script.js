@@ -612,8 +612,9 @@ document.getElementById("refresh").onclick = () => render();
       if (statusEl) statusEl.textContent = "📨 承認待ちへ送信中…";
       await submitToPending(mode, bucket, text);
 
+      // ✅ 管理導線の文言を消す（承認という仕組みだけ残す）
       if (statusEl) statusEl.textContent =
-        "✅ 承認待ちへ送信しました。管理画面（admin.html）で承認すると一般公開されます。";
+        "✅ 送信しました。承認されると一般公開されます。";
 
       const ta = document.getElementById("newPhrase");
       if (ta) ta.value = "";
@@ -622,19 +623,6 @@ document.getElementById("refresh").onclick = () => render();
     }finally{
       btn.disabled = false;
     }
-  };
-})();
-
-// ==============================
-// ✅ 管理画面を開くボタン
-// ==============================
-(function setupGoAdmin(){
-  const btn = document.getElementById("goAdminBtn");
-  if (!btn) return;
-
-  btn.onclick = () => {
-    // 同一タブが良ければ location.href = "./admin.html";
-    window.open("./admin.html", "_blank", "noopener,noreferrer");
   };
 })();
 
