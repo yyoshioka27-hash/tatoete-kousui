@@ -1,6 +1,6 @@
 // script.js
-const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api-y-yoshioka27.workers.dev";
-
+// ✅ API_BASE 修正（ここが原因）
+const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
 
 // ==============================
@@ -113,6 +113,17 @@ async function warmPublicCache(mode, bucket){
 
 function getPublicItems(mode, bucket){
   const k = keyMB(mode, bucket);
+
+  // ✅ 追加：未warmなら裏でwarmして次回renderで混ざるようにする
+  if (!publicCache.has(k)) {
+    // fire-and-forget（UIを止めない）
+    warmPublicCache(mode, bucket).then(() => {
+      // warm完了後に再描画できる環境なら更新
+      try { render(); } catch {}
+    }).catch(() => {});
+    return [];
+  }
+
   const arr = publicCache.get(k) || [];
   return arr.map(t => ({ text: String(t || "").trim(), extraId: null })).filter(x => x.text);
 }
@@ -600,6 +611,8 @@ function render() {
     setIcon(slotKey, rounded);
 
     const mode = getSelectedMode();
+
+    // ✅ ここで public が未warmなら裏でwarmされ、次のrenderで混ざる
     const picked = pickMetaphor(mode, rounded);
 
     const sc = getShareCounts(mode, rounded);
