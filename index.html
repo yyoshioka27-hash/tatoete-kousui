@@ -1,192 +1,146 @@
-// ==============================
-// 追加ネタ管理（localStorage）
-// 既存機能は触らず、管理UIだけ増やす
-// ==============================
-(() => {
-  const LS_KEY = "extra_phrases_v1";
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>たとえて、降水確率。</title>
 
-  // ----- utils -----
-  const $ = (id) => document.getElementById(id);
+  <link rel="manifest" href="./manifest.webmanifest" />
 
-  function escapeHtml(s) {
-    return String(s)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function loadStore() {
-    // 形式： [{id, mode, bucket, text, createdAt}, ...]
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return [];
-      const data = JSON.parse(raw);
-      return Array.isArray(data) ? data : [];
-    } catch {
-      return [];
+  <style>
+    :root{
+      --bg1:#ffffff;
+      --bg2:#ffffff;
+      --accent:#2563eb;
+      --text:#0f172a;
+      --sub:#475569;
+      --card: rgba(255,255,255,0.86);
+      --shadow: 0 12px 28px rgba(2,6,23,0.10);
     }
-  }
-
-  function saveStore(list) {
-    localStorage.setItem(LS_KEY, JSON.stringify(list));
-  }
-
-  function getMode() {
-    const el = $("manageMode");
-    return el ? el.value : "trivia";
-  }
-
-  function getBucket() {
-    const el = $("manageBucket");
-    return el ? Number(el.value) : 0;
-  }
-
-  function setStatus(msg, cls = "muted") {
-    const el = $("manageStatus");
-    if (!el) return;
-    el.className = cls;
-    el.textContent = msg;
-  }
-
-  // ----- render list -----
-  function renderManageList() {
-    const listEl = $("manageList");
-    if (!listEl) return;
-
-    const mode = getMode();
-    const bucket = getBucket();
-    const store = loadStore();
-
-    const filtered = store
-      .filter((x) => x.mode === mode && Number(x.bucket) === bucket)
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-    if (filtered.length === 0) {
-      listEl.innerHTML = `<div class="muted">この条件の追加ネタはありません。</div>`;
-      setStatus(`表示：0件（モード=${mode}, 確率=${bucket}%）`, "muted");
-      return;
+    body{
+      margin:0;
+      font-family:-apple-system,system-ui,"Noto Sans JP",sans-serif;
+      background:linear-gradient(180deg,var(--bg1),var(--bg2));
+      color:var(--text);
     }
+    .wrap{
+      max-width:900px;
+      margin:0 auto;
+      padding:18px 14px 40px;
+    }
+    h1{
+      font-size:26px;
+      margin:6px 0 2px;
+    }
+    .sub{
+      color:var(--sub);
+      font-size:13px;
+      margin-bottom:12px;
+    }
+    .card{
+      background:var(--card);
+      border-radius:16px;
+      box-shadow:var(--shadow);
+      padding:16px;
+      margin:12px 0;
+    }
+    input,select,button{
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid #ddd;
+      font-size:14px;
+    }
+    button{
+      cursor:pointer;
+      background:#fff;
+    }
+    .row{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .big{
+      font-size:38px;
+      font-weight:700;
+    }
+    .meta{
+      font-size:14px;
+      margin-top:6px;
+    }
+    .muted{
+      color:var(--sub);
+      font-size:12px;
+    }
+    .slot{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin:8px 0;
+    }
+    .slot span{
+      font-size:22px;
+      font-weight:600;
+    }
+    .footer{
+      margin-top:18px;
+      font-size:12px;
+      color:var(--sub);
+    }
+  </style>
+</head>
 
-    setStatus(`表示：${filtered.length}件（モード=${mode}, 確率=${bucket}%）`, "ok");
+<body>
+  <div class="wrap">
+    <h1>たとえて、降水確率。</h1>
+    <div class="sub">降水確率を「別の確率」で例えてみるアプリ</div>
 
-    listEl.innerHTML = `
-      <div style="display:grid; gap:8px;">
-        ${filtered
-          .map(
-            (item) => `
-          <div style="border:1px solid #eee; border-radius:14px; padding:12px;">
-            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
-              <div style="flex:1;">
-                <div class="small">
-                  <b>${escapeHtml(item.bucket)}%</b> / ${escapeHtml(item.mode)}
-                  <span class="muted" style="margin-left:8px;">
-                    ${item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
-                  </span>
-                </div>
-                <div style="margin-top:6px; white-space:pre-wrap; font-size:16px; line-height:1.5;">
-                  ${escapeHtml(item.text)}
-                </div>
-              </div>
-              <button data-del-id="${escapeHtml(item.id)}">削除</button>
-            </div>
-          </div>
-        `
-          )
-          .join("")}
+    <div class="card">
+      <div class="row">
+        <input id="place" placeholder="地点（例：仙台）" />
+        <button id="search">検索</button>
       </div>
-    `;
+      <div class="row" style="margin-top:6px;">
+        <select id="candidates" disabled></select>
+      </div>
+      <div id="placeStatus" class="muted" style="margin-top:6px;">地点を入力してください</div>
+    </div>
 
-    // 削除ボタン
-    listEl.querySelectorAll("button[data-del-id]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-del-id");
-        deleteOne(id);
-      });
-    });
-  }
+    <div class="card">
+      <div class="slot">
+        <span>🌅 朝</span>
+        <div>
+          <div id="pop_m" class="big">--%</div>
+          <div id="meta_m" class="meta muted">---</div>
+        </div>
+      </div>
+      <div class="slot">
+        <span>🌞 昼</span>
+        <div>
+          <div id="pop_d" class="big">--%</div>
+          <div id="meta_d" class="meta muted">---</div>
+        </div>
+      </div>
+      <div class="slot">
+        <span>🌙 夜</span>
+        <div>
+          <div id="pop_e" class="big">--%</div>
+          <div id="meta_e" class="meta muted">---</div>
+        </div>
+      </div>
+    </div>
 
-  function deleteOne(id) {
-    const store = loadStore();
-    const next = store.filter((x) => x.id !== id);
-    saveStore(next);
-    renderManageList();
-  }
+    <div class="card">
+      <div id="metaphor" class="big">地点を選んでください</div>
+      <div class="footer">
+        ※ Open-Meteo API を使用<br>
+        ※ 0/10/20…100% に丸めて表示
+      </div>
+    </div>
+  </div>
 
-  function clearBucket() {
-    const mode = getMode();
-    const bucket = getBucket();
-    const store = loadStore();
-    const next = store.filter((x) => !(x.mode === mode && Number(x.bucket) === bucket));
-    saveStore(next);
-    renderManageList();
-  }
-
-  function clearAll() {
-    saveStore([]);
-    renderManageList();
-  }
-
-  // ----- add phrase -----
-  function addPhraseFromUI() {
-    const modeEl = $("newPhraseMode");
-    const bucketEl = $("newPhraseBucket");
-    const textEl = $("newPhrase");
-    const statusEl = $("addStatus");
-
-    if (!modeEl || !bucketEl || !textEl) return;
-
-    const mode = modeEl.value;
-    const bucket = Number(bucketEl.value);
-    const text = (textEl.value || "").trim();
-
-    if (!text) {
-      if (statusEl) statusEl.textContent = "未入力です。ネタ文を入れてください。";
-      return;
-    }
-
-    const store = loadStore();
-    const item = {
-      id: (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2),
-      mode,
-      bucket,
-      text,
-      createdAt: Date.now(),
-    };
-    store.push(item);
-    saveStore(store);
-
-    // 入力欄クリア
-    textEl.value = "";
-    if (statusEl) statusEl.textContent = `保存しました（${mode} / ${bucket}%）`;
-
-    // 管理側の条件と一致してたら即反映
-    renderManageList();
-  }
-
-  // ----- bind events on load -----
-  document.addEventListener("DOMContentLoaded", () => {
-    // 管理UIが無いページでも落ちないようにガード
-    if ($("manageRefresh")) $("manageRefresh").addEventListener("click", renderManageList);
-    if ($("manageMode")) $("manageMode").addEventListener("change", renderManageList);
-    if ($("manageBucket")) $("manageBucket").addEventListener("change", renderManageList);
-
-    if ($("manageClearBucket")) $("manageClearBucket").addEventListener("click", () => {
-      if (confirm("この%の追加ネタを全削除します。よろしいですか？")) clearBucket();
-    });
-
-    if ($("manageClearAll")) $("manageClearAll").addEventListener("click", () => {
-      if (confirm("全ての追加ネタを削除します。よろしいですか？")) clearAll();
-    });
-
-    if ($("addPhraseBtn")) $("addPhraseBtn").addEventListener("click", addPhraseFromUI);
-
-    // 初回表示
-    renderManageList();
-  });
-
-  // ★ もし「例え表示側」で追加ネタを使いたい場合は、ここを他のコードから呼べます
-  // window.getExtraPhrases = (mode, bucket) => loadStore().filter(x => x.mode===mode && Number(x.bucket)===Number(bucket)).map(x => x.text);
-
-})();
+  <script src="./metaphors.js"></script>
+  <script src="./script.js"></script>
+</body>
+</html>
