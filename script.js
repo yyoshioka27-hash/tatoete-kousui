@@ -1,6 +1,7 @@
 // script.js
-// ✅ API_BASE（必ずこれに統一）
-const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev/";
+// ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
+const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api-y.yoshioka27.workers.dev";
+
 
 // ==============================
 // 承認待ち投稿（Workers）
@@ -13,7 +14,7 @@ async function submitToPending(mode, bucket, text){
   });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `submit failed ${res.status}`);
-  return data; // {ok:true, queued:true/false, id? ...}
+  return data;
 }
 
 async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
@@ -32,10 +33,13 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 
 // ==============================
 // 共有ネタ（GitHub PagesのJSON）
+// ※ 起動時に読み込んで抽選候補へ混ぜる
 // ==============================
 const SHARED_JSON_URL = "./metaphors.json";
 
 let sharedItems = []; // [{mode,bucket,text}, ...]
+
+// 互換用（過去に入れた人向け）: JSON items をここにも入れる
 window.JSON_METAPHORS = window.JSON_METAPHORS || [];
 
 async function loadSharedJSON() {
@@ -54,6 +58,7 @@ async function loadSharedJSON() {
       }))
       .filter(it => it.text);
 
+    // 互換：window.JSON_METAPHORS にも反映
     window.JSON_METAPHORS = items || [];
   } catch (e) {
     sharedItems = [];
@@ -65,6 +70,7 @@ function getSharedItems(mode, bucket) {
   const m = (mode === "fun" ? "fun" : "trivia");
   const b = window.bucket10(bucket);
 
+  // sharedItems を優先。空なら window.JSON_METAPHORS もフォールバックで使う
   const base = (sharedItems && sharedItems.length)
     ? sharedItems
     : (Array.isArray(window.JSON_METAPHORS) ? window.JSON_METAPHORS.map(it => ({
@@ -78,6 +84,8 @@ function getSharedItems(mode, bucket) {
 
 // ==============================
 // ✅ 共有ネタ（Cloudflare Workers /api/public）
+// - public を抽選候補へ混ぜる
+// - mode×bucket のキャッシュ
 // ==============================
 const publicCache = new Map(); // key: "mode_bucket" => [text,...]
 
@@ -99,13 +107,14 @@ async function warmPublicCache(mode, bucket){
     });
     publicCache.set(k, texts);
   }catch{
-    publicCache.set(k, []);
+    publicCache.set(k, []); // 失敗時も空で確定（無限リトライ防止）
   }
 }
 
 function getPublicItems(mode, bucket){
   const k = keyMB(mode, bucket);
 
+  // ✅ 未warmなら裏でwarmして次回renderで混ざるようにする
   if (!publicCache.has(k)) {
     warmPublicCache(mode, bucket).then(() => {
       try { render(); } catch {}
@@ -138,16 +147,16 @@ let state = {
   tz: null,
   source: "API: 未接続",
   currentPhrases: {
-    m: { text: null, extraId: null, bucket: null, mode: null },
-    d: { text: null, extraId: null, bucket: null, mode: null },
-    e: { text: null, extraId: null, bucket: null, mode: null }
+    m: { text: null, extraId: null },
+    d: { text: null, extraId: null },
+    e: { text: null, extraId: null }
   }
 };
 
 const $ = (id) => document.getElementById(id);
 
 // =========================
-// 📌 公開準備（ローカル Like）
+// 📌 公開準備（ローカル）
 // =========================
 const LIKES_KEY = "metaphorLikes";
 
@@ -170,7 +179,7 @@ function incrementLike(phrase) {
 }
 
 // =========================
-// ✅ 本当の「公開準備ピン」管理（ローカル印）
+// ✅ 本当の「公開準備ピン」管理（解除できる）
 // =========================
 const PIN_KEY = "metaphorPins_v1";
 
@@ -195,50 +204,129 @@ function togglePinned(phrase){
   setPinned(phrase, !isPinned(phrase));
 }
 
-// =========================
-// ✅ 公開準備「送信済み」管理（Workersへ送った印）
-// mode/bucket/text 単位で管理（重複送信を防止）
-// =========================
-const SENT_KEY = "pendingSent_v1";
+// ==============================
+// ✅ 承認待ち送信キュー（iPhone連続POST対策）
+// - 追加時：キューに貯める（送信はしない）
+// - 送信ボタン：1件ずつ送る（待ち時間を入れる）
+// ==============================
+const PENDING_QUEUE_KEY = "pending_queue_v1";
 
-function loadSent(){
-  try { return JSON.parse(localStorage.getItem(SENT_KEY) || "{}"); }
-  catch { return {}; }
+function loadQueue(){
+  try {
+    const q = JSON.parse(localStorage.getItem(PENDING_QUEUE_KEY) || "[]");
+    return Array.isArray(q) ? q : [];
+  } catch {
+    return [];
+  }
 }
-function saveSent(obj){ localStorage.setItem(SENT_KEY, JSON.stringify(obj)); }
-
-let sentData = loadSent();
-
-function phraseKey(mode, bucket, text){
+function saveQueue(q){
+  localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(Array.isArray(q) ? q : []));
+}
+function queueForPending(mode, bucket, text){
   const m = (mode === "fun" ? "fun" : "trivia");
   const b = window.bucket10(bucket);
-  return `${m}|${b}|${String(text||"").trim()}`;
+  const t = String(text || "").trim();
+  if (!t) return { ok:false, msg:"ネタが空です" };
+
+  const q = loadQueue();
+
+  // 同一(mode,bucket,text)は重複登録しない（送信事故防止）
+  const key = `${m}__${b}__${t}`;
+  const exists = q.some(x => `${x.mode}__${x.bucket}__${x.text}` === key);
+  if (!exists) q.push({ mode:m, bucket:b, text:t, at: Date.now() });
+
+  saveQueue(q);
+  return { ok:true, msg: exists ? "送信待ちに既にあります" : "送信待ちに追加しました" };
 }
-function isSent(mode, bucket, text){
-  const k = phraseKey(mode, bucket, text);
-  return !!sentData[k];
-}
-function markSent(mode, bucket, text, payload){
-  const k = phraseKey(mode, bucket, text);
-  sentData[k] = payload || { at: Date.now() };
-  saveSent(sentData);
+function queueCount(){
+  return loadQueue().length;
 }
 
-// ✅ 「公開準備」＝ pin + submit を一体化（失敗時はpinは付けるが送信済みにはしない）
-async function ensurePendingSent(mode, bucket, text){
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = window.bucket10(bucket);
-  const t = String(text||"").trim();
-  if (!t) throw new Error("text empty");
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
-  if (isSent(m, b, t)) return { ok:true, already:true };
+async function sendQueueAll({ delayMs = 1200 } = {}){
+  const statusEl = document.getElementById("addStatus");
+  let q = loadQueue();
 
-  const data = await submitToPending(m, b, t);
+  if (!q.length) {
+    if (statusEl) statusEl.textContent = "送信待ちはありません。";
+    updateSendBtnLabel();
+    return;
+  }
 
-  // queued:false（already pending）でも成功扱いで送信済み印にする
-  markSent(m, b, t, { ...data, at: Date.now() });
+  if (statusEl) statusEl.textContent = `📨 承認待ちへ送信中…（${q.length}件 / 1件ずつ送ります）`;
 
-  return data;
+  const rest = [];
+  let okCount = 0;
+
+  for (const item of q){
+    try{
+      await submitToPending(item.mode, item.bucket, item.text);
+      okCount++;
+      // ✅ iPhone Safari対策：連続POSTを避ける
+      await sleep(delayMs);
+    }catch(e){
+      rest.push(item);
+      // 失敗しても次へ。通信が落ち着いたら次回再送できる
+      await sleep(delayMs);
+    }
+  }
+
+  saveQueue(rest);
+  updateSendBtnLabel();
+
+  if (statusEl) {
+    if (rest.length === 0) {
+      statusEl.textContent = `✅ 承認待ちへ送信しました（成功 ${okCount}件）\n👉 管理画面で承認すると一般公開されます。`;
+    } else {
+      statusEl.textContent = `⚠️ 一部送信に失敗しました（成功 ${okCount}件 / 残り ${rest.length}件）\n📨 もう一度「承認待ちへ送信」を押すと再送できます。`;
+    }
+  }
+}
+
+let sendBtnEl = null;
+
+function ensureSendBtn(){
+  // addSection の中で addPhraseBtn の近くにボタンを自動挿入
+  const addBtn = document.getElementById("addPhraseBtn");
+  if (!addBtn) return;
+
+  if (sendBtnEl && document.getElementById(sendBtnEl.id)) {
+    updateSendBtnLabel();
+    return;
+  }
+
+  const wrap = addBtn.parentElement; // actions
+  if (!wrap) return;
+
+  const btn = document.createElement("button");
+  btn.id = "sendPendingAll";
+  btn.className = "btnPrimary";
+  btn.style.whiteSpace = "nowrap";
+  btn.textContent = "📨 承認待ちへ送信（0件）";
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      await sendQueueAll({ delayMs: 1200 });
+    } finally {
+      btn.disabled = false;
+      updateSendBtnLabel();
+    }
+  };
+
+  // 追加ボタンの右側に入れる（末尾）
+  wrap.appendChild(btn);
+  sendBtnEl = btn;
+
+  updateSendBtnLabel();
+}
+
+function updateSendBtnLabel(){
+  const btn = document.getElementById("sendPendingAll");
+  if (!btn) return;
+  const n = queueCount();
+  btn.textContent = `📨 承認待ちへ送信（${n}件）`;
+  btn.disabled = (n === 0);
 }
 
 // ==============================
@@ -362,12 +450,8 @@ function renderExtraList() {
     meta.className = "listMeta";
     const dt = new Date(it.createdAt);
 
-    const pinned = isPinned(it.text);
-    const sent = isSent(it.mode, it.bucket, it.text);
-
-    const pinMark = pinned ? "　📌公開準備" : "";
-    const sentMark = sent ? "　📨送信済み" : "";
-    meta.textContent = `追加日: ${dt.toLocaleString()}${pinMark}${sentMark}`;
+    const pinMark = isPinned(it.text) ? "　📌公開準備" : "";
+    meta.textContent = `追加日: ${dt.toLocaleString()}${pinMark}`;
 
     left.appendChild(text);
     left.appendChild(meta);
@@ -379,48 +463,11 @@ function renderExtraList() {
 
     const pinBtn = document.createElement("button");
     pinBtn.className = "btnSmall";
-    pinBtn.textContent = pinned ? "📌 公開準備を解除" : (sent ? "📨 送信済み" : "📌 公開準備");
-    pinBtn.disabled = false;
-
-    pinBtn.onclick = async () => {
-      // 解除
-      if (isPinned(it.text)) {
-        setPinned(it.text, false);
-        renderExtraList();
-        render();
-        return;
-      }
-
-      // 公開準備ON（pin + submit）
-      setPinned(it.text, true); // まずローカル印
+    pinBtn.textContent = isPinned(it.text) ? "📌 公開準備を解除" : "📌 公開準備";
+    pinBtn.onclick = () => {
+      togglePinned(it.text);
       renderExtraList();
       render();
-
-      // 既に送信済みなら終わり
-      if (isSent(it.mode, it.bucket, it.text)) {
-        renderExtraList();
-        render();
-        return;
-      }
-
-      // 送信
-      pinBtn.disabled = true;
-      const prev = pinBtn.textContent;
-      pinBtn.textContent = "送信中…";
-
-      try{
-        await ensurePendingSent(it.mode, it.bucket, it.text);
-        pinBtn.textContent = "📨 送信済み";
-      }catch(e){
-        // 送信失敗：pinは残す（出やすさUPは維持）
-        pinBtn.textContent = prev;
-        alert("承認待ち送信に失敗: " + (e?.message || "unknown"));
-        console.error(e);
-      }finally{
-        pinBtn.disabled = false;
-        renderExtraList();
-        render();
-      }
     };
     right.appendChild(pinBtn);
 
@@ -583,72 +630,24 @@ function updateLikeUI(slot) {
     return;
   }
 
-  const mode = phraseObj?.mode || getSelectedMode();
-  const bucket = phraseObj?.bucket ?? null;
-
   const count = getLikesFor(phrase);
   if (countEl) countEl.textContent = String(count);
 
   const pinned = isPinned(phrase);
-  const sent = (bucket != null) ? isSent(mode, bucket, phrase) : false;
-
   if (badgeEl) {
-    if (sent) badgeEl.textContent = "📨送信済み";
-    else if (pinned) badgeEl.textContent = "📌公開準備";
+    if (pinned) badgeEl.textContent = "📌公開準備";
     else badgeEl.textContent = count >= 5 ? "⭐候補！" : "";
   }
 
   if (btnEl) {
     btnEl.disabled = false;
-
-    if (!pinned && sent) btnEl.textContent = "📨 送信済み";
-    else btnEl.textContent = pinned ? "📌 公開準備を解除" : "📌 公開準備";
-
-    btnEl.onclick = async () => {
-      // 解除
-      if (isPinned(phrase)) {
-        setPinned(phrase, false);
-        updateLikeUI(slot);
-        renderExtraList();
-        render();
-        return;
-      }
-
-      // 公開準備ON
-      setPinned(phrase, true);
-      incrementLike(phrase); // 公開準備にしたときだけカウント（既存仕様維持）
-
+    btnEl.textContent = pinned ? "📌 公開準備を解除" : "📌 公開準備";
+    btnEl.onclick = () => {
+      togglePinned(phrase);
+      if (!pinned) incrementLike(phrase); // 公開準備にしたときだけカウント
       updateLikeUI(slot);
       renderExtraList();
       render();
-
-      // bucket がわからない時は送れない（通常あり得ないが保険）
-      if (bucket == null) return;
-
-      // 既に送信済みなら終わり
-      if (isSent(mode, bucket, phrase)) {
-        updateLikeUI(slot);
-        renderExtraList();
-        render();
-        return;
-      }
-
-      // 送信
-      btnEl.disabled = true;
-      const prevText = btnEl.textContent;
-      btnEl.textContent = "送信中…";
-      try{
-        await ensurePendingSent(mode, bucket, phrase);
-      }catch(e){
-        alert("承認待ち送信に失敗: " + (e?.message || "unknown"));
-        console.error(e);
-      }finally{
-        btnEl.disabled = false;
-        btnEl.textContent = prevText;
-        updateLikeUI(slot);
-        renderExtraList();
-        render();
-      }
     };
   }
 }
@@ -723,7 +722,7 @@ function render() {
 
       setIcon(slotKey, null);
 
-      state.currentPhrases[slotKey] = { text: null, extraId: null, bucket: null, mode: null };
+      state.currentPhrases[slotKey] = { text: null, extraId: null };
       updateLikeUI(slotKey);
       updateDeleteUI(slotKey);
       return null;
@@ -743,11 +742,14 @@ function render() {
 
     if (metaEl) metaEl.textContent = `${label}：${picked.text} ${shareHint}`;
 
-    state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId, bucket: rounded, mode };
+    state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId };
     updateLikeUI(slotKey);
     updateDeleteUI(slotKey);
 
-    return { value: rounded, text: picked.text, label, mode, bucket: rounded };
+    // テーマ適用（降水確率に応じて）
+    try { applyTheme(rounded); } catch {}
+
+    return { value: rounded, text: picked.text, label };
   };
 
   if (!state.pops) {
@@ -787,7 +789,7 @@ function renderEmpty() {
 
     setIcon(k, null);
 
-    state.currentPhrases[k] = { text: null, extraId: null, bucket: null, mode: null };
+    state.currentPhrases[k] = { text: null, extraId: null };
     updateLikeUI(k);
     updateDeleteUI(k);
   });
@@ -956,7 +958,9 @@ document.getElementById("refresh").onclick = () => render();
 if ($("listMode")) $("listMode").addEventListener("change", renderExtraList);
 if ($("listBucket")) $("listBucket").addEventListener("change", renderExtraList);
 
-// ネタ追加（承認待ち送信を “必ず見える形で” 表示）
+// ==============================
+// ネタ追加（送信は“キューに貯める”）
+// ==============================
 document.getElementById("addPhraseBtn").onclick = async () => {
   const statusEl = document.getElementById("addStatus");
   const mode = ($("newPhraseMode")?.value ?? "trivia");
@@ -969,17 +973,13 @@ document.getElementById("addPhraseBtn").onclick = async () => {
   if (statusEl) statusEl.textContent = res.ok ? `✅ ${res.msg}` : `⚠️ ${res.msg}`;
   if (res.ok && document.getElementById("newPhrase")) document.getElementById("newPhrase").value = "";
 
-  // 承認待ち送信（公開のための準備）
+  // ✅ ここが変更点：iPhone連続POST対策のため「即送信せず」キューに貯める
   if (res.ok) {
-    if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 公開のために承認待ちへ送信中…`;
-    try {
-      const out = await ensurePendingSent(mode, bucket, text);
-      const msg = out?.queued === false ? "（すでに承認待ちにあります）" : "";
-      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n📨 承認待ちに送信しました ${msg}\n（管理画面で承認すると公開されます）`;
-    } catch (e) {
-      const msg = (e && e.message) ? e.message : "unknown error";
-      if (statusEl) statusEl.textContent = `✅ ${res.msg}\n⚠️ 承認待ち送信に失敗：${msg}`;
-      console.error(e);
+    const qres = queueForPending(mode, bucket, text);
+    updateSendBtnLabel();
+    if (statusEl) {
+      statusEl.textContent =
+        `✅ ${res.msg}\n📌 公開のための送信待ちに入れました（${queueCount()}件）\n👉 右の「📨 承認待ちへ送信」を押すと、1件ずつ安全に送ります。`;
     }
   }
 
@@ -991,6 +991,8 @@ document.getElementById("addPhraseBtn").onclick = async () => {
 // 初期化
 // ==============================
 setupToggleExtraPanel();
+ensureSendBtn();          // ✅ 送信ボタンを自動生成
+updateSendBtnLabel();     // ✅ キュー件数反映
 render();
 
 loadSharedJSON().then(() => {
