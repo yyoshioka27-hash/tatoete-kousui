@@ -1,3 +1,4 @@
+<!-- admin.html -->
 <!doctype html>
 <html lang="ja">
 <head>
@@ -246,15 +247,27 @@
 
     function saveInputs() {
       localStorage.setItem(LS_API_BASE, $("apiBase").value.trim());
-      localStorage.setItem(LS_ADMIN_KEY, $("adminKey").value);
+      localStorage.setItem(LS_ADMIN_KEY, ($("adminKey").value || "").trim());
     }
 
     function getApiBase() {
       return $("apiBase").value.trim().replace(/\/+$/,"");
     }
 
-    function getAdminKey() {
-      return $("adminKey").value;
+    // ★超重要：ADMIN_KEYが空ならpromptで聞く→入力欄＆localStorageへ反映
+    function getAdminKey({ forcePrompt = false } = {}) {
+      let k = ($("adminKey").value || "").trim();
+
+      if (forcePrompt || !k) {
+        const p = (prompt("ADMIN_KEY を入れて") || "").trim();
+        if (p) {
+          $("adminKey").value = p;
+          k = p;
+          // 自動保存（「保存」を押し忘れても次から困らない）
+          localStorage.setItem(LS_ADMIN_KEY, k);
+        }
+      }
+      return k;
     }
 
     function fmtTime(ms) {
@@ -272,7 +285,12 @@
     async function apiGet(path, admin=false) {
       const url = `${getApiBase()}${path}`;
       const headers = {};
-      if (admin) headers["x-admin-key"] = getAdminKey();
+
+      if (admin) {
+        const k = getAdminKey();
+        if (!k) throw new Error("ADMIN_KEY が空です（入力または保存してください）");
+        headers["x-admin-key"] = k;
+      }
 
       const res = await fetch(url, { headers });
       const data = await res.json().catch(() => null);
@@ -282,7 +300,12 @@
     async function apiPost(path, body, admin=false) {
       const url = `${getApiBase()}${path}`;
       const headers = { "Content-Type":"application/json" };
-      if (admin) headers["x-admin-key"] = getAdminKey();
+
+      if (admin) {
+        const k = getAdminKey();
+        if (!k) throw new Error("ADMIN_KEY が空です（入力または保存してください）");
+        headers["x-admin-key"] = k;
+      }
 
       const res = await fetch(url, {
         method: "POST",
@@ -350,7 +373,6 @@
         btn.addEventListener("click", async () => {
           const act = btn.getAttribute("data-act");
           const id  = btn.getAttribute("data-id");
-
           if (!id) return;
 
           btn.disabled = true;
@@ -385,6 +407,7 @@
         setPill($("pillHealth"), `health: OK (kv:${data.kv ? "true":"false"})`, true);
         return true;
       } catch (e) {
+        setPill($("pillHealth"), "health: NG", false);
         setErr(e?.message || String(e));
         return false;
       }
@@ -393,8 +416,8 @@
     async function fetchPending() {
       setErr("");
 
-      // admin check (pending取得できるか)
       try {
+        // pending取得（ここでADMIN_KEYが空ならpromptが出る）
         const { res, data } = await apiGet("/api/pending", true);
         if (!res.ok || !data?.ok) {
           setPill($("pillAdmin"), "admin: NG", false);
@@ -402,10 +425,12 @@
         }
         setPill($("pillAdmin"), "admin: OK", true);
 
-        // ★ ここがキモ：data.items を全部描画
+        // data.items を描画
         renderPending(data.items);
 
       } catch (e) {
+        // admin keyが空 / 403 / JSON不正など
+        setPill($("pillAdmin"), "admin: NG", false);
         setErr(e?.message || String(e));
         renderPending([]);
       }
@@ -427,11 +452,11 @@
 
     // init
     loadSaved();
-    // ページ開いたら軽くhealthだけ確認（邪魔なら外してOK）
+    // ページ開いたらhealthだけ確認（邪魔なら外してOK）
     checkHealth();
 
   </script>
 
-  <!-- END -->
+  <!-- # END -->
 </body>
 </html>
