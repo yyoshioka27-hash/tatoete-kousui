@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>管理（承認待ち）</title>
+  <title>管理（承認待ち / 一般公開）</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -19,6 +19,7 @@
       --btn:#0f172a;
       --btnText:#fff;
       --mutedBg:rgba(15,23,42,.04);
+      --amber:#f59e0b;
     }
     body{
       margin:0;
@@ -33,7 +34,7 @@
     }
     h1{
       font-size: 28px;
-      margin: 8px 0 18px;
+      margin: 8px 0 14px;
     }
     .row{
       display:flex;
@@ -46,20 +47,23 @@
       align-items:center;
       gap:8px;
       margin: 6px 0;
+      flex-wrap:wrap;
     }
     label{
       font-size: 13px;
       color:var(--sub);
       width: 84px;
+      flex: 0 0 auto;
     }
-    input{
+    input, select{
       border:1px solid var(--line);
       border-radius: 10px;
       padding: 10px 12px;
       font-size: 14px;
-      min-width: 360px;
+      min-width: 220px;
       max-width: 100%;
     }
+    input.wide{ min-width: 360px; }
     button{
       border:1px solid transparent;
       border-radius: 10px;
@@ -76,6 +80,7 @@
     }
     button.blue{ background: var(--blue); }
     button.red{ background: var(--red); }
+    button.amber{ background: var(--amber); color:#111827; }
     button:disabled{
       opacity:.6;
       cursor:not-allowed;
@@ -92,6 +97,7 @@
       justify-content:space-between;
       gap:10px;
       flex-wrap:wrap;
+      align-items:center;
     }
     .pill{
       display:inline-flex;
@@ -106,12 +112,46 @@
     }
     .pill.ok{ color: var(--green); border-color: rgba(22,163,74,.35); }
     .pill.ng{ color: var(--red); border-color: rgba(239,68,68,.35); }
-
-    .list{
-      margin-top: 14px;
-      border-top:1px solid var(--line);
-      padding-top: 12px;
+    .small{
+      font-size: 12px;
+      color: var(--sub);
     }
+    .danger{
+      color: var(--red);
+      font-size: 13px;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+
+    /* tabs */
+    .tabs{
+      margin-top: 14px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .tabbtn{
+      background:#fff;
+      color:var(--text);
+      border:1px solid var(--line);
+      border-radius: 999px;
+      padding: 9px 12px;
+      font-size: 13px;
+      cursor:pointer;
+    }
+    .tabbtn.active{
+      background: var(--text);
+      color:#fff;
+      border-color: var(--text);
+    }
+
+    .panel{
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top:1px solid var(--line);
+    }
+
     .card{
       border:1px solid var(--line);
       border-radius: 14px;
@@ -127,6 +167,7 @@
       display:flex;
       gap:10px;
       flex-wrap:wrap;
+      align-items:center;
     }
     .text{
       font-size: 16px;
@@ -144,36 +185,49 @@
     .hint{
       font-size: 12px;
       color: var(--sub);
-      margin-top: 6px;
-    }
-    .danger{
-      color: var(--red);
-      font-size: 13px;
       margin-top: 10px;
-      white-space: pre-wrap;
+      line-height: 1.6;
     }
-    .small{
-      font-size: 12px;
-      color: var(--sub);
-    }
+
     .top-actions{
       margin-left:auto;
       display:flex;
       gap:8px;
       flex-wrap:wrap;
     }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 820px){
+      .grid2{ grid-template-columns: 1fr; }
+      input.wide{ min-width: 240px; }
+    }
+
+    .mutedBox{
+      border:1px dashed rgba(15,23,42,.18);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(15,23,42,.02);
+      color: var(--sub);
+      font-size: 12px;
+      line-height: 1.6;
+      margin-top: 10px;
+    }
   </style>
 </head>
 
 <body>
   <div class="wrap">
-    <h1>管理（承認待ち）</h1>
+    <h1>管理（承認待ち / 一般公開）</h1>
 
     <div class="row">
       <div style="flex:1; min-width: 520px;">
         <div class="field">
           <label for="apiBase">API_BASE:</label>
-          <input id="apiBase" type="text" value="https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev" />
+          <input id="apiBase" class="wide" type="text" value="https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev" />
         </div>
         <div class="field">
           <label for="adminKey">ADMIN_KEY:</label>
@@ -184,39 +238,98 @@
 
       <div class="top-actions">
         <button class="secondary" id="btnHealth">health</button>
-        <button class="secondary" id="btnRefresh">一覧更新</button>
+        <button class="secondary" id="btnRefresh">更新（表示中タブ）</button>
       </div>
     </div>
 
     <div class="statusbar">
-      <div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <span class="pill" id="pillHealth">health: 未確認</span>
         <span class="pill" id="pillAdmin">admin: 未確認</span>
       </div>
       <div class="small">
-        承認待ち: <strong id="count">0</strong> 件
+        承認待ち: <strong id="countPending">0</strong> 件 / 公開: <strong id="countPublic">0</strong> 件
       </div>
     </div>
 
     <div class="danger" id="errBox" style="display:none;"></div>
 
-    <div class="list" id="pendingList">
-      <p class="small">「一覧更新」を押すと、承認待ちが表示されます。</p>
+    <!-- tabs -->
+    <div class="tabs">
+      <button class="tabbtn active" id="tabPending">🕒 承認待ち</button>
+      <button class="tabbtn" id="tabPublic">📚 一般公開</button>
     </div>
 
-    <p class="hint">
-      ※ 取得は <code>/api/pending</code>、承認は <code>/api/approve</code>、却下は <code>/api/reject</code> を呼びます。<br>
-      ※ Worker の返却が <code>{ ok:true, items:[...] }</code> の前提です。
-    </p>
+    <!-- Pending Panel -->
+    <div class="panel" id="panelPending">
+      <div id="pendingList">
+        <p class="small">「更新（表示中タブ）」を押すと、承認待ちが表示されます。</p>
+      </div>
+
+      <p class="hint">
+        ※ 取得: <code>/api/pending</code> / 承認: <code>/api/approve</code> / 却下: <code>/api/reject</code><br>
+        ※ Worker の返却が <code>{ ok:true, items:[...] }</code> の前提です。
+      </p>
+    </div>
+
+    <!-- Public Panel -->
+    <div class="panel" id="panelPublic" style="display:none;">
+      <div class="grid2">
+        <div class="field">
+          <label for="pubMode">mode:</label>
+          <select id="pubMode">
+            <option value="">全て</option>
+            <option value="trivia">trivia（雑学）</option>
+            <option value="fun">fun（お笑い）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="pubBucket">bucket:</label>
+          <select id="pubBucket">
+            <option value="">全て</option>
+            <option value="0">0</option><option value="10">10</option><option value="20">20</option><option value="30">30</option>
+            <option value="40">40</option><option value="50">50</option><option value="60">60</option><option value="70">70</option>
+            <option value="80">80</option><option value="90">90</option><option value="100">100</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="pubLimit">limit:</label>
+        <select id="pubLimit">
+          <option value="50">50</option>
+          <option value="200" selected>200</option>
+          <option value="500">500</option>
+        </select>
+        <button class="secondary" id="btnPublicReload">公開一覧を取得</button>
+      </div>
+
+      <div class="mutedBox">
+        ✅ 「管理削除」は <strong>サーバ（KV）から削除</strong>します。<br>
+        → つまり <strong>全員の一般公開から消えます</strong>。<br>
+        ※この操作は取り消しできません（復活は再投稿が必要）。
+      </div>
+
+      <div id="publicList">
+        <p class="small">「公開一覧を取得」を押すと、一般公開のネタが表示されます。</p>
+      </div>
+
+      <p class="hint">
+        ※ 一般公開の取得は <code>/api/admin/list</code>（admin only）を使います。<br>
+        ※ 削除は <code>/api/admin/delete</code>（admin only）です。
+      </p>
+    </div>
+
   </div>
 
   <script>
     // ===========================
-    // admin.html (pending manager)
+    // admin.html (pending + public manager)
     // ===========================
 
     const LS_API_BASE  = "tatoete_admin_api_base_v1";
     const LS_ADMIN_KEY = "tatoete_admin_key_v1";
+    const LS_ACTIVE_TAB = "tatoete_admin_tab_v1"; // "pending" | "public"
 
     const $ = (id) => document.getElementById(id);
 
@@ -241,8 +354,11 @@
     function loadSaved() {
       const api = localStorage.getItem(LS_API_BASE);
       const key = localStorage.getItem(LS_ADMIN_KEY);
+      const tab = localStorage.getItem(LS_ACTIVE_TAB);
       if (api) $("apiBase").value = api;
       if (key) $("adminKey").value = key;
+      if (tab === "public") setActiveTab("public");
+      else setActiveTab("pending");
     }
 
     function saveInputs() {
@@ -263,7 +379,6 @@
         if (p) {
           $("adminKey").value = p;
           k = p;
-          // 自動保存（「保存」を押し忘れても次から困らない）
           localStorage.setItem(LS_ADMIN_KEY, k);
         }
       }
@@ -325,12 +440,34 @@
         .replaceAll("'","&#039;");
     }
 
+    // ---------------------------
+    // Tabs
+    // ---------------------------
+    function setActiveTab(tab){
+      const isPending = (tab === "pending");
+      $("panelPending").style.display = isPending ? "block" : "none";
+      $("panelPublic").style.display  = isPending ? "none"  : "block";
+      $("tabPending").classList.toggle("active", isPending);
+      $("tabPublic").classList.toggle("active", !isPending);
+      localStorage.setItem(LS_ACTIVE_TAB, tab);
+    }
+
+    $("tabPending").addEventListener("click", () => setActiveTab("pending"));
+    $("tabPublic").addEventListener("click", () => setActiveTab("public"));
+
+    function getCurrentTab(){
+      return localStorage.getItem(LS_ACTIVE_TAB) === "public" ? "public" : "pending";
+    }
+
+    // ---------------------------
+    // Pending render
+    // ---------------------------
     function renderPending(items) {
       const list = $("pendingList");
       list.innerHTML = "";
 
       const arr = Array.isArray(items) ? items : [];
-      $("count").textContent = String(arr.length);
+      $("countPending").textContent = String(arr.length);
 
       if (arr.length === 0) {
         list.innerHTML = `<p class="small">承認待ちはありません。</p>`;
@@ -396,6 +533,122 @@
       });
     }
 
+    async function fetchPending() {
+      setErr("");
+      try {
+        const { res, data } = await apiGet("/api/pending", true);
+        if (!res.ok || !data?.ok) {
+          setPill($("pillAdmin"), "admin: NG", false);
+          throw new Error(data?.error || `pending failed ${res.status}`);
+        }
+        setPill($("pillAdmin"), "admin: OK", true);
+        renderPending(data.items);
+      } catch (e) {
+        setPill($("pillAdmin"), "admin: NG", false);
+        setErr(e?.message || String(e));
+        renderPending([]);
+      }
+    }
+
+    // ---------------------------
+    // Public render (admin list + admin delete)
+    // ---------------------------
+    function renderPublic(items) {
+      const list = $("publicList");
+      list.innerHTML = "";
+
+      const arr = Array.isArray(items) ? items : [];
+      $("countPublic").textContent = String(arr.length);
+
+      if (arr.length === 0) {
+        list.innerHTML = `<p class="small">一般公開のネタはありません（または条件に該当なし）。</p>`;
+        return;
+      }
+
+      for (const it of arr) {
+        const id = it?.id || "";
+        const mode = it?.mode ?? "";
+        const bucket = it?.bucket ?? "";
+        const at = it?.createdAt ? fmtTime(it.createdAt) : "";
+        const text = it?.text ?? "";
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+          <div class="meta">
+            <span>ID: <code>${escapeHtml(id)}</code></span>
+            <span>mode: <code>${escapeHtml(mode)}</code></span>
+            <span>bucket: <code>${escapeHtml(bucket)}</code></span>
+            ${at ? `<span>at: ${escapeHtml(at)}</span>` : ""}
+          </div>
+
+          <p class="text">${escapeHtml(text)}</p>
+
+          <div class="actions">
+            <button class="red" data-act="deletePublic" data-id="${escapeHtml(id)}">管理削除（全員から消える）</button>
+          </div>
+        `;
+
+        list.appendChild(card);
+      }
+
+      list.querySelectorAll("button[data-act='deletePublic']").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          if (!id) return;
+
+          const ok = confirm(
+            "このネタをサーバから削除します。\n全員の一般公開から消えます。\nよろしいですか？"
+          );
+          if (!ok) return;
+
+          btn.disabled = true;
+          setErr("");
+
+          try {
+            const { res, data } = await apiPost("/api/admin/delete", { id }, true);
+            if (!res.ok || !data?.ok) throw new Error(data?.error || `delete failed ${res.status}`);
+            await fetchPublic(); // refresh
+          } catch (e) {
+            setErr(e?.message || String(e));
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function fetchPublic() {
+      setErr("");
+
+      const mode = ($("pubMode").value || "").trim();
+      const bucket = ($("pubBucket").value || "").trim();
+      const limit = Number(($("pubLimit").value || "200").trim());
+
+      const qs = new URLSearchParams();
+      if (mode) qs.set("mode", mode);
+      if (bucket) qs.set("bucket", bucket);
+      qs.set("limit", String(Math.max(1, Math.min(500, Number.isFinite(limit) ? limit : 200))));
+
+      try {
+        const { res, data } = await apiGet(`/api/admin/list?${qs.toString()}`, true);
+        if (!res.ok || !data?.ok) {
+          setPill($("pillAdmin"), "admin: NG", false);
+          throw new Error(data?.error || `admin/list failed ${res.status}`);
+        }
+        setPill($("pillAdmin"), "admin: OK", true);
+        renderPublic(data.items);
+      } catch (e) {
+        setPill($("pillAdmin"), "admin: NG", false);
+        setErr(e?.message || String(e));
+        renderPublic([]);
+      }
+    }
+
+    // ---------------------------
+    // Health
+    // ---------------------------
     async function checkHealth() {
       setErr("");
       try {
@@ -413,30 +666,9 @@
       }
     }
 
-    async function fetchPending() {
-      setErr("");
-
-      try {
-        // pending取得（ここでADMIN_KEYが空ならpromptが出る）
-        const { res, data } = await apiGet("/api/pending", true);
-        if (!res.ok || !data?.ok) {
-          setPill($("pillAdmin"), "admin: NG", false);
-          throw new Error(data?.error || `pending failed ${res.status}`);
-        }
-        setPill($("pillAdmin"), "admin: OK", true);
-
-        // data.items を描画
-        renderPending(data.items);
-
-      } catch (e) {
-        // admin keyが空 / 403 / JSON不正など
-        setPill($("pillAdmin"), "admin: NG", false);
-        setErr(e?.message || String(e));
-        renderPending([]);
-      }
-    }
-
-    // bind
+    // ---------------------------
+    // Bind
+    // ---------------------------
     $("btnSave").addEventListener("click", () => {
       saveInputs();
       setErr("");
@@ -447,14 +679,18 @@
     });
 
     $("btnRefresh").addEventListener("click", async () => {
-      await fetchPending();
+      const tab = getCurrentTab();
+      if (tab === "public") await fetchPublic();
+      else await fetchPending();
+    });
+
+    $("btnPublicReload").addEventListener("click", async () => {
+      await fetchPublic();
     });
 
     // init
     loadSaved();
-    // ページ開いたらhealthだけ確認（邪魔なら外してOK）
-    checkHealth();
-
+    checkHealth(); // healthだけ先に
   </script>
 
   <!-- # END -->
