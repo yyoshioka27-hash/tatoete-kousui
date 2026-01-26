@@ -1,6 +1,6 @@
 // sw.js
-// ★ 更新するたびに数字を上げる（tatoete-v8）
-const CACHE_NAME = "tatoete-v8";
+// ★ 更新するたびに数字を上げる（tatoete-v8: API素通し安定版）
+const CACHE_NAME = "tatoete-v9";
 
 const ASSETS = [
   "./",
@@ -19,7 +19,7 @@ function isHtmlRequest(req) {
   return req.headers.get("accept")?.includes("text/html");
 }
 
-// ✅ Workers API（workers.dev）はSWが触らない
+// Workers API は SW が触らない（必ずネットへ）
 function isWorkersApi(req) {
   try {
     const url = new URL(req.url);
@@ -29,7 +29,7 @@ function isWorkersApi(req) {
   }
 }
 
-// ✅ 外部API（Open-Meteoなど）も触らない
+// 外部API（Open-Meteo等）も素通し
 function isExternalApi(req) {
   try {
     const url = new URL(req.url);
@@ -45,9 +45,7 @@ function isExternalApi(req) {
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
-      .catch(() => {})
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).catch(() => {})
   );
 });
 
@@ -57,7 +55,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -69,10 +67,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
 
-  // ✅ 1) Workers / 外部API は完全素通し
+  // 1) Workers / 外部API は完全素通し（SWが介入しない）
   if (isWorkersApi(req) || isExternalApi(req)) return;
 
-  // ✅ 2) HTMLはネット優先
+  // 2) HTMLはネットワーク優先
   if (isHtmlRequest(req)) {
     event.respondWith(
       fetch(req)
@@ -86,10 +84,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ✅ 3) 同一オリジン静的ファイルはキャッシュ優先
+  // 3) 静的ファイルはキャッシュ優先
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
+
       return fetch(req).then((res) => {
         if (res && res.ok) {
           const copy = res.clone();
