@@ -215,6 +215,53 @@
       margin: 0;
       transform: translateY(1px);
     }
+
+    /* =========================
+       Reroll (例え切替) animation
+    ========================= */
+    .fade-swap{
+      will-change: opacity, transform;
+      transition: opacity .18s ease, transform .18s ease;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .fade-swap.is-leaving{
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    .fade-swap.is-entering{
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+
+    /* 例えを変えるボタン（押し感） */
+    .reroll-btn{
+      transition: transform .06s ease, filter .12s ease;
+    }
+    .reroll-btn:active{
+      transform: translateY(1px) scale(0.99);
+      filter: brightness(0.98);
+    }
+
+    /* 今日のランキング */
+    .ranking-card h3{
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+    .ranking-card ol{
+      margin: 0;
+      padding-left: 1.2em;
+    }
+    .ranking-card li{
+      margin: .45em 0;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .ranking-card .likes{
+      color: #64748b;
+      font-size: 12px;
+      margin-top: 2px;
+    }
   </style>
 </head>
 
@@ -313,13 +360,21 @@
       </div>
     </div>
 
+    <!-- ✅ 人間向け翻訳は削除：例え表示だけに整理 -->
     <div class="card">
-      <div class="small">人間向け翻訳（毎回ランダム）</div>
-      <div class="big" id="metaphor">地点を選んでください</div>
+      <div class="big fade-swap" id="metaphor">地点を選んでください</div>
       <div class="muted" id="metaFoot" style="margin-top:10px;"></div>
 
       <div class="actions">
-        <button id="refresh" class="btnPrimary">同じ確率でも例えを変える</button>
+        <button id="refresh" class="btnPrimary reroll-btn">同じ確率でも例えを変える</button>
+      </div>
+
+      <!-- ✅ 今日のランキング（ボタンの下） -->
+      <div class="slot ranking-card" id="todayRanking" style="margin-top:12px;">
+        <h3>🏆 今日のランキング BEST3</h3>
+        <ol id="rankingList">
+          <li class="muted">（地点を選ぶと表示されます）</li>
+        </ol>
       </div>
     </div>
 
@@ -354,6 +409,11 @@
 
         <!-- ✅ 送信ボタン（script.js側で /api/submit を叩く） -->
         <button id="submitPendingBtn" class="btnPrimary">承認待ちへ送信</button>
+      </div>
+
+      <!-- ✅ ペンネーム（任意） -->
+      <div style="margin-top:10px;">
+        <input id="penName" placeholder="ペンネーム（任意：未入力なら匿名）" />
       </div>
 
       <div style="margin-top:10px;">
