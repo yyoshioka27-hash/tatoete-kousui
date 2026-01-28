@@ -18,7 +18,6 @@ function scheduleRender(){
 
 // =========================
 // ✅ いいね演出用CSSを注入（HTML改修不要）
-// ✅ 追加：匿名表示を薄くする（.pen-muted）
 // =========================
 (function injectLikeFxCSS(){
   const id = "likeFxCSS_v1";
@@ -38,14 +37,10 @@ function scheduleRender(){
       transition: transform 520ms ease, opacity 520ms ease;
       text-shadow: 0 2px 10px rgba(0,0,0,0.10);
     }
-    .like-plusone.__fly {
-      transform: translateY(-18px);
-      opacity: 0;
-    }
-    .pen-muted{
-      opacity: .55;
-      font-weight: 700;
-    }
+    .like-plusone.__fly { transform: translateY(-18px); opacity: 0; }
+
+    /* ✅匿名を薄く */
+    .pen-muted { opacity: .55; font-weight: 700; }
   `;
   document.head.appendChild(style);
 })();
@@ -62,7 +57,6 @@ function likeFxPlusOne(btnEl){
     const parent = btnEl.parentElement;
     if (!parent) return;
 
-    // 親を基準に絶対配置できるように
     const cs = window.getComputedStyle(parent);
     if (cs.position === "static") parent.style.position = "relative";
 
@@ -70,120 +64,60 @@ function likeFxPlusOne(btnEl){
     plus.className = "like-plusone";
     plus.textContent = "+1";
 
-    // ボタン右上あたりに出す
     plus.style.left = (btnEl.offsetLeft + btnEl.offsetWidth - 6) + "px";
     plus.style.top  = (btnEl.offsetTop - 6) + "px";
 
     parent.appendChild(plus);
 
-    requestAnimationFrame(() => {
-      plus.classList.add("__fly");
-    });
+    requestAnimationFrame(() => { plus.classList.add("__fly"); });
 
-    setTimeout(() => {
-      try{ plus.remove(); }catch{}
-    }, 700);
+    setTimeout(() => { try{ plus.remove(); }catch{} }, 700);
   }catch{}
 }
 
 // ==============================
-// ✅ ペンネーム（唯一 + PIN / token）
-// - HTMLを増やさず運用するため、PINは prompt() で聞く
-// - tokenは localStorage に保存
+// ✅ 合言葉（PIN）入力欄をJS側で自動生成（HTML改修不要）
 // ==============================
-const LS_PEN_TOKENS = "penTokens_v1"; // { "山田": "token...", ... }
+(function ensurePenPinDom(){
+  const pen = document.getElementById("penName");
+  if (!pen) return;
+  if (document.getElementById("penPin")) return;
 
-function loadPenTokens(){
-  try{
-    const raw = localStorage.getItem(LS_PEN_TOKENS);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    return (obj && typeof obj === "object") ? obj : {};
-  }catch{ return {}; }
-}
-function savePenTokens(obj){
-  try{ localStorage.setItem(LS_PEN_TOKENS, JSON.stringify(obj || {})); }catch{}
-}
-function normPenNameClient(v){
-  const s = String(v ?? "").trim().replace(/[ 　]+/g, " ");
-  if (!s) return "";
-  // 予約語は匿名扱いに寄せる
-  const low = s.toLowerCase();
-  if (low === "匿名" || low === "(匿名)" || low === "anonymous") return "";
-  return s;
-}
+  const pin = document.createElement("input");
+  pin.id = "penPin";
+  pin.type = "password";
+  pin.autocomplete = "off";
+  pin.placeholder = "合言葉（初回登録/別端末ログイン用）";
+  pin.style.width = "100%";
+  pin.style.boxSizing = "border-box";
+  pin.style.marginTop = "8px";
+  pin.style.padding = "12px 14px";
+  pin.style.borderRadius = "12px";
+  pin.style.border = "1px solid rgba(15,23,42,.12)";
 
-async function penAuth(penName, pin){
-  const res = await fetch(`${API_BASE}/api/penname/auth`, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ penName, pin })
-  });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `pen auth failed ${res.status}`);
-  return data; // {ok:true, penName, token}
-}
+  const note = document.createElement("div");
+  note.className = "muted";
+  note.style.marginTop = "6px";
+  note.textContent = "※合言葉は一般公開されません。忘れるとそのペンネームは使えません（救済なし）。";
 
-async function penRegister(penName, pin){
-  const res = await fetch(`${API_BASE}/api/penname/register`, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ penName, pin })
-  });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `pen register failed ${res.status}`);
-  return data; // {ok:true, penName, token}
-}
-
-// ✅ 投稿時に token を確実に用意する（救済なし：PIN忘れたら終わり）
-// - 既に token があればそれを使う
-// - 無ければ PIN を聞いて auth
-// - 未登録なら register（＝その瞬間にその名前を確保）
-async function ensurePenToken(penNameRaw, statusEl){
-  const penName = normPenNameClient(penNameRaw);
-  if (!penName) return null;
-
-  const tokens = loadPenTokens();
-  if (tokens[penName]) return tokens[penName];
-
-  const pin = prompt(`ペンネーム「${penName}」の合言葉（PIN）を入力してください。\n※救済なし：忘れたら別名でお願いします`);
-  if (!pin) throw new Error("pin_required");
-
-  try{
-    if (statusEl) statusEl.textContent = "🔐 合言葉確認中…";
-    const out = await penAuth(penName, pin);
-    tokens[penName] = out.token;
-    savePenTokens(tokens);
-    return out.token;
-  }catch(e){
-    const msg = String(e?.message || e);
-
-    // 未登録なら登録（＝同名が既に取られてたらここで弾かれる）
-    if (msg.includes("penname_not_registered")) {
-      if (statusEl) statusEl.textContent = "🆕 未登録のため登録します…";
-      const out = await penRegister(penName, pin);
-      tokens[penName] = out.token;
-      savePenTokens(tokens);
-      return out.token;
-    }
-
-    // それ以外はそのまま上げる（PIN違いなど）
-    throw e;
-  }
-}
+  pen.insertAdjacentElement("afterend", pin);
+  pin.insertAdjacentElement("afterend", note);
+})();
 
 // ==============================
 // 承認待ち投稿（Workers）
-// ✅ token を送る（penNameありのときのみ必須）
 // ==============================
-async function submitToPending(mode, bucket, text, penName, token){
+async function submitToPending(mode, bucket, text, penName, penPin){
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
     headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ mode, bucket, text, penName, token, from: "mobile" })
+    body: JSON.stringify({ mode, bucket, text, penName, penPin, from: "mobile" })
   });
   const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `submit failed ${res.status}`);
+  if (!res.ok || !data?.ok) {
+    const code = data?.code || data?.error || `submit failed ${res.status}`;
+    throw new Error(code);
+  }
   return data;
 }
 
@@ -214,11 +148,10 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 }
 
 // ==============================
-// 👍 いいね（Workers）
+// ✅ いいね（Workers）
 // - public/base/json すべて対象
 // ==============================
 async function likeAny(payload){
-  // payload: { id, mode, bucket, text, penName, source }
   const res = await fetch(`${API_BASE}/api/like`, {
     method: "POST",
     headers: { "Content-Type":"application/json" },
@@ -226,7 +159,7 @@ async function likeAny(payload){
   });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
-  return data; // {ok:true, id, likesToday}
+  return data;
 }
 
 // ==============================
@@ -247,7 +180,7 @@ async function fetchRankingToday(mode, bucket, limit = 3){
 // 共有ネタ（GitHub PagesのJSON / metaphors.json）
 // ==============================
 const SHARED_JSON_URL = "./metaphors.json";
-let sharedItems = []; // [{mode,bucket,text}, ...]
+let sharedItems = [];
 
 window.JSON_METAPHORS = window.JSON_METAPHORS || [];
 
@@ -290,10 +223,9 @@ function getSharedItems(mode, bucket) {
 }
 
 // ==============================
-// ✅ publicネタ（Workers /api/public）
-// - mode×bucket のキャッシュ
+// ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
-const publicCache = new Map(); // key: "mode_bucket" => [{id,text,penName}, ...]
+const publicCache = new Map(); // "mode_bucket" => [{id,text,penName}, ...]
 
 function keyMB(mode, bucket){
   const m = (mode === "fun" ? "fun" : "trivia");
@@ -352,18 +284,16 @@ let state = {
   tz: null,
   source: "API: 未接続",
   currentPhrases: {
-    // ✅ penDisplay を追加（表示用）、penName は「実名 or null」
-    m: { text: null, source: null, id: null, penName: null, penDisplay: null, likesToday: 0, mode: null, bucket: null },
-    d: { text: null, source: null, id: null, penName: null, penDisplay: null, likesToday: 0, mode: null, bucket: null },
-    e: { text: null, source: null, id: null, penName: null, penDisplay: null, likesToday: 0, mode: null, bucket: null }
+    m: { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null },
+    d: { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null },
+    e: { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null }
   }
 };
 
 const $ = (id) => document.getElementById(id);
 
 // =========================
-// ✅ 全ネタを一意ID化（base/json も集計対象にする）
-// - 速度優先: FNV-1a 32bit
+// ✅ 全ネタを一意ID化（base/json も集計対象）
 // =========================
 function fnv1a32(str){
   let h = 0x811c9dc5;
@@ -387,8 +317,8 @@ function makeGlobalId({mode, bucket, text, source}){
 // =========================
 function iconForPop(roundedPop) {
   const p = Number(roundedPop);
-  if (p <= 20) return "🌤️";
-  if (p <= 60) return "☁️";
+  if (p <= 20) return "☀️";
+  if (p <= 60) return "⛅";
   return "🌧️";
 }
 function setIcon(slotKey, roundedPop) {
@@ -399,7 +329,7 @@ function setIcon(slotKey, roundedPop) {
 }
 
 // =========================
-// ✅ いいねDOMが無い環境でも自動生成する（HTML改修不要）
+// ✅ いいねDOMが無い環境でも自動生成
 // =========================
 function ensureLikeDom(slot){
   const btnId = `like_${slot}`;
@@ -445,7 +375,7 @@ function ensureLikeDom(slot){
 }
 
 // =========================
-// ネタ抽選（base + JSON + public を混ぜる）
+// ネタ抽選（base + JSON + public）
 // =========================
 const lastPickKey = {};
 
@@ -462,8 +392,6 @@ function getBaseTexts(mode, bucket) {
   return base.map(x => String(x || "").trim()).filter(Boolean);
 }
 
-// ✅ 公開ネタは全部候補に混ぜる（public/base/json全部）
-// - 重複は text で除去（public優先）
 function buildCandidatePool(mode, bucket) {
   const b = window.bucket10(bucket);
   const m = (mode === "fun" ? "fun" : "trivia");
@@ -482,7 +410,7 @@ function buildCandidatePool(mode, bucket) {
     penName: null
   }));
 
-  const publicItems = getPublicItems(m, b); // [{text,source:"public",id,penName}]
+  const publicItems = getPublicItems(m, b);
 
   const merged = [...publicItems, ...jsonItems, ...baseItems];
 
@@ -534,10 +462,7 @@ function getCurrentMainBucket(){
 }
 
 // =========================
-// 👍 UI（公開ネタ＝全部対象）
-// - id がある時は表示・押下可能
-// - ✅FIX1: いいねはランキングと同じ代表bucketに入れる（反映ズレ防止）
-// - ✅②: ぷに＋+1演出
+// ✅ UI（公開ネタ＝全部対象）
 // =========================
 function updateLikeUI(slot) {
   ensureLikeDom(slot);
@@ -577,12 +502,10 @@ function updateLikeUI(slot) {
         mode: phraseObj.mode || getSelectedMode(),
         bucket: Number(mainBucket ?? phraseObj.bucket ?? 0),
         text: phraseObj.text,
-        // ✅ 匿名は null を送る（meta保存を匿名に寄せる）
-        penName: phraseObj.penName || null,
+        penName: (phraseObj.penName && phraseObj.penName !== "匿名") ? phraseObj.penName : null,
         source: phraseObj.source || null
       });
 
-      // ✅②演出
       likeFxPop(btnEl);
       likeFxPlusOne(btnEl);
 
@@ -625,14 +548,21 @@ function normalizePlaceName(input) {
     .trim();
 }
 
-// ✅ render用 escape（meta表示で innerHTML を使うため）
-function esc(s){
+function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+// =========================
+// theme（無ければ何もしない）
+// =========================
+function applyTheme(_rounded){
+  // 既存のHTML/CSS側にapplyThemeがあったり、色テーマ拡張してる場合に備えてダミー
+  // 必要ならここでCSS変数を変える等も可能
 }
 
 // =========================
@@ -658,7 +588,7 @@ function render() {
       if (metaEl) metaEl.textContent = "データなし";
       setIcon(slotKey, null);
 
-      state.currentPhrases[slotKey] = { text: null, source: null, id: null, penName: null, penDisplay: null, likesToday: 0, mode: null, bucket: null };
+      state.currentPhrases[slotKey] = { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null };
       updateLikeUI(slotKey);
       updateDeleteUI(slotKey);
       return null;
@@ -671,18 +601,18 @@ function render() {
     const mode = getSelectedMode();
     const picked = pickMetaphor(mode, rounded);
 
-    // ✅③: ペンネーム未入力は常に「(匿名)」で統一（薄く表示）
-    const penRaw = (picked.penName && String(picked.penName).trim()) ? String(picked.penName).trim() : null;
-    const displayPen = penRaw ? penRaw : "(匿名)";
+    // ✅ ペンネーム未入力は常に「匿名」で統一（薄く表示）
+    const displayPen = (picked.penName && String(picked.penName).trim())
+      ? String(picked.penName).trim()
+      : "匿名";
 
     if (metaEl) {
-      const penHtml = penRaw
-        ? `（${esc(displayPen)}）`
-        : `（<span class="pen-muted">${esc(displayPen)}</span>）`;
-      metaEl.innerHTML = `${esc(label)}：${esc(picked.text)}${penHtml}`;
+      const penHtml = (displayPen === "匿名")
+        ? `<span class="pen-muted">（匿名）</span>`
+        : `<span class="muted">（${escapeHtml(displayPen)}）</span>`;
+      metaEl.innerHTML = `${escapeHtml(label)}：${escapeHtml(picked.text)} ${penHtml}`;
     }
 
-    // ✅ ネタが変わったら likesToday を引き継がない（同じIDのときだけ維持）
     const prevId = state.currentPhrases[slotKey]?.id || null;
     const nextId = picked.id || null;
     const nextLikes = (prevId && nextId && prevId === nextId)
@@ -693,8 +623,7 @@ function render() {
       text: picked.text,
       source: picked.source || null,
       id: nextId,
-      penName: penRaw,          // ✅ 実データ（匿名なら null）
-      penDisplay: displayPen,   // ✅ 表示用
+      penName: displayPen,
       likesToday: nextLikes,
       mode,
       bucket: rounded
@@ -748,7 +677,7 @@ function renderEmpty() {
 
     setIcon(k, null);
 
-    state.currentPhrases[k] = { text: null, source: null, id: null, penName: null, penDisplay: null, likesToday: 0, mode: null, bucket: null };
+    state.currentPhrases[k] = { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null };
     updateLikeUI(k);
     updateDeleteUI(k);
   });
@@ -810,18 +739,28 @@ async function fetchPopsBySlots(lat, lon) {
 }
 
 // =========================
-// ランキング表示（例えを変えるボタンの下）
+// ✅ ランキングDOM（無い環境でも自動生成）
+// 「例えを変える」ボタンの下に出す
 // =========================
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function ensureRankingDom(){
+  if (document.getElementById("todayRankingWrap")) return;
+
+  const refreshBtn = document.getElementById("refresh");
+  if (!refreshBtn) return;
+
+  const wrap = document.createElement("div");
+  wrap.id = "todayRankingWrap";
+  wrap.style.marginTop = "14px";
+
+  // refresh の直下に出したいので afterend
+  refreshBtn.insertAdjacentElement("afterend", wrap);
 }
 
+// =========================
+// ランキング表示（例えを変えるボタンの下）
+// =========================
 async function renderRanking(){
+  ensureRankingDom();
   const wrap = document.getElementById("todayRankingWrap");
   if (!wrap) return;
 
@@ -833,7 +772,6 @@ async function renderRanking(){
     return;
   }
 
-  // ✅① 明記（0:00リセット）
   wrap.innerHTML = `
     <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
       <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
@@ -853,11 +791,10 @@ async function renderRanking(){
     }
 
     const rows = items.map((it, idx) => {
-      // ✅③ ランキング側も匿名表示に寄せる（薄く）
-      const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "(匿名)";
-      const pen = (it.penName && String(it.penName).trim())
-        ? ` <span class="muted">(${escapeHtml(p)})</span>`
-        : ` <span class="muted">(<span class="pen-muted">${escapeHtml(p)}</span>)</span>`;
+      const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+      const pen = (p === "匿名")
+        ? ` <span class="pen-muted">（匿名）</span>`
+        : ` <span class="muted">（${escapeHtml(p)}）</span>`;
       const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
       return `
         <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
@@ -981,108 +918,65 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 document.getElementById("refresh").onclick = () => scheduleRender();
 
 // ==============================
-// ✅ ネタ追加（承認待ちへ送信 一本化）
-// - ✅③: ペンネーム未入力は (匿名)
-// - ✅ ペンネームありは token必須（PIN救済なし）
+// ✅ ネタ追加（承認待ちへ送信）
+// - ✅ ペンネーム指定時はPIN必須（救済なし）
+// - ✅ ペンネーム空欄ならPIN不要（= 匿名投稿）
 // ==============================
-(function setupSubmitPending(){
-  const btn = document.getElementById("submitPendingBtn");
-  if (!btn) return;
+(function wireSubmit(){
+  const btn = document.getElementById("submit");
+  const ta  = document.getElementById("newPhrase");
+  if (!btn || !ta) return;
 
   btn.onclick = async () => {
-    const statusEl = document.getElementById("addStatus");
+    const mode = getSelectedMode();
+    const bucketSel = document.getElementById("bucket");
+    const bucket = bucketSel ? Number(bucketSel.value) : getCurrentMainBucket() ?? 0;
 
-    const mode = ($("newPhraseMode")?.value ?? "trivia");
-    const bucketRaw = Number($("newPhraseBucket")?.value ?? 0);
-    const bucket = window.bucket10(bucketRaw);
-    const text = (document.getElementById("newPhrase")?.value ?? "").trim();
+    const text = String(ta.value || "").trim();
+    if (!text) { alert("ネタが空です"); return; }
 
-    const penNameRaw = (document.getElementById("penName")?.value ?? "").trim();
-    const penName = normPenNameClient(penNameRaw) || ""; // 空は匿名
+    const penEl = document.getElementById("penName");
+    const pinEl = document.getElementById("penPin");
 
-    if (!text) {
-      if (statusEl) statusEl.textContent = "⚠️ ネタが空です";
+    const penName = penEl ? String(penEl.value || "").trim() : "";
+    const penPin  = pinEl ? String(pinEl.value || "").trim() : "";
+
+    // ✅ペンネームあり → PIN必須
+    if (penName && !penPin) {
+      alert("ペンネームを使う場合は合言葉（PIN）が必要です。");
       return;
     }
 
     btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = "送信中…";
+
     try{
-      if (statusEl) statusEl.textContent = "📨 承認待ちへ送信中…";
+      await submitToPending(mode, window.bucket10(bucket), text, (penName || null), (penName ? penPin : null));
+      ta.value = "";
+      alert("承認待ちに送信しました（管理画面で承認すると公開されます）");
 
-      // ✅ ペンネームあり → token取得（PIN prompt）
-      const token = penName ? await ensurePenToken(penName, statusEl) : null;
+      // 送信後：public cache を温め直し（同バケット）
+      const b = window.bucket10(bucket);
+      const k = keyMB(mode, b);
+      publicCache.delete(k);
+      await warmPublicCache(mode, b);
 
-      await submitToPending(mode, bucket, text, penName || null, token);
-
-      if (statusEl) statusEl.textContent =
-        "✅ 送信しました。承認されると一般公開されます。";
-
-      const ta = document.getElementById("newPhrase");
-      if (ta) ta.value = "";
-      const pn = document.getElementById("penName");
-      if (pn) pn.value = "";
+      scheduleRender();
     }catch(e){
-      const msg = String(e?.message || e);
-
-      // ここから表示を分かりやすく
-      if (msg.includes("penname_taken")) {
-        if (statusEl) statusEl.textContent = "⚠️ そのペンネームは既に使われています（先に誰かが登録済み）。別の名前にしてください。";
-      } else if (msg.includes("penname_auth_required")) {
-        if (statusEl) statusEl.textContent = "⚠️ 合言葉が合いません（救済なし）。別のペンネームにしてください。";
-      } else if (msg.includes("pin_required")) {
-        if (statusEl) statusEl.textContent = "⚠️ 合言葉（PIN）が未入力のため中止しました。";
-      } else if (msg.includes("invalid_penname")) {
-        if (statusEl) statusEl.textContent = "⚠️ ペンネームが不正です（2〜20文字推奨、匿名系は不可）。";
-      } else if (msg.includes("invalid_pin")) {
-        if (statusEl) statusEl.textContent = "⚠️ 合言葉（PIN）が不正です（4文字以上推奨）。";
-      } else if (msg.includes("submit limit")) {
-        if (statusEl) statusEl.textContent = "⚠️ 今日は投稿上限（10件）に達しました。";
-      } else {
-        if (statusEl) statusEl.textContent = `⚠️ 送信に失敗：${msg}`;
-      }
+      alert(`送信失敗：${e?.message || e}`);
     }finally{
       btn.disabled = false;
+      btn.textContent = oldText || "送信";
     }
   };
 })();
 
 // ==============================
-// 初期化
+// ✅ 初期化
 // ==============================
-scheduleRender();
-loadSharedJSON().then(() => scheduleRender());
-
-// ==============================
-// Theme (Gradient) by precipitation
-// ==============================
-function themeFromPercent(p){
-  if (p <= 10)  return { bg1:"#fff7d6", bg2:"#ffffff", accent:"#f59e0b" };
-  if (p <= 30)  return { bg1:"#e8f6ff", bg2:"#ffffff", accent:"#38bdf8" };
-  if (p <= 50)  return { bg1:"#eaf0ff", bg2:"#f8fafc", accent:"#60a5fa" };
-  if (p <= 70)  return { bg1:"#dbeafe", bg2:"#eff6ff", accent:"#2563eb" };
-  if (p <= 90)  return { bg1:"#c7d2fe", bg2:"#e0e7ff", accent:"#1d4ed8" };
-  return          { bg1:"#e9d5ff", bg2:"#0b1220", accent:"#a855f7" }; // 100%
-}
-
-function applyTheme(p){
-  const t = themeFromPercent(Number(p));
-  const root = document.documentElement;
-
-  root.style.setProperty("--bg1", t.bg1);
-  root.style.setProperty("--bg2", t.bg2);
-  root.style.setProperty("--accent", t.accent);
-
-  if (Number(p) >= 100) {
-    root.style.setProperty("--text", "#f9fafb");
-    root.style.setProperty("--sub", "rgba(249,250,251,0.75)");
-    root.style.setProperty("--card", "rgba(17,24,39,0.55)");
-    root.style.setProperty("--shadow", "0 14px 30px rgba(0,0,0,0.45)");
-  } else {
-    root.style.setProperty("--text", "#0f172a");
-    root.style.setProperty("--sub", "#475569");
-    root.style.setProperty("--card", "rgba(255,255,255,0.86)");
-    root.style.setProperty("--shadow", "0 10px 26px rgba(0,0,0,0.10)");
-  }
-}
-
-// # END
+(async function init(){
+  try { ensureRankingDom(); } catch {}
+  try { await loadSharedJSON(); } catch {}
+  try { scheduleRender(); } catch {}
+})();
