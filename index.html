@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#ffffff" />
   <meta name="description" content="降水確率を“別の確率”で例えてみる。雑学/お笑いの2モード対応。PWAでホーム画面に追加OK。" />
   <link rel="manifest" href="./manifest.webmanifest" />
+
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
 
@@ -26,6 +27,7 @@
 
       --radius: 18px;
       --radius2: 14px;
+
       --tap: 44px;
     }
 
@@ -36,10 +38,12 @@
       background: linear-gradient(180deg, var(--bg1), var(--bg2));
       color: var(--text);
     }
+
     .container{
       max-width: 860px;
       margin: 0 auto;
     }
+
     h1{
       margin: 0 0 14px;
       font-size: 26px;
@@ -68,7 +72,13 @@
       font-size: 13px;
       line-height: 1.4;
     }
-    .muted{ color:#64748b; font-size:12px; }
+
+    .big{
+      font-size: 52px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
 
     input, select, textarea{
       padding: 12px 14px;
@@ -109,6 +119,9 @@
       color: #fff;
       box-shadow: 0 14px 28px rgba(37,99,235,0.18);
     }
+    .btnPrimary:hover{
+      box-shadow: 0 16px 34px rgba(37,99,235,0.22);
+    }
 
     .row{
       display: grid;
@@ -117,95 +130,7 @@
       align-items: center;
     }
 
-    /* ====== モード（雑学/お笑い）位置ズレ完全修正 ====== */
-    .example-mode .modeWrap{
-      display:flex;
-      gap:16px;
-      align-items:center;
-      justify-content:flex-start;
-      margin-top:10px;
-    }
-    .example-mode label{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      cursor:pointer;
-      white-space:nowrap;
-      font-size:16px;
-    }
-    .example-mode input[type="radio"]{
-      margin:0;
-      transform: translateY(1px);
-    }
-
-    /* ====== 朝昼夜（縦並び・大きく） ====== */
-    .slot{
-      border: 1px solid rgba(15,23,42,0.08);
-      border-radius: var(--radius2);
-      padding: 14px;
-      margin-top: 12px;
-      background: rgba(255,255,255,0.72);
-    }
-    .slotHead{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-    }
-    .slotLabel{
-      font-size: 13px;
-      color: var(--sub);
-      font-weight: 700;
-    }
-    .slotMain{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      margin-top:6px;
-    }
-    .wx{
-      font-size: 30px;
-      width: 38px;
-      text-align:center;
-      line-height:1;
-    }
-    .pop{
-      font-size: 44px;
-      font-weight: 900;
-      letter-spacing: -1px;
-      line-height: 1;
-      min-width: 110px;
-    }
-    .metaLine{
-      margin-top: 8px;
-      font-size: 16px;       /* ← 小さすぎ問題を解消 */
-      color: #1f2937;
-      line-height: 1.65;
-      font-weight: 600;
-    }
-
-    .actions{
-      display:flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-top: 12px;
-    }
-
-    .likeBtn{
-      min-height: 40px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 15px;
-      background: rgba(255,255,255,0.92);
-    }
-    .badge{
-      margin-left:6px;
-      font-size:16px;
-      font-weight:800;
-      color:#f59e0b;
-    }
-
+    .muted{ color:#64748b; font-size:12px; }
     .pill{
       display:inline-block;
       padding: 6px 10px;
@@ -216,16 +141,64 @@
       background: rgba(255,255,255,0.80);
     }
 
-    /* ====== ランキング ====== */
-    .rankCardTitle{
-      font-size: 16px;
-      font-weight: 900;
-      margin: 0 0 8px;
+    .slot{
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: var(--radius2);
+      padding: 14px;
+      margin-top: 12px;
+      background: rgba(255,255,255,0.72);
     }
-    .rankHint{
-      font-size: 12px;
-      color: var(--sub);
-      margin: 0 0 8px;
+    .slot .big{ font-size: 34px; }
+    .slot .small{ margin-top: 6px; }
+
+    #meta_m, #meta_d, #meta_e{
+      margin-top: 8px;
+      font-size: 16px; /* ← 前バージョンと同じ “読めるサイズ” */
+      color: #1f2937;
+      line-height: 1.65;
+      font-weight: 500;
+    }
+
+    .actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    /* ✅ 雑学/お笑い：前バージョンの並び・ズレ防止 */
+    .example-mode .modeWrap{
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .example-mode label{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .example-mode input[type="radio"]{
+      margin: 0;
+      transform: translateY(1px);
+    }
+
+    /* ✅ 例えを変える：ふわっと表示用 */
+    #refreshArea{
+      position: relative;
+      overflow: hidden;
+    }
+    .floatAnim{
+      animation: floatUp .35s ease;
+    }
+    @keyframes floatUp{
+      0%{ transform: translateY(8px); opacity: .0; }
+      100%{ transform: translateY(0); opacity: 1; }
     }
 
     .footer{
@@ -239,10 +212,11 @@
     @media (max-width: 600px){
       body{ padding: 12px; }
       h1{ font-size: 22px; }
+      .subtitle{ font-size: 13px; }
       .card{ padding: 12px; }
       .row{ grid-template-columns: 1fr; }
-      .pop{ font-size: 40px; min-width: 100px; }
-      .metaLine{ font-size: 15px; }
+      #meta_m, #meta_d, #meta_e{ font-size: 15px; }
+      .pill{ font-size: 11px; padding: 5px 8px; }
     }
   </style>
 </head>
@@ -254,7 +228,6 @@
       <div class="subtitle">－降水確率を“別の確率”で例えてみた。</div>
     </h1>
 
-    <!-- 地点検索 -->
     <div class="card">
       <div class="small">天気予報を知りたい地点</div>
       <div class="row" style="margin-top:10px;">
@@ -272,74 +245,69 @@
       </div>
     </div>
 
-    <!-- モード -->
     <div class="card example-mode">
       <div class="small">例えモード</div>
+
       <div class="modeWrap">
         <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
         <label><input type="radio" name="mode" value="fun"> お笑い</label>
       </div>
+
       <div class="muted" style="margin-top:10px;">
         ※同じ確率でも、毎回ちがうネタが出ます（👍で出やすくなります）
       </div>
     </div>
 
-    <!-- 降水確率（縦並び：朝→昼→夜） -->
+    <!-- ✅ 前バージョンと同じ：朝/昼/夜を縦に並べる -->
     <div class="card">
       <div class="small">今日の降水確率（朝/昼/夜）</div>
       <div class="small" id="popHint">地点を選ぶと自動取得します</div>
 
       <!-- 朝 -->
       <div class="slot">
-        <div class="slotHead">
-          <div class="slotLabel">朝（6–11時）</div>
+        <div class="small">朝（6–11時）</div>
+        <div class="big">
+          <span id="wx_m" style="margin-right:8px;">--</span>
+          <span id="pop_m">--%</span>
         </div>
-        <div class="slotMain">
-          <div class="wx" id="wx_m">--</div>
-          <div class="pop" id="pop_m">--%</div>
-        </div>
-        <div class="metaLine" id="meta_m"></div>
+        <div class="small" id="meta_m"></div>
 
         <div class="actions">
           <button id="del_m" style="display:none;">このネタを削除</button>
-          <button id="like_m" class="likeBtn">👍いいね (<span id="likeCount_m">0</span>)</button>
-          <span id="badge_m" class="badge"></span>
+          <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
+          <span id="badge_m" style="margin-left:6px;font-size:20px;"></span>
         </div>
       </div>
 
       <!-- 昼 -->
       <div class="slot">
-        <div class="slotHead">
-          <div class="slotLabel">昼（12–17時）</div>
+        <div class="small">昼（12–17時）</div>
+        <div class="big">
+          <span id="wx_d" style="margin-right:8px;">--</span>
+          <span id="pop_d">--%</span>
         </div>
-        <div class="slotMain">
-          <div class="wx" id="wx_d">--</div>
-          <div class="pop" id="pop_d">--%</div>
-        </div>
-        <div class="metaLine" id="meta_d"></div>
+        <div class="small" id="meta_d"></div>
 
         <div class="actions">
           <button id="del_d" style="display:none;">このネタを削除</button>
-          <button id="like_d" class="likeBtn">👍いいね (<span id="likeCount_d">0</span>)</button>
-          <span id="badge_d" class="badge"></span>
+          <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
+          <span id="badge_d" style="margin-left:6px;font-size:20px;"></span>
         </div>
       </div>
 
       <!-- 夜 -->
       <div class="slot">
-        <div class="slotHead">
-          <div class="slotLabel">夜（18–23時）</div>
+        <div class="small">夜（18–23時）</div>
+        <div class="big">
+          <span id="wx_e" style="margin-right:8px;">--</span>
+          <span id="pop_e">--%</span>
         </div>
-        <div class="slotMain">
-          <div class="wx" id="wx_e">--</div>
-          <div class="pop" id="pop_e">--%</div>
-        </div>
-        <div class="metaLine" id="meta_e"></div>
+        <div class="small" id="meta_e"></div>
 
         <div class="actions">
           <button id="del_e" style="display:none;">このネタを削除</button>
-          <button id="like_e" class="likeBtn">👍いいね (<span id="likeCount_e">0</span>)</button>
-          <span id="badge_e" class="badge"></span>
+          <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
+          <span id="badge_e" style="margin-left:6px;font-size:20px;"></span>
         </div>
       </div>
 
@@ -349,19 +317,17 @@
       </div>
     </div>
 
-    <!-- ✅ 赤枠の総評（人間向け翻訳）ブロックは “完全削除” -->
-
-    <!-- 例えを変える -->
-    <div class="card">
-      <div class="actions" style="justify-content:center;">
+    <!-- ✅ 人間向け翻訳ブロックは削除。ボタンだけ残す -->
+    <div class="card" id="refreshArea">
+      <div class="actions">
         <button id="refresh" class="btnPrimary" style="width:100%;">同じ確率でも例えを変える</button>
       </div>
 
-      <!-- ランキングは “ボタン直下” -->
+      <!-- ✅ ボタン直下にランキング -->
       <div id="todayRankingWrap" style="margin-top:12px;"></div>
     </div>
 
-    <!-- ネタ追加 -->
+    <!-- ✅ ネタ追加：ペンネーム欄追加 -->
     <div class="card" id="addSection">
       <div class="small"><b>ネタ追加（承認待ちへ送信）</b></div>
       <div class="muted" style="margin-top:8px;">
@@ -393,7 +359,6 @@
         <button id="submitPendingBtn" class="btnPrimary">承認待ちへ送信</button>
       </div>
 
-      <!-- ✅ ペンネーム -->
       <div style="margin-top:10px;">
         <input id="penName" placeholder="ペンネーム（任意）" />
       </div>
@@ -411,10 +376,9 @@
 
   </div><!-- /.container -->
 
-  <!-- ✅ 重要：ネタ（metaphors.js）を先に読む -->
-  <script src="metaphors.js?v=12"></script>
-  <!-- ✅ script.js はその次 -->
-  <script defer src="script.js?v=12"></script>
+  <!-- ✅ 重要：metaphors.js が “確実に” 先 -->
+  <script src="metaphors.js?v=99"></script>
+  <script defer src="script.js?v=99"></script>
 
   <!-- # END -->
 </body>
