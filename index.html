@@ -6,162 +6,101 @@
   <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="./manifest.webmanifest" />
 
-  <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
+  <title>たとえて、降水確率。</title>
 
   <style>
-    /* =========================
-       Pro UI Base
-    ========================= */
     :root{
       --bg1:#ffffff;
       --bg2:#ffffff;
       --accent:#2563eb;
       --text:#0f172a;
       --sub:#475569;
-
-      --card: rgba(255,255,255,0.86);
-      --card-border: rgba(15,23,42,0.08);
-      --shadow: 0 12px 28px rgba(2,6,23,0.10);
+      --card: rgba(255,255,255,0.9);
+      --shadow: 0 10px 26px rgba(0,0,0,0.1);
     }
 
     body{
       margin:0;
-      font-family:-apple-system, BlinkMacSystemFont, "Segoe UI",
-                   "Hiragino Sans", "Noto Sans JP", sans-serif;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:linear-gradient(180deg,var(--bg1),var(--bg2));
       color:var(--text);
-      background:
-        linear-gradient(180deg,var(--bg1),var(--bg2));
     }
 
     .wrap{
-      max-width:720px;
+      max-width:640px;
       margin:0 auto;
       padding:16px;
     }
 
-    h1{
-      font-size:22px;
-      margin:8px 0 4px;
-    }
-    .subtitle{
-      font-size:13px;
-      color:var(--sub);
-      margin-bottom:14px;
-    }
-
     .card{
       background:var(--card);
-      border:1px solid var(--card-border);
-      border-radius:18px;
+      border-radius:16px;
       box-shadow:var(--shadow);
       padding:16px;
-      margin-bottom:14px;
+      margin-bottom:16px;
+    }
+
+    h1{
+      font-size:20px;
+      margin:0 0 8px;
     }
 
     .row{
       display:flex;
-      gap:10px;
-      flex-wrap:wrap;
+      align-items:center;
+      gap:12px;
+      margin-bottom:12px;
     }
 
-    input, select, textarea, button{
-      font-family:inherit;
+    .wx{
+      font-size:24px;
+      width:32px;
+      text-align:center;
+    }
+
+    .pop{
+      font-size:22px;
+      font-weight:700;
+      width:60px;
+    }
+
+    .meta{
+      flex:1;
       font-size:14px;
-      border-radius:14px;
-      border:1px solid var(--card-border);
-      padding:10px 12px;
     }
 
-    textarea{ width:100%; resize:vertical; }
-
-    button{
-      background:#fff;
+    .like{
+      font-size:14px;
       cursor:pointer;
+      background:#fff;
+      border:1px solid #ddd;
+      border-radius:12px;
+      padding:4px 10px;
     }
-    button.primary{
+
+    .btn-main{
+      width:100%;
       background:var(--accent);
       color:#fff;
       border:none;
-    }
-
-    button:disabled{
-      opacity:.5;
-      cursor:not-allowed;
-    }
-
-    .status{
-      font-size:12px;
-      margin-top:6px;
-    }
-    .status.ok{ color:#16a34a; }
-    .status.ng{ color:#ef4444; }
-    .status.muted{ color:#64748b; }
-
-    /* =========================
-       Weather blocks
-    ========================= */
-    .slots{
-      display:grid;
-      grid-template-columns: repeat(3,1fr);
-      gap:10px;
-      margin-top:10px;
-    }
-    .slot{
-      text-align:center;
-      padding:12px 8px;
       border-radius:14px;
-      background:rgba(255,255,255,0.65);
-      border:1px solid var(--card-border);
-    }
-    .slot .icon{ font-size:22px; }
-    .slot .pop{ font-size:20px; font-weight:800; margin-top:4px; }
-    .slot .meta{ font-size:12px; margin-top:6px; }
-
-    .likeRow{
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      gap:6px;
-      margin-top:6px;
-      font-size:12px;
-    }
-
-    .likeBtn{
-      border:none;
-      background:transparent;
+      padding:14px;
+      font-size:16px;
       cursor:pointer;
+    }
+
+    .ranking-item{
       font-size:14px;
+      margin:6px 0;
     }
 
-    .badge{
-      color:#f59e0b;
-      font-weight:700;
-    }
-
-    /* =========================
-       Actions
-    ========================= */
-    .actions{
-      margin-top:14px;
-      display:flex;
-      justify-content:center;
-    }
-
-    /* =========================
-       Ranking (script.jsが中身生成)
-    ========================= */
-    #todayRankingWrap{
-      margin-top:12px;
-    }
-
-    /* =========================
-       Footer
-    ========================= */
-    footer{
-      font-size:11px;
-      color:var(--sub);
-      margin-top:10px;
-      line-height:1.5;
+    input, select, textarea{
+      width:100%;
+      padding:12px;
+      border-radius:12px;
+      border:1px solid #ddd;
+      margin-top:8px;
+      font-size:14px;
     }
   </style>
 </head>
@@ -169,142 +108,90 @@
 <body>
 <div class="wrap">
 
-  <h1>たとえて、降水確率。</h1>
-  <div class="subtitle">降水確率を“別の確率”で例えてみた。</div>
-
-  <!-- =========================
-       地点検索
-  ========================= -->
+  <!-- 地点検索 -->
   <div class="card">
-    <div class="row">
-      <input id="place" placeholder="例：仙台 / Tokyo / Sendai" style="flex:1;">
-      <button id="search" class="primary">検索</button>
-    </div>
-
-    <select id="candidates" disabled style="margin-top:10px;width:100%;"></select>
-
-    <div id="placeStatus" class="status muted"></div>
+    <input id="place" placeholder="例：仙台 / Sendai" />
+    <button id="search" class="btn-main" style="margin-top:8px;">検索</button>
+    <select id="candidates" disabled style="margin-top:8px;"></select>
+    <div id="placeStatus" class="sub"></div>
   </div>
 
-  <!-- =========================
-       モード選択
-  ========================= -->
+  <!-- モード -->
   <div class="card">
-    <div class="row">
-      <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
-      <label><input type="radio" name="mode" value="fun"> お笑い</label>
-    </div>
+    <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
+    <label style="margin-left:12px;"><input type="radio" name="mode" value="fun"> お笑い</label>
   </div>
 
-  <!-- =========================
-       天気 & 例え
-  ========================= -->
+  <!-- 朝 -->
+  <div class="card row">
+    <div class="wx" id="wx_m">--</div>
+    <div class="pop" id="pop_m">--%</div>
+    <div class="meta" id="meta_m">---</div>
+    <button class="like" id="like_m">👍 <span id="likeCount_m">0</span></button>
+  </div>
+
+  <!-- 昼 -->
+  <div class="card row">
+    <div class="wx" id="wx_d">--</div>
+    <div class="pop" id="pop_d">--%</div>
+    <div class="meta" id="meta_d">---</div>
+    <button class="like" id="like_d">👍 <span id="likeCount_d">0</span></button>
+  </div>
+
+  <!-- 夜 -->
+  <div class="card row">
+    <div class="wx" id="wx_e">--</div>
+    <div class="pop" id="pop_e">--%</div>
+    <div class="meta" id="meta_e">---</div>
+    <button class="like" id="like_e">👍 <span id="likeCount_e">0</span></button>
+  </div>
+
+  <!-- 例え変更 -->
   <div class="card">
-    <div id="popHint" class="status muted">地点を選ぶと自動取得します</div>
+    <button id="refresh" class="btn-main">同じ確率で例えを変える</button>
+  </div>
 
-    <div class="slots">
-      <!-- 朝 -->
-      <div class="slot">
-        <div id="wx_m" class="icon">--</div>
-        <div id="pop_m" class="pop">--%</div>
-        <div id="meta_m" class="meta">データなし</div>
-        <div class="likeRow">
-          <button id="like_m" class="likeBtn">👍</button>
-          <span id="likeCount_m">0</span>
-          <span id="badge_m" class="badge"></span>
-        </div>
-      </div>
-
-      <!-- 昼 -->
-      <div class="slot">
-        <div id="wx_d" class="icon">--</div>
-        <div id="pop_d" class="pop">--%</div>
-        <div id="meta_d" class="meta">データなし</div>
-        <div class="likeRow">
-          <button id="like_d" class="likeBtn">👍</button>
-          <span id="likeCount_d">0</span>
-          <span id="badge_d" class="badge"></span>
-        </div>
-      </div>
-
-      <!-- 夜 -->
-      <div class="slot">
-        <div id="wx_e" class="icon">--</div>
-        <div id="pop_e" class="pop">--%</div>
-        <div id="meta_e" class="meta">データなし</div>
-        <div class="likeRow">
-          <button id="like_e" class="likeBtn">👍</button>
-          <span id="likeCount_e">0</span>
-          <span id="badge_e" class="badge"></span>
-        </div>
-      </div>
-    </div>
-
-    <!-- まとめ文 -->
-    <div id="metaphor" style="margin-top:14px;font-weight:700;">
-      地点を選んでください
-    </div>
-
-    <!-- 例えを変える -->
-    <div class="actions">
-      <button id="refresh">🔄 別のたとえにする</button>
-    </div>
-
-    <!-- ↓↓↓ ここ直下にランキングが script.js で自動挿入される ↓↓↓ -->
-
-    <footer id="metaFoot"></footer>
-    <div class="status muted">
-      <span id="sourceTag">API: 未接続</span> /
-      <span id="tzTag">TZ: --</span>
+  <!-- 今日のランキング -->
+  <div class="card">
+    <h1>今日のランキング TOP3</h1>
+    <div id="todayRanking">
+      <div class="sub">まだランキングはありません</div>
     </div>
   </div>
 
-  <!-- =========================
-       ネタ追加（承認待ち）
-  ========================= -->
+  <!-- ネタ追加 -->
   <div class="card">
-    <h3 style="margin-top:0;">ネタを追加する（承認制）</h3>
+    <h1>ネタを追加（承認制）</h1>
+    <select id="newPhraseMode">
+      <option value="trivia">雑学</option>
+      <option value="fun">お笑い</option>
+    </select>
 
-    <div class="row">
-      <select id="newPhraseMode">
-        <option value="trivia">雑学</option>
-        <option value="fun">お笑い</option>
-      </select>
+    <select id="newPhraseBucket">
+      <option value="0">0%</option>
+      <option value="10">10%</option>
+      <option value="20">20%</option>
+      <option value="30">30%</option>
+      <option value="40">40%</option>
+      <option value="50">50%</option>
+      <option value="60">60%</option>
+      <option value="70">70%</option>
+      <option value="80">80%</option>
+      <option value="90">90%</option>
+      <option value="100">100%</option>
+    </select>
 
-      <select id="newPhraseBucket">
-        <option value="0">0%</option>
-        <option value="10">10%</option>
-        <option value="20">20%</option>
-        <option value="30">30%</option>
-        <option value="40">40%</option>
-        <option value="50">50%</option>
-        <option value="60">60%</option>
-        <option value="70">70%</option>
-        <option value="80">80%</option>
-        <option value="90">90%</option>
-        <option value="100">100%</option>
-      </select>
-    </div>
+    <input id="penName" placeholder="ペンネーム（任意）" />
+    <textarea id="newPhrase" placeholder="例えを書いてください"></textarea>
 
-    <!-- ペンネーム -->
-    <input id="penName" placeholder="ペンネーム（任意）" style="margin-top:8px;width:100%;">
-
-    <textarea id="newPhrase" rows="3" placeholder="例：世界人口のうち、英語を話せる人の割合は約20%。"></textarea>
-
-    <button id="submitPendingBtn" class="primary" style="margin-top:8px;">
-      送信（承認待ち）
+    <button id="submitPendingBtn" class="btn-main" style="margin-top:8px;">
+      承認待ちへ送信
     </button>
-
-    <div id="addStatus" class="status muted"></div>
+    <div id="addStatus"></div>
   </div>
 
 </div>
 
-<!-- =========================
-     Scripts
-========================= -->
-<script src="./metaphors.js"></script>
 <script src="./script.js"></script>
-
 </body>
 </html>
