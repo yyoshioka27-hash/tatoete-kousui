@@ -153,7 +153,7 @@
 
     #meta_m, #meta_d, #meta_e{
       margin-top: 8px;
-      font-size: 16px; /* ← 前バージョンと同じ “読めるサイズ” */
+      font-size: 16px;
       color: #1f2937;
       line-height: 1.65;
       font-weight: 500;
@@ -167,7 +167,6 @@
       margin-top: 12px;
     }
 
-    /* ✅ 雑学/お笑い：前バージョンの並び・ズレ防止 */
     .example-mode .modeWrap{
       display: flex;
       flex-direction: column;
@@ -188,7 +187,6 @@
       transform: translateY(1px);
     }
 
-    /* ✅ 例えを変える：ふわっと表示用 */
     #refreshArea{
       position: relative;
       overflow: hidden;
@@ -258,12 +256,10 @@
       </div>
     </div>
 
-    <!-- ✅ 前バージョンと同じ：朝/昼/夜を縦に並べる -->
     <div class="card">
       <div class="small">今日の降水確率（朝/昼/夜）</div>
       <div class="small" id="popHint">地点を選ぶと自動取得します</div>
 
-      <!-- 朝 -->
       <div class="slot">
         <div class="small">朝（6–11時）</div>
         <div class="big">
@@ -279,7 +275,6 @@
         </div>
       </div>
 
-      <!-- 昼 -->
       <div class="slot">
         <div class="small">昼（12–17時）</div>
         <div class="big">
@@ -295,7 +290,6 @@
         </div>
       </div>
 
-      <!-- 夜 -->
       <div class="slot">
         <div class="small">夜（18–23時）</div>
         <div class="big">
@@ -317,17 +311,14 @@
       </div>
     </div>
 
-    <!-- ✅ 人間向け翻訳ブロックは削除。ボタンだけ残す -->
     <div class="card" id="refreshArea">
       <div class="actions">
         <button id="refresh" class="btnPrimary" style="width:100%;">同じ確率でも例えを変える</button>
       </div>
 
-      <!-- ✅ ボタン直下にランキング -->
       <div id="todayRankingWrap" style="margin-top:12px;"></div>
     </div>
 
-    <!-- ✅ ネタ追加：ペンネーム欄追加 -->
     <div class="card" id="addSection">
       <div class="small"><b>ネタ追加（承認待ちへ送信）</b></div>
       <div class="muted" style="margin-top:8px;">
@@ -374,9 +365,8 @@
       API: Open-Meteo / PWA対応（ホーム画面に追加OK）
     </div>
 
-  </div><!-- /.container -->
+  </div>
 
-  <!-- ✅ 重要：metaphors.js が “確実に” 先 -->
   <script src="metaphors.js?v=99"></script>
   <script defer src="script.js?v=99"></script>
 
