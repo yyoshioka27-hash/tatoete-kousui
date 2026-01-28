@@ -2,6 +2,20 @@
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
+// =========================
+// ✅FIX: render 多重呼び出し防止（固まり対策）
+// requestAnimationFrame で 1フレームに 1回だけ render
+// =========================
+let __renderQueued = false;
+function scheduleRender(){
+  if (__renderQueued) return;
+  __renderQueued = true;
+  requestAnimationFrame(() => {
+    __renderQueued = false;
+    try { render(); } catch {}
+  });
+}
+
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
@@ -149,10 +163,10 @@ async function warmPublicCache(mode, bucket){
 function getPublicItems(mode, bucket){
   const k = keyMB(mode, bucket);
 
-  // ✅ 未warmなら裏でwarmして次回renderで混ざるようにする
+  // ✅FIX: 未warmなら warm して scheduleRender（多重render防止）
   if (!publicCache.has(k)) {
     warmPublicCache(mode, bucket).then(() => {
-      try { render(); } catch {}
+      scheduleRender();
     }).catch(() => {});
     return [];
   }
@@ -531,7 +545,6 @@ function escapeHtml(s) {
 
 // 今選んでいる確率（朝昼夜のどれか＝最大の枠）を使う
 function getCurrentMainBucket(){
-  const mode = getSelectedMode();
   if (!state?.pops) return null;
   const arr = [state.pops.m, state.pops.d, state.pops.e].filter(v => v != null);
   if (!arr.length) return null;
@@ -579,7 +592,8 @@ async function renderRanking(){
       `;
     }).join("");
 
-    if (body) body.outerHTML = rows;
+    // ✅FIX: outerHTML はDOMを壊すので使わない（固まり対策）
+    if (body) body.innerHTML = rows;
 
   } catch (e) {
     if (body) body.textContent = `ランキング取得に失敗：${e?.message || e}`;
@@ -636,7 +650,9 @@ document.getElementById("search").onclick = async () => {
 
       state.placeLabel = opt.textContent;
       state.source = "API: Open-Meteo";
-      render();
+
+      // ✅FIX: 直接renderせず scheduleRender（多重render防止）
+      scheduleRender();
       setStatus("天気取得中…", "muted");
 
       try {
@@ -644,7 +660,7 @@ document.getElementById("search").onclick = async () => {
         state.pops = out.pops;
         state.tz = out.tz;
 
-        // public候補も先読み
+        // public候補も先読み（popsがnullのときも安全）
         await Promise.all([
           warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
           warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
@@ -660,12 +676,12 @@ document.getElementById("search").onclick = async () => {
           setStatus("取得しました", "ok");
         }
 
-        render();
+        scheduleRender();
       } catch (e) {
         setStatus(e.message || "天気取得エラー", "ng");
         state.source = "API: エラー";
         state.pops = null;
-        render();
+        scheduleRender();
       }
     };
 
@@ -686,11 +702,13 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
         warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
       ]);
     }
-    render();
+    // ✅FIX
+    scheduleRender();
   })
 );
 
-document.getElementById("refresh").onclick = () => render();
+// ✅FIX
+document.getElementById("refresh").onclick = () => scheduleRender();
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信 一本化）
@@ -737,10 +755,12 @@ document.getElementById("refresh").onclick = () => render();
 // ==============================
 // 初期化
 // ==============================
-render();
+// ✅FIX: 直接renderではなく scheduleRender
+scheduleRender();
 
 loadSharedJSON().then(() => {
-  render();
+  // ✅FIX
+  scheduleRender();
 });
 
 // ==============================
