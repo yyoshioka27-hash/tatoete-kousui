@@ -5,11 +5,12 @@ const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.work
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
-async function submitToPending(mode, bucket, text){
+// ✅ penName を追加（未入力は "" のまま送る or 送らない どちらでもOKだが、ここでは送る）
+async function submitToPending(mode, bucket, text, penName = "") {
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
     headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ mode, bucket, text, from: "mobile" })
+    body: JSON.stringify({ mode, bucket, text, penName, from: "mobile" })
   });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `submit failed ${res.status}`);
@@ -28,6 +29,111 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   const data = await res.json();
   if (!data?.ok) throw new Error("public not ok");
   return (data.items || []).map(x => x.text).filter(Boolean);
+}
+
+// ==============================
+// ✅ 今日ランキング（Workers）
+// ==============================
+// 期待するAPI：GET /api/ranking/today?mode=trivia&bucket=10&limit=3
+// ※ Worker側が未実装なら 404等になるので、UIは「未対応」と表示する
+async function fetchTodayRanking({ mode, bucket, limit = 3 }) {
+  const params = new URLSearchParams();
+  params.set("mode", (mode === "fun" ? "fun" : "trivia"));
+  params.set("bucket", String(window.bucket10(bucket)));
+  params.set("limit", String(limit));
+
+  const url = `${API_BASE}/api/ranking/today?${params.toString()}`;
+  const res = await fetch(url, { method: "GET" });
+  if (!res.ok) throw new Error(`ranking fetch failed: ${res.status}`);
+  const data = await res.json().catch(()=>null);
+  if (!data?.ok) throw new Error("ranking not ok");
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function setRankingMessage(msg) {
+  const list = document.getElementById("rankingList");
+  if (!list) return;
+  list.innerHTML = `<li class="muted">${escapeHtml(msg)}</li>`;
+}
+
+function renderRankingList(items) {
+  const list = document.getElementById("rankingList");
+  if (!list) return;
+
+  if (!items || !items.length) {
+    list.innerHTML = `<li class="muted">まだランキングはありません</li>`;
+    return;
+  }
+
+  list.innerHTML = items.slice(0, 3).map((it, idx) => {
+    const text = escapeHtml(it.text || "");
+    const likes = Number(it.likes ?? 0);
+    const pen = escapeHtml((it.penName || it.pen_name || it.name || "").trim());
+    const penLine = pen ? `　— ${pen}` : "";
+    return `
+      <li>
+        ${idx + 1}. ${text}
+        <div class="likes">👍 ${likes}${penLine}</div>
+      </li>
+    `;
+  }).join("");
+}
+
+// いまの画面状態から「ランキング対象の確率（バケット）」を決める
+// 方針：render()が作っている #metaphor は「最大の降水確率」を採用しているので、それに合わせる
+function getCurrentRankingContext() {
+  if (!state?.pops) return null;
+  const mode = getSelectedMode();
+
+  const candidates = [
+    (state.pops.m != null ? window.bucket10(state.pops.m) : null),
+    (state.pops.d != null ? window.bucket10(state.pops.d) : null),
+    (state.pops.e != null ? window.bucket10(state.pops.e) : null),
+  ].filter(v => v != null);
+
+  if (!candidates.length) return null;
+
+  const bucket = Math.max(...candidates);
+  return { mode, bucket };
+}
+
+// ランキング更新は render() の最後で呼ぶが、呼びすぎ防止に軽くデバウンス
+let rankingTimer = null;
+let rankingInFlight = false;
+
+function scheduleRankingUpdate() {
+  if (rankingTimer) clearTimeout(rankingTimer);
+  rankingTimer = setTimeout(async () => {
+    const ctx = getCurrentRankingContext();
+    if (!ctx) {
+      setRankingMessage("（地点を選ぶと表示されます）");
+      return;
+    }
+
+    if (rankingInFlight) return;
+    rankingInFlight = true;
+
+    try {
+      setRankingMessage("ランキング取得中…");
+      const items = await fetchTodayRanking({ mode: ctx.mode, bucket: ctx.bucket, limit: 3 });
+      renderRankingList(items);
+    } catch (e) {
+      // Worker未実装 / 404 / 500 などを吸収
+      // ここは“壊れない”こと優先
+      setRankingMessage("（ランキング機能はまだ未対応です：Worker側API追加が必要）");
+    } finally {
+      rankingInFlight = false;
+    }
+  }, 120);
 }
 
 // ==============================
@@ -330,6 +436,36 @@ function normalizePlaceName(input) {
 }
 
 // =========================
+// ✅ 例え切替アニメ（#metaphor）
+// =========================
+function animateSwap(el, doUpdate) {
+  if (!el) { doUpdate(); return; }
+
+  el.classList.remove("is-entering");
+  el.classList.add("is-leaving");
+
+  const onEnd = (e) => {
+    if (e && e.target !== el) return;
+    doUpdate();
+    el.classList.remove("is-leaving");
+    el.classList.add("is-entering");
+    requestAnimationFrame(() => {
+      el.classList.remove("is-entering");
+    });
+  };
+
+  el.addEventListener("transitionend", onEnd, { once: true });
+
+  // 保険：transitionendが来ない場合
+  setTimeout(() => {
+    if (el.classList.contains("is-leaving")) {
+      try { el.removeEventListener("transitionend", onEnd); } catch {}
+      onEnd();
+    }
+  }, 260);
+}
+
+// =========================
 // render
 // =========================
 function render() {
@@ -386,6 +522,7 @@ function render() {
     if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
     renderEmpty();
     if (footEl) footEl.textContent = "";
+    scheduleRankingUpdate();
     return;
   }
 
@@ -405,6 +542,9 @@ function render() {
 
   if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、既存ネタ＋共有(JSON)＋共有(public)からランダム表示（👍が多いほど出やすい）";
+
+  // ✅ renderの最後でランキング更新（いまの確率に紐づくBEST3）
+  scheduleRankingUpdate();
 }
 
 function renderEmpty() {
@@ -584,7 +724,11 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   })
 );
 
-document.getElementById("refresh").onclick = () => render();
+// ✅ 例えを変える：#metaphor だけアニメしてから render()（既存の抽選ロジックはそのまま）
+document.getElementById("refresh").onclick = () => {
+  const el = document.getElementById("metaphor");
+  animateSwap(el, () => render());
+};
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信 一本化）
@@ -602,6 +746,9 @@ document.getElementById("refresh").onclick = () => render();
     const bucket = window.bucket10(bucketRaw);
     const text = (document.getElementById("newPhrase")?.value ?? "").trim();
 
+    // ✅ penName 取得（任意）
+    const penName = (document.getElementById("penName")?.value ?? "").trim();
+
     if (!text) {
       if (statusEl) statusEl.textContent = "⚠️ ネタが空です";
       return;
@@ -610,14 +757,17 @@ document.getElementById("refresh").onclick = () => render();
     btn.disabled = true;
     try{
       if (statusEl) statusEl.textContent = "📨 承認待ちへ送信中…";
-      await submitToPending(mode, bucket, text);
+      await submitToPending(mode, bucket, text, penName);
 
-      // ✅ 管理導線の文言を消す（承認という仕組みだけ残す）
       if (statusEl) statusEl.textContent =
         "✅ 送信しました。承認されると一般公開されます。";
 
       const ta = document.getElementById("newPhrase");
       if (ta) ta.value = "";
+
+      const pn = document.getElementById("penName");
+      if (pn) pn.value = "";
+
     }catch(e){
       if (statusEl) statusEl.textContent = `⚠️ 送信に失敗：${e?.message || e}`;
     }finally{
