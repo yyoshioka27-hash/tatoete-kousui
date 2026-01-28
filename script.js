@@ -5,8 +5,7 @@ const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.work
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
-// ✅ penName を追加（未入力は "" のまま送る or 送らない どちらでもOKだが、ここでは送る）
-async function submitToPending(mode, bucket, text, penName = "") {
+async function submitToPending(mode, bucket, text, penName){
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
     headers: { "Content-Type":"application/json" },
@@ -32,108 +31,33 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 }
 
 // ==============================
-// ✅ 今日ランキング（Workers）
+// ✅ いいね（Workers）
 // ==============================
-// 期待するAPI：GET /api/ranking/today?mode=trivia&bucket=10&limit=3
-// ※ Worker側が未実装なら 404等になるので、UIは「未対応」と表示する
-async function fetchTodayRanking({ mode, bucket, limit = 3 }) {
+async function sendLikeToServer(publicId){
+  const res = await fetch(`${API_BASE}/api/like`, {
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ id: publicId })
+  });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
+  return data; // {ok,id,likesToday}
+}
+
+// ==============================
+// ✅ 今日のランキング（Workers）
+// ==============================
+async function fetchTodayRanking({ mode, bucket, limit = 3 }){
   const params = new URLSearchParams();
-  params.set("mode", (mode === "fun" ? "fun" : "trivia"));
+  params.set("mode", mode === "fun" ? "fun" : "trivia");
   params.set("bucket", String(window.bucket10(bucket)));
-  params.set("limit", String(limit));
+  params.set("limit", String(Math.max(1, Math.min(50, Number(limit || 3)))));
 
   const url = `${API_BASE}/api/ranking/today?${params.toString()}`;
   const res = await fetch(url, { method: "GET" });
-  if (!res.ok) throw new Error(`ranking fetch failed: ${res.status}`);
   const data = await res.json().catch(()=>null);
-  if (!data?.ok) throw new Error("ranking not ok");
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function setRankingMessage(msg) {
-  const list = document.getElementById("rankingList");
-  if (!list) return;
-  list.innerHTML = `<li class="muted">${escapeHtml(msg)}</li>`;
-}
-
-function renderRankingList(items) {
-  const list = document.getElementById("rankingList");
-  if (!list) return;
-
-  if (!items || !items.length) {
-    list.innerHTML = `<li class="muted">まだランキングはありません</li>`;
-    return;
-  }
-
-  list.innerHTML = items.slice(0, 3).map((it, idx) => {
-    const text = escapeHtml(it.text || "");
-    const likes = Number(it.likes ?? 0);
-    const pen = escapeHtml((it.penName || it.pen_name || it.name || "").trim());
-    const penLine = pen ? `　— ${pen}` : "";
-    return `
-      <li>
-        ${idx + 1}. ${text}
-        <div class="likes">👍 ${likes}${penLine}</div>
-      </li>
-    `;
-  }).join("");
-}
-
-// いまの画面状態から「ランキング対象の確率（バケット）」を決める
-// 方針：render()が作っている #metaphor は「最大の降水確率」を採用しているので、それに合わせる
-function getCurrentRankingContext() {
-  if (!state?.pops) return null;
-  const mode = getSelectedMode();
-
-  const candidates = [
-    (state.pops.m != null ? window.bucket10(state.pops.m) : null),
-    (state.pops.d != null ? window.bucket10(state.pops.d) : null),
-    (state.pops.e != null ? window.bucket10(state.pops.e) : null),
-  ].filter(v => v != null);
-
-  if (!candidates.length) return null;
-
-  const bucket = Math.max(...candidates);
-  return { mode, bucket };
-}
-
-// ランキング更新は render() の最後で呼ぶが、呼びすぎ防止に軽くデバウンス
-let rankingTimer = null;
-let rankingInFlight = false;
-
-function scheduleRankingUpdate() {
-  if (rankingTimer) clearTimeout(rankingTimer);
-  rankingTimer = setTimeout(async () => {
-    const ctx = getCurrentRankingContext();
-    if (!ctx) {
-      setRankingMessage("（地点を選ぶと表示されます）");
-      return;
-    }
-
-    if (rankingInFlight) return;
-    rankingInFlight = true;
-
-    try {
-      setRankingMessage("ランキング取得中…");
-      const items = await fetchTodayRanking({ mode: ctx.mode, bucket: ctx.bucket, limit: 3 });
-      renderRankingList(items);
-    } catch (e) {
-      // Worker未実装 / 404 / 500 などを吸収
-      // ここは“壊れない”こと優先
-      setRankingMessage("（ランキング機能はまだ未対応です：Worker側API追加が必要）");
-    } finally {
-      rankingInFlight = false;
-    }
-  }, 120);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking failed ${res.status}`);
+  return data.items || []; // [{id,text,likes,penName}]
 }
 
 // ==============================
@@ -188,8 +112,8 @@ function getSharedItems(mode, bucket) {
 // - public を抽選候補へ混ぜる
 // - mode×bucket のキャッシュ
 // ==============================
-const publicCache = new Map(); // key: "mode_bucket" => [text,...]
-
+const publicCache = new Map(); // key: "mode_bucket" => [{text,id,penName?}, ...]
+// 互換：/api/public は text しか返していないので id は null のまま（like送信はできない）
 function keyMB(mode, bucket){
   const m = (mode === "fun" ? "fun" : "trivia");
   const b = window.bucket10(bucket);
@@ -201,12 +125,13 @@ async function warmPublicCache(mode, bucket){
   if (publicCache.has(k)) return;
 
   try{
+    // 現状 /api/public は text のみ取り出し → idは不明
     const texts = await fetchPublicMetaphors({
       mode: (mode === "fun" ? "fun" : "trivia"),
       bucket: window.bucket10(bucket),
       limit: 200
     });
-    publicCache.set(k, texts);
+    publicCache.set(k, texts.map(t => ({ text: String(t||"").trim(), id: null, penName: null })));
   }catch{
     publicCache.set(k, []);
   }
@@ -224,7 +149,11 @@ function getPublicItems(mode, bucket){
   }
 
   const arr = publicCache.get(k) || [];
-  return arr.map(t => ({ text: String(t || "").trim(), extraId: null })).filter(x => x.text);
+  return arr.map(x => ({
+    text: String(x?.text || "").trim(),
+    extraId: x?.id || null,     // ✅ publicId（あれば）
+    penName: x?.penName || null
+  })).filter(x => x.text);
 }
 
 // =========================
@@ -245,10 +174,11 @@ let state = {
   tz: null,
   source: "API: 未接続",
   currentPhrases: {
-    m: { text: null, extraId: null },
-    d: { text: null, extraId: null },
-    e: { text: null, extraId: null }
-  }
+    m: { text: null, extraId: null, penName: null },
+    d: { text: null, extraId: null, penName: null },
+    e: { text: null, extraId: null, penName: null }
+  },
+  lastMain: { text: null, animToken: 0 } // 例えを変える用
 };
 
 const $ = (id) => document.getElementById(id);
@@ -258,13 +188,11 @@ const $ = (id) => document.getElementById(id);
 // ※ 仕様変更していないので維持（不要なら後で一括OFF可能）
 // =========================
 const LIKES_KEY = "metaphorLikes";
-
 function loadLikes() {
   try { return JSON.parse(localStorage.getItem(LIKES_KEY) || '{}'); }
   catch { return {}; }
 }
 function saveLikes(obj) { localStorage.setItem(LIKES_KEY, JSON.stringify(obj)); }
-
 let likesData = loadLikes();
 
 function getSelectedMode() {
@@ -309,8 +237,8 @@ function getBaseTexts(mode, bucket) {
 function buildCandidatePool(mode, bucket) {
   const b = window.bucket10(bucket);
 
-  const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null }));
-  const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null }));
+  const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, extraId: null, penName: null }));
+  const shared = getSharedItems(mode, b).map(x => ({ text: x.text, extraId: null, penName: null }));
   const pub    = getPublicItems(mode, b);
 
   const out = [];
@@ -357,7 +285,7 @@ function weightedPick(items) {
 function pickMetaphor(mode, bucket) {
   const b = window.bucket10(bucket);
   const pool = buildCandidatePool(mode, b);
-  if (!pool.length) return { text: "データなし", extraId: null };
+  if (!pool.length) return { text: "データなし", extraId: null, penName: null };
 
   const key = `${mode}_${b}`;
   let picked = weightedPick(pool);
@@ -375,6 +303,7 @@ function pickMetaphor(mode, bucket) {
 
 // =========================
 // 👍 UI（表示中の3つ）
+// - ローカルに加えて /api/like にも送る（idが分かる場合だけ）
 // =========================
 function updateLikeUI(slot) {
   const phraseObj = state.currentPhrases[slot];
@@ -400,10 +329,34 @@ function updateLikeUI(slot) {
   if (badgeEl) badgeEl.textContent = (count >= 5 ? "⭐候補！" : "");
 
   btnEl.disabled = false;
-  btnEl.onclick = () => {
+  btnEl.onclick = async () => {
+    // まずローカル加算（オフラインでも効く）
     incrementLike(phrase);
     updateLikeUI(slot);
     render(); // 出やすさ反映
+
+    // サーバへも送る（publicIdがある場合のみ）
+    const publicId = phraseObj?.extraId || null;
+    if (!publicId) {
+      // publicId不明（metaphors.js / shared JSON / text-only public 由来）なら送れない
+      // ここは何も言わない（静かにローカルだけ効かせる）
+      return;
+    }
+
+    // 二重クリック対策（短時間はボタンを軽くロック）
+    btnEl.disabled = true;
+    try {
+      await sendLikeToServer(publicId);
+      // ✅ いいね成功したらランキングを更新
+      await updateRankingUI();
+    } catch (e) {
+      // 429(日次上限)などもここに来る
+      try {
+        showTempInfo(`⚠️ いいね送信：${e?.message || e}`);
+      } catch {}
+    } finally {
+      btnEl.disabled = false;
+    }
   };
 }
 
@@ -436,33 +389,244 @@ function normalizePlaceName(input) {
 }
 
 // =========================
-// ✅ 例え切替アニメ（#metaphor）
+// ✅ CSS注入（ふわーっと浮き上がる）
 // =========================
-function animateSwap(el, doUpdate) {
-  if (!el) { doUpdate(); return; }
-
-  el.classList.remove("is-entering");
-  el.classList.add("is-leaving");
-
-  const onEnd = (e) => {
-    if (e && e.target !== el) return;
-    doUpdate();
-    el.classList.remove("is-leaving");
-    el.classList.add("is-entering");
-    requestAnimationFrame(() => {
-      el.classList.remove("is-entering");
-    });
-  };
-
-  el.addEventListener("transitionend", onEnd, { once: true });
-
-  // 保険：transitionendが来ない場合
-  setTimeout(() => {
-    if (el.classList.contains("is-leaving")) {
-      try { el.removeEventListener("transitionend", onEnd); } catch {}
-      onEnd();
+(function injectAnimCSS(){
+  if (document.getElementById("animCSS_v1")) return;
+  const style = document.createElement("style");
+  style.id = "animCSS_v1";
+  style.textContent = `
+    .floatChange{
+      animation: floatChange .42s ease-out both;
     }
-  }, 260);
+    @keyframes floatChange{
+      0%   { opacity: .55; transform: translateY(10px); filter: blur(0.3px); }
+      100% { opacity: 1;   transform: translateY(0px); filter: blur(0px); }
+    }
+    .rankBox{
+      margin-top: 10px;
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: 14px;
+      padding: 12px 12px;
+      background: rgba(255,255,255,0.72);
+    }
+    .rankTitle{
+      font-size: 13px;
+      color: #475569;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .rankItems{
+      display:flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .rankItem{
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(15,23,42,0.08);
+      background: rgba(255,255,255,0.86);
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .rankTopRow{
+      display:flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .rankText{
+      font-size: 14px;
+      line-height: 1.55;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .rankMeta{
+      font-size: 12px;
+      color: #64748b;
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .rankBadge{
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .rankMuted{
+      font-size: 12px;
+      color: #64748b;
+    }
+    .tempInfo{
+      margin-top: 8px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .penInput{
+      max-width: 260px;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+// =========================
+// ✅ 一時メッセージ（軽く通知）
+// =========================
+let tempInfoTimer = null;
+function showTempInfo(msg){
+  const host = ensureRankingHost(); // ボタン下に出す
+  if (!host) return;
+
+  let el = document.getElementById("tempInfo");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "tempInfo";
+    el.className = "tempInfo";
+    host.appendChild(el);
+  }
+  el.textContent = msg;
+
+  if (tempInfoTimer) clearTimeout(tempInfoTimer);
+  tempInfoTimer = setTimeout(() => {
+    try { el.textContent = ""; } catch {}
+  }, 3500);
+}
+
+// =========================
+// ✅ ランキングUI（refreshボタンの直下に出す）
+// =========================
+function ensureRankingHost(){
+  const refreshBtn = document.getElementById("refresh");
+  if (!refreshBtn) return null;
+  const actions = refreshBtn.closest(".actions") || refreshBtn.parentElement;
+  if (!actions) return null;
+
+  // ranking box は actions の直後に置く（「ボタンの下」）
+  let host = document.getElementById("rankingHost");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "rankingHost";
+    host.className = "rankBox";
+    // actions の次に挿入
+    if (actions.nextSibling) actions.parentElement.insertBefore(host, actions.nextSibling);
+    else actions.parentElement.appendChild(host);
+  }
+  return host;
+}
+
+function renderRankingSkeleton(){
+  const host = ensureRankingHost();
+  if (!host) return;
+
+  const mode = getSelectedMode();
+  const bucket = getCurrentFocusBucket();
+
+  const title = (mode === "fun") ? "今日のお笑いランキング" : "今日の雑学ランキング";
+
+  host.innerHTML = `
+    <div class="rankTitle">
+      <div>🏆 ${title} BEST3（${bucket}%）</div>
+      <div class="rankMuted" id="rankStatus">取得中…</div>
+    </div>
+    <div class="rankItems" id="rankItems"></div>
+  `;
+}
+
+function getCurrentFocusBucket(){
+  // 「今選んでいる確率」＝画面で一番メインになっているやつ
+  // あなたの仕様：朝昼夜のうち最大の降水確率で例えが決まっている → そのbucketを採用
+  if (!state?.pops) return 0;
+  const m = state.pops.m;
+  const d = state.pops.d;
+  const e = state.pops.e;
+  const arr = [m,d,e].filter(v => v != null);
+  if (!arr.length) return 0;
+  return window.bucket10(Math.max(...arr));
+}
+
+function rankBadgeByIndex(i){
+  if (i === 0) return "🥇";
+  if (i === 1) return "🥈";
+  if (i === 2) return "🥉";
+  return "🏅";
+}
+
+function escapeHtml(s){
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function updateRankingUI(){
+  const host = ensureRankingHost();
+  if (!host) return;
+
+  // popsがないならランキングも空
+  if (!state?.pops) {
+    host.innerHTML = `
+      <div class="rankTitle">
+        <div>🏆 今日のランキング BEST3</div>
+        <div class="rankMuted">地点未選択</div>
+      </div>
+      <div class="rankMuted">地点を選ぶとランキングを表示します。</div>
+    `;
+    return;
+  }
+
+  renderRankingSkeleton();
+
+  const mode = getSelectedMode();
+  const bucket = getCurrentFocusBucket();
+
+  const statusEl = document.getElementById("rankStatus");
+  const itemsEl = document.getElementById("rankItems");
+
+  try{
+    const items = await fetchTodayRanking({ mode, bucket, limit: 3 });
+
+    if (statusEl) statusEl.textContent = "更新";
+
+    if (!itemsEl) return;
+
+    if (!items.length) {
+      itemsEl.innerHTML = `
+        <div class="rankMuted">
+          まだ「今日のいいね」がありません。最初の一票をどうぞ👍
+        </div>
+      `;
+      return;
+    }
+
+    itemsEl.innerHTML = items.map((it, idx) => {
+      const badge = rankBadgeByIndex(idx);
+      const pen = it.penName ? `✍️ ${escapeHtml(it.penName)}` : "";
+      const likes = Number(it.likes || 0);
+      return `
+        <div class="rankItem">
+          <div class="rankTopRow">
+            <div class="rankText"><span class="rankBadge">${badge}</span> ${escapeHtml(it.text)}</div>
+            <div class="rankMuted">👍 ${likes}</div>
+          </div>
+          <div class="rankMeta">
+            ${pen ? `<span>${pen}</span>` : `<span class="rankMuted">（ペンネームなし）</span>`}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  }catch(e){
+    if (statusEl) statusEl.textContent = "取得失敗";
+    if (itemsEl) itemsEl.innerHTML = `
+      <div class="rankMuted">⚠️ ランキング取得に失敗：${escapeHtml(e?.message || e)}</div>
+    `;
+  }
 }
 
 // =========================
@@ -473,8 +637,9 @@ function render() {
   const sourceTag = document.getElementById("sourceTag");
   const tzTag = document.getElementById("tzTag");
 
-  const metaAll = document.getElementById("metaphor");
-  const footEl = document.getElementById("metaFoot");
+  // ★ 「人間向け翻訳」DOMが消えても落ちないようにする
+  const metaAll = document.getElementById("metaphor"); // 無ければ null
+  const footEl = document.getElementById("metaFoot");  // 無ければ null
 
   if (sourceTag) sourceTag.textContent = state.source;
   if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
@@ -489,7 +654,7 @@ function render() {
 
       setIcon(slotKey, null);
 
-      state.currentPhrases[slotKey] = { text: null, extraId: null };
+      state.currentPhrases[slotKey] = { text: null, extraId: null, penName: null };
       updateLikeUI(slotKey);
       updateDeleteUI(slotKey);
       return null;
@@ -508,7 +673,7 @@ function render() {
 
     if (metaEl) metaEl.textContent = `${label}：${picked.text} ${shareHint}`;
 
-    state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId };
+    state.currentPhrases[slotKey] = { text: picked.text, extraId: picked.extraId, penName: picked.penName };
     updateLikeUI(slotKey);
     updateDeleteUI(slotKey);
 
@@ -522,7 +687,8 @@ function render() {
     if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
     renderEmpty();
     if (footEl) footEl.textContent = "";
-    scheduleRankingUpdate();
+    // ランキングも更新
+    try { updateRankingUI(); } catch {}
     return;
   }
 
@@ -533,18 +699,25 @@ function render() {
   const c = setSlot("e", state.pops.e, "夜");
 
   const candidates = [a, b, c].filter(Boolean);
+
   if (!candidates.length) {
     if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
   } else {
     const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
-    if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
+    const mainText = `【${maxOne.label}】${maxOne.value}% → ${maxOne.text}`;
+
+    // 「例えを変える」対象（メイン文）を保持
+    state.lastMain.text = mainText;
+
+    // メイン表示（人間向け翻訳欄を消してもOK）
+    if (metaAll) metaAll.textContent = mainText;
   }
 
   if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、既存ネタ＋共有(JSON)＋共有(public)からランダム表示（👍が多いほど出やすい）";
 
-  // ✅ renderの最後でランキング更新（いまの確率に紐づくBEST3）
-  scheduleRankingUpdate();
+  // ✅ ランキング更新（今のbucketで）
+  try { updateRankingUI(); } catch {}
 }
 
 function renderEmpty() {
@@ -559,7 +732,7 @@ function renderEmpty() {
 
     setIcon(k, null);
 
-    state.currentPhrases[k] = { text: null, extraId: null };
+    state.currentPhrases[k] = { text: null, extraId: null, penName: null };
     updateLikeUI(k);
     updateDeleteUI(k);
   });
@@ -724,19 +897,65 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   })
 );
 
-// ✅ 例えを変える：#metaphor だけアニメしてから render()（既存の抽選ロジックはそのまま）
+// =========================
+// ✅ 「例えを変える」ボタン
+// - 人間向け翻訳DOMが消えても落ちない
+// - ふわーっと浮き上がるアニメ
+// - ランキングは「今の確率(bucket)」のまま（変わらない）
+// =========================
 document.getElementById("refresh").onclick = () => {
-  const el = document.getElementById("metaphor");
-  animateSwap(el, () => render());
+  // renderすると、メイン文も再抽選される（最大確率のbucketのネタが変わる）
+  render();
+
+  const metaAll = document.getElementById("metaphor");
+  if (metaAll) {
+    // アニメ付け直し（連打対応：classを外して付ける）
+    metaAll.classList.remove("floatChange");
+    // 強制リフロー
+    void metaAll.offsetWidth;
+    metaAll.classList.add("floatChange");
+  }
+  // ランキングも更新（同一bucketだが、いいね状況が変わっている可能性がある）
+  try { updateRankingUI(); } catch {}
 };
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信 一本化）
 // - submitPendingBtn を押したら即 /api/submit
+// - ペンネーム欄はJS側で自動生成（HTMLを触らなくても出る）
 // ==============================
 (function setupSubmitPending(){
   const btn = document.getElementById("submitPendingBtn");
   if (!btn) return;
+
+  // ✅ ペンネーム入力欄を「確率selectの近く」に追加（無ければ生成）
+  (function ensurePenNameUI(){
+    const modeSel = document.getElementById("newPhraseMode");
+    const bucketSel = document.getElementById("newPhraseBucket");
+    const actionsWrap = btn.closest(".actions") || btn.parentElement;
+    if (!actionsWrap) return;
+
+    if (document.getElementById("penName")) return;
+
+    const label = document.createElement("label");
+    label.className = "small";
+    label.textContent = "ペンネーム：";
+
+    const input = document.createElement("input");
+    input.id = "penName";
+    input.className = "penInput";
+    input.placeholder = "例：ひらめき君 / 匿名でもOK";
+    input.autocomplete = "nickname";
+
+    // bucketの後ろに差し込む（なければ末尾）
+    if (bucketSel && bucketSel.nextSibling) {
+      actionsWrap.insertBefore(label, bucketSel.nextSibling);
+      actionsWrap.insertBefore(input, label.nextSibling);
+    } else {
+      actionsWrap.appendChild(label);
+      actionsWrap.appendChild(input);
+    }
+  })();
 
   btn.onclick = async () => {
     const statusEl = document.getElementById("addStatus");
@@ -745,8 +964,6 @@ document.getElementById("refresh").onclick = () => {
     const bucketRaw = Number($("newPhraseBucket")?.value ?? 0);
     const bucket = window.bucket10(bucketRaw);
     const text = (document.getElementById("newPhrase")?.value ?? "").trim();
-
-    // ✅ penName 取得（任意）
     const penName = (document.getElementById("penName")?.value ?? "").trim();
 
     if (!text) {
@@ -757,17 +974,13 @@ document.getElementById("refresh").onclick = () => {
     btn.disabled = true;
     try{
       if (statusEl) statusEl.textContent = "📨 承認待ちへ送信中…";
-      await submitToPending(mode, bucket, text, penName);
+      await submitToPending(mode, bucket, text, penName || null);
 
       if (statusEl) statusEl.textContent =
         "✅ 送信しました。承認されると一般公開されます。";
 
       const ta = document.getElementById("newPhrase");
       if (ta) ta.value = "";
-
-      const pn = document.getElementById("penName");
-      if (pn) pn.value = "";
-
     }catch(e){
       if (statusEl) statusEl.textContent = `⚠️ 送信に失敗：${e?.message || e}`;
     }finally{
@@ -784,6 +997,9 @@ render();
 loadSharedJSON().then(() => {
   render();
 });
+
+// 初回：ランキング枠だけ先に作っておく（地点選択前でも「地点未選択」を出す）
+try { updateRankingUI(); } catch {}
 
 // ==============================
 // Theme (Gradient) by precipitation
