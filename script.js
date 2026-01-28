@@ -92,7 +92,6 @@ async function fetchRankingToday(mode, bucket, limit = 3){
 const SHARED_JSON_URL = "./metaphors.json";
 let sharedItems = []; // [{mode,bucket,text}, ...]
 
-// 互換用（過去に入れた人向け）
 window.JSON_METAPHORS = window.JSON_METAPHORS || [];
 
 async function loadSharedJSON() {
@@ -164,7 +163,6 @@ async function warmPublicCache(mode, bucket){
 function getPublicItems(mode, bucket){
   const k = keyMB(mode, bucket);
 
-  // ✅ 未warmなら warm して次回反映（render多重防止）
   if (!publicCache.has(k)) {
     warmPublicCache(mode, bucket).then(() => scheduleRender()).catch(() => {});
     return [];
@@ -367,8 +365,19 @@ function pickMetaphor(mode, bucket) {
 }
 
 // =========================
+// ✅ ランキングが参照する “代表バケット”
+// =========================
+function getCurrentMainBucket(){
+  if (!state?.pops) return null;
+  const arr = [state.pops.m, state.pops.d, state.pops.e].filter(v => v != null);
+  if (!arr.length) return null;
+  return window.bucket10(Math.max(...arr));
+}
+
+// =========================
 // 👍 UI（公開ネタ＝全部対象）
 // - id がある時は表示・押下可能
+// - ✅FIX1: いいねはランキングと同じ代表bucketに入れる（反映ズレ防止）
 // =========================
 function updateLikeUI(slot) {
   ensureLikeDom(slot);
@@ -402,10 +411,12 @@ function updateLikeUI(slot) {
   btnEl.onclick = async () => {
     btnEl.disabled = true;
     try{
+      const mainBucket = getCurrentMainBucket();
       const out = await likeAny({
         id: phraseObj.id,
         mode: phraseObj.mode || getSelectedMode(),
-        bucket: Number(phraseObj.bucket ?? 0),
+        // ✅FIX: ランキングと同じ代表bucketに格納（ここがズレてると反映されない）
+        bucket: Number(mainBucket ?? phraseObj.bucket ?? 0),
         text: phraseObj.text,
         penName: phraseObj.penName || null,
         source: phraseObj.source || null
@@ -488,12 +499,19 @@ function render() {
     const pen = picked.penName ? `（${picked.penName}）` : "";
     if (metaEl) metaEl.textContent = `${label}：${picked.text}${pen}`;
 
+    // ✅FIX2: ネタが変わったら likesToday を引き継がない（モード切替で同数のまま問題を消す）
+    const prevId = state.currentPhrases[slotKey]?.id || null;
+    const nextId = picked.id || null;
+    const nextLikes = (prevId && nextId && prevId === nextId)
+      ? Number(state.currentPhrases[slotKey]?.likesToday || 0)
+      : 0;
+
     state.currentPhrases[slotKey] = {
       text: picked.text,
       source: picked.source || null,
-      id: picked.id || null,
+      id: nextId,
       penName: picked.penName || null,
-      likesToday: state.currentPhrases[slotKey]?.likesToday ?? 0,
+      likesToday: nextLikes,
       mode,
       bucket: rounded
     };
@@ -619,13 +637,6 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-function getCurrentMainBucket(){
-  if (!state?.pops) return null;
-  const arr = [state.pops.m, state.pops.d, state.pops.e].filter(v => v != null);
-  if (!arr.length) return null;
-  return window.bucket10(Math.max(...arr));
-}
-
 async function renderRanking(){
   const wrap = document.getElementById("todayRankingWrap");
   if (!wrap) return;
@@ -734,7 +745,6 @@ document.getElementById("search").onclick = async () => {
         state.pops = out.pops;
         state.tz = out.tz;
 
-        // public候補も先読み
         await Promise.all([
           warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
           warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
