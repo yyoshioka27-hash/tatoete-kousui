@@ -16,6 +16,71 @@ function scheduleRender(){
   });
 }
 
+// =========================
+// ✅ いいね演出用CSSを注入（HTML改修不要）
+// =========================
+(function injectLikeFxCSS(){
+  const id = "likeFxCSS_v1";
+  if (document.getElementById(id)) return;
+  const style = document.createElement("style");
+  style.id = id;
+  style.textContent = `
+    .like-btn-pop { transform: scale(1.0); transition: transform 120ms ease; }
+    .like-btn-pop.__pop { transform: scale(1.10); }
+    .like-plusone {
+      position: absolute;
+      font-weight: 900;
+      pointer-events: none;
+      user-select: none;
+      transform: translateY(0);
+      opacity: 1;
+      transition: transform 520ms ease, opacity 520ms ease;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.10);
+    }
+    .like-plusone.__fly {
+      transform: translateY(-18px);
+      opacity: 0;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+function likeFxPop(btnEl){
+  try{
+    btnEl.classList.add("__pop");
+    setTimeout(() => btnEl.classList.remove("__pop"), 140);
+  }catch{}
+}
+
+function likeFxPlusOne(btnEl){
+  try{
+    const parent = btnEl.parentElement;
+    if (!parent) return;
+
+    // 親を基準に絶対配置できるように
+    const cs = window.getComputedStyle(parent);
+    if (cs.position === "static") parent.style.position = "relative";
+
+    const plus = document.createElement("span");
+    plus.className = "like-plusone";
+    plus.textContent = "+1";
+
+    // ボタン右上あたりに出す
+    plus.style.left = (btnEl.offsetLeft + btnEl.offsetWidth - 6) + "px";
+    plus.style.top  = (btnEl.offsetTop - 6) + "px";
+
+    parent.appendChild(plus);
+
+    requestAnimationFrame(() => {
+      plus.classList.add("__fly");
+    });
+
+    setTimeout(() => {
+      try{ plus.remove(); }catch{}
+    }, 700);
+  }catch{}
+}
+
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
@@ -260,6 +325,7 @@ function ensureLikeDom(slot){
   btn.id = btnId;
   btn.type = "button";
   btn.textContent = "👍 いいね";
+  btn.className = "like-btn-pop";
   btn.style.padding = "8px 10px";
   btn.style.borderRadius = "12px";
   btn.style.border = "1px solid rgba(15,23,42,.18)";
@@ -378,6 +444,7 @@ function getCurrentMainBucket(){
 // 👍 UI（公開ネタ＝全部対象）
 // - id がある時は表示・押下可能
 // - ✅FIX1: いいねはランキングと同じ代表bucketに入れる（反映ズレ防止）
+// - ✅②: ぷに＋+1演出
 // =========================
 function updateLikeUI(slot) {
   ensureLikeDom(slot);
@@ -415,12 +482,16 @@ function updateLikeUI(slot) {
       const out = await likeAny({
         id: phraseObj.id,
         mode: phraseObj.mode || getSelectedMode(),
-        // ✅FIX: ランキングと同じ代表bucketに格納（ここがズレてると反映されない）
         bucket: Number(mainBucket ?? phraseObj.bucket ?? 0),
         text: phraseObj.text,
         penName: phraseObj.penName || null,
         source: phraseObj.source || null
       });
+
+      // ✅②演出
+      likeFxPop(btnEl);
+      likeFxPlusOne(btnEl);
+
       state.currentPhrases[slot].likesToday = Number(out.likesToday || 0);
       updateLikeUI(slot);
       try { renderRanking(); } catch {}
@@ -496,10 +567,14 @@ function render() {
     const mode = getSelectedMode();
     const picked = pickMetaphor(mode, rounded);
 
-    const pen = picked.penName ? `（${picked.penName}）` : "";
-    if (metaEl) metaEl.textContent = `${label}：${picked.text}${pen}`;
+    // ✅③: ペンネーム未入力は常に「匿名」で統一
+    const displayPen = (picked.penName && String(picked.penName).trim())
+      ? String(picked.penName).trim()
+      : "匿名";
 
-    // ✅FIX2: ネタが変わったら likesToday を引き継がない（モード切替で同数のまま問題を消す）
+    if (metaEl) metaEl.textContent = `${label}：${picked.text}（${displayPen}）`;
+
+    // ✅ ネタが変わったら likesToday を引き継がない（同じIDのときだけ維持）
     const prevId = state.currentPhrases[slotKey]?.id || null;
     const nextId = picked.id || null;
     const nextLikes = (prevId && nextId && prevId === nextId)
@@ -510,7 +585,7 @@ function render() {
       text: picked.text,
       source: picked.source || null,
       id: nextId,
-      penName: picked.penName || null,
+      penName: displayPen, // ←ここは表示用に匿名へ寄せる
       likesToday: nextLikes,
       mode,
       bucket: rounded
@@ -649,10 +724,11 @@ async function renderRanking(){
     return;
   }
 
+  // ✅① 明記（0:00リセット）
   wrap.innerHTML = `
     <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
       <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
-      <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（公開ネタすべて）</div>
+      <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（毎日0:00にリセット）</div>
       <div class="muted" id="rankingBody">読み込み中…</div>
     </div>
   `;
@@ -668,7 +744,9 @@ async function renderRanking(){
     }
 
     const rows = items.map((it, idx) => {
-      const pen = it.penName ? ` <span class="muted">(${escapeHtml(it.penName)})</span>` : "";
+      // ✅③ ランキング側も匿名表示に寄せる
+      const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+      const pen = ` <span class="muted">(${escapeHtml(p)})</span>`;
       const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
       return `
         <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
@@ -678,7 +756,6 @@ async function renderRanking(){
       `;
     }).join("");
 
-    // ✅ outerHTML はDOMを壊すので使わない
     if (body) body.innerHTML = rows;
 
   } catch (e) {
@@ -794,6 +871,7 @@ document.getElementById("refresh").onclick = () => scheduleRender();
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信 一本化）
+// - ✅③: 重複ペンネームの場合は分かりやすく表示（worker側が返すエラーを利用）
 // ==============================
 (function setupSubmitPending(){
   const btn = document.getElementById("submitPendingBtn");
@@ -806,7 +884,8 @@ document.getElementById("refresh").onclick = () => scheduleRender();
     const bucketRaw = Number($("newPhraseBucket")?.value ?? 0);
     const bucket = window.bucket10(bucketRaw);
     const text = (document.getElementById("newPhrase")?.value ?? "").trim();
-    const penName = (document.getElementById("penName")?.value ?? "").trim();
+    const penNameRaw = (document.getElementById("penName")?.value ?? "").trim();
+    const penName = penNameRaw; // 空は空でOK（匿名扱いにする）
 
     if (!text) {
       if (statusEl) statusEl.textContent = "⚠️ ネタが空です";
@@ -826,7 +905,13 @@ document.getElementById("refresh").onclick = () => scheduleRender();
       const pn = document.getElementById("penName");
       if (pn) pn.value = "";
     }catch(e){
-      if (statusEl) statusEl.textContent = `⚠️ 送信に失敗：${e?.message || e}`;
+      const msg = String(e?.message || e);
+      // worker.js側で "penname_taken" を返す想定
+      if (msg.includes("penname_taken") || msg.includes("ペンネーム")) {
+        if (statusEl) statusEl.textContent = "⚠️ そのペンネームは既に使われています。別の名前にしてください。";
+      } else {
+        if (statusEl) statusEl.textContent = `⚠️ 送信に失敗：${msg}`;
+      }
     }finally{
       btn.disabled = false;
     }
