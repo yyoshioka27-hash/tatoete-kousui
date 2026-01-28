@@ -922,15 +922,44 @@ document.getElementById("refresh").onclick = () => scheduleRender();
 // - ✅ ペンネーム指定時はPIN必須（救済なし）
 // - ✅ ペンネーム空欄ならPIN不要（= 匿名投稿）
 // ==============================
-(function wireSubmit(){
-  const btn = document.getElementById("submit");
-  const ta  = document.getElementById("newPhrase");
-  if (!btn || !ta) return;
+// ==============================
+// ✅ ネタ追加（承認待ちへ送信）
+// - ✅ ペンネーム指定時はPIN必須（救済なし）
+// - ✅ ペンネーム空欄ならPIN不要（= 匿名投稿）
+// ==============================
+function wireSubmit(){
+  // 1) まずは従来IDで探す
+  let btn = document.getElementById("submit");
+  let ta  = document.getElementById("newPhrase");
 
-  btn.onclick = async () => {
+  // 2) 無ければUIから推測して拾う（id違い対策）
+  if (!btn) {
+    btn = Array.from(document.querySelectorAll("button"))
+      .find(b => (b.textContent || "").includes("承認待ちへ送信"));
+  }
+  if (!ta) {
+    // 一番大きい textarea をネタ欄とみなす（雑に見えて実用的）
+    const tas = Array.from(document.querySelectorAll("textarea"));
+    ta = tas.sort((a,b)=> (b.value?.length||0) - (a.value?.length||0))[0] || tas[0] || null;
+  }
+
+  if (!btn || !ta) {
+    console.warn("wireSubmit: submit button or textarea not found", { btn, ta });
+    return;
+  }
+
+  // 二重バインド防止
+  if (btn.dataset.wired === "1") return;
+  btn.dataset.wired = "1";
+
+  btn.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+
     const mode = getSelectedMode();
-    const bucketSel = document.getElementById("bucket");
-    const bucket = bucketSel ? Number(bucketSel.value) : getCurrentMainBucket() ?? 0;
+
+    // bucket は select が無ければ「今の代表バケット」→それも無ければ0
+    const bucketSel = document.getElementById("bucket") || document.querySelector('select[name="bucket"]');
+    const bucket = bucketSel ? Number(bucketSel.value) : (getCurrentMainBucket() ?? 0);
 
     const text = String(ta.value || "").trim();
     if (!text) { alert("ネタが空です"); return; }
@@ -941,7 +970,6 @@ document.getElementById("refresh").onclick = () => scheduleRender();
     const penName = penEl ? String(penEl.value || "").trim() : "";
     const penPin  = pinEl ? String(pinEl.value || "").trim() : "";
 
-    // ✅ペンネームあり → PIN必須
     if (penName && !penPin) {
       alert("ペンネームを使う場合は合言葉（PIN）が必要です。");
       return;
@@ -967,10 +995,19 @@ document.getElementById("refresh").onclick = () => scheduleRender();
       alert(`送信失敗：${e?.message || e}`);
     }finally{
       btn.disabled = false;
-      btn.textContent = oldText || "送信";
+      btn.textContent = oldText || "承認待ちへ送信";
     }
-  };
-})();
+  }, { passive:false });
+
+  console.log("wireSubmit: bound OK", btn);
+}
+
+// ✅DOMができてから必ず結び付ける
+window.addEventListener("DOMContentLoaded", () => {
+  try { wireSubmit(); } catch(e){ console.warn(e); }
+});
+// ✅念のためロード済みでも一回呼ぶ
+try { if (document.readyState !== "loading") wireSubmit(); } catch {}
 
 // ==============================
 // ✅ 初期化
