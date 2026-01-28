@@ -1017,3 +1017,7 @@ try { if (document.readyState !== "loading") wireSubmit(); } catch {}
   try { await loadSharedJSON(); } catch {}
   try { scheduleRender(); } catch {}
 })();
+window.addEventListener("DOMContentLoaded", () => {
+  console.log("DOMContentLoaded: wireSubmit 再実行");
+  try { wireSubmit(); } catch(e){ console.error(e); }
+});
