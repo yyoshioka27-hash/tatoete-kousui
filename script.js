@@ -226,16 +226,32 @@ function getBaseTexts(mode, bucket) {
   return base.map(x => String(x || "").trim()).filter(Boolean);
 }
 
+// ✅ A案：publicが1件でもあるなら「publicだけ」から抽選（=👍が必ず出る）
 function buildCandidatePool(mode, bucket) {
   const b = window.bucket10(bucket);
 
+  const pub = getPublicItems(mode, b);
+
+  // publicがあるなら public のみ（重複除去）
+  if (pub.length > 0) {
+    const out = [];
+    const seen = new Set();
+    for (const item of pub) {
+      if (!item?.text) continue;
+      if (seen.has(item.text)) continue;
+      seen.add(item.text);
+      out.push(item);
+    }
+    return out;
+  }
+
+  // publicが無い時だけ、従来通り（base + shared）
   const baseTexts = getBaseTexts(mode, b).map(t => ({ text: t, source: "base", publicId: null, penName: null }));
   const shared = getSharedItems(mode, b).map(x => ({ text: x.text, source: "json", publicId: null, penName: null }));
-  const pub    = getPublicItems(mode, b);
 
   const out = [];
   const seen = new Set();
-  for (const item of [...baseTexts, ...shared, ...pub]) {
+  for (const item of [...baseTexts, ...shared]) {
     if (!item?.text) continue;
     if (seen.has(item.text)) continue;
     seen.add(item.text);
@@ -386,8 +402,7 @@ function render() {
       likesToday: null
     };
 
-    // publicの場合：その場で「今日の👍」を表示できるように（0で初期化）
-    // ※正確に取りたいなら別APIが要るので、ここでは押した後に更新する方式
+    // publicの場合：押した後に増える方式（初期0）
     if (state.currentPhrases[slotKey].publicId) {
       state.currentPhrases[slotKey].likesToday = 0;
     }
@@ -424,7 +439,7 @@ function render() {
   }
 
   if (footEl) footEl.textContent =
-    "※降水確率を0/10/…/100%に丸め、既存ネタ＋共有(JSON)＋共有(public)からランダム表示";
+    "※降水確率を0/10/…/100%に丸め、共有(public優先/なければJSON)からランダム表示";
 
   try { renderRanking(); } catch {}
 }
