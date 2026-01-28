@@ -1,12 +1,16 @@
+<!-- index.html -->
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="降水確率を“別の確率”で例えてみる。雑学/お笑いの2モード対応。PWAでホーム画面に追加OK。" />
   <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="icon" type="image/png" href="./icons/icon-192.png" />
 
-  <title>たとえて、降水確率。</title>
+  <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
 
   <style>
     :root{
@@ -15,183 +19,403 @@
       --accent:#2563eb;
       --text:#0f172a;
       --sub:#475569;
-      --card: rgba(255,255,255,0.9);
-      --shadow: 0 10px 26px rgba(0,0,0,0.1);
+
+      --card: rgba(255,255,255,0.86);
+      --card-border: rgba(15, 23, 42, 0.08);
+      --shadow: 0 12px 28px rgba(2,6,23,0.10);
+
+      --radius: 18px;
+      --radius2: 14px;
+      --tap: 44px;
     }
 
     body{
       margin:0;
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:linear-gradient(180deg,var(--bg1),var(--bg2));
-      color:var(--text);
+      padding: 18px;
+      font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      background: linear-gradient(180deg, var(--bg1), var(--bg2));
+      color: var(--text);
     }
-
-    .wrap{
-      max-width:640px;
-      margin:0 auto;
-      padding:16px;
+    .container{
+      max-width: 860px;
+      margin: 0 auto;
+    }
+    h1{
+      margin: 0 0 14px;
+      font-size: 26px;
+      letter-spacing: -0.2px;
+      line-height: 1.25;
+    }
+    .subtitle{
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--sub);
     }
 
     .card{
-      background:var(--card);
-      border-radius:16px;
-      box-shadow:var(--shadow);
-      padding:16px;
-      margin-bottom:16px;
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 12px 0;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
     }
 
-    h1{
-      font-size:20px;
-      margin:0 0 8px;
+    .small{
+      color: var(--sub);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .muted{ color:#64748b; font-size:12px; }
+
+    input, select, textarea{
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(15,23,42,0.10);
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 16px;
+      background: rgba(255,255,255,0.90);
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(37,99,235,0.55);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+    }
+
+    button{
+      min-height: var(--tap);
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(15,23,42,0.10);
+      background: #fff;
+      cursor: pointer;
+      font-size: 16px;
+      transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease;
+      box-shadow: 0 8px 18px rgba(2,6,23,0.06);
+    }
+    button:hover{
+      border-color: rgba(37,99,235,0.35);
+      box-shadow: 0 10px 24px rgba(2,6,23,0.10);
+    }
+    button:active{ transform: translateY(1px); }
+    button:disabled{ opacity: .55; cursor: not-allowed; }
+
+    .btnPrimary{
+      background: var(--accent);
+      border-color: rgba(37,99,235,0.55);
+      color: #fff;
+      box-shadow: 0 14px 28px rgba(37,99,235,0.18);
     }
 
     .row{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* ====== モード（雑学/お笑い）位置ズレ完全修正 ====== */
+    .example-mode .modeWrap{
+      display:flex;
+      gap:16px;
+      align-items:center;
+      justify-content:flex-start;
+      margin-top:10px;
+    }
+    .example-mode label{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      cursor:pointer;
+      white-space:nowrap;
+      font-size:16px;
+    }
+    .example-mode input[type="radio"]{
+      margin:0;
+      transform: translateY(1px);
+    }
+
+    /* ====== 朝昼夜（縦並び・大きく） ====== */
+    .slot{
+      border: 1px solid rgba(15,23,42,0.08);
+      border-radius: var(--radius2);
+      padding: 14px;
+      margin-top: 12px;
+      background: rgba(255,255,255,0.72);
+    }
+    .slotHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .slotLabel{
+      font-size: 13px;
+      color: var(--sub);
+      font-weight: 700;
+    }
+    .slotMain{
       display:flex;
       align-items:center;
-      gap:12px;
-      margin-bottom:12px;
+      gap:10px;
+      margin-top:6px;
     }
-
     .wx{
-      font-size:24px;
-      width:32px;
+      font-size: 30px;
+      width: 38px;
       text-align:center;
+      line-height:1;
     }
-
     .pop{
-      font-size:22px;
-      font-weight:700;
-      width:60px;
+      font-size: 44px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1;
+      min-width: 110px;
+    }
+    .metaLine{
+      margin-top: 8px;
+      font-size: 16px;       /* ← 小さすぎ問題を解消 */
+      color: #1f2937;
+      line-height: 1.65;
+      font-weight: 600;
     }
 
-    .meta{
-      flex:1;
-      font-size:14px;
+    .actions{
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 12px;
     }
 
-    .like{
-      font-size:14px;
-      cursor:pointer;
-      background:#fff;
-      border:1px solid #ddd;
-      border-radius:12px;
-      padding:4px 10px;
+    .likeBtn{
+      min-height: 40px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 15px;
+      background: rgba(255,255,255,0.92);
     }
-
-    .btn-main{
-      width:100%;
-      background:var(--accent);
-      color:#fff;
-      border:none;
-      border-radius:14px;
-      padding:14px;
+    .badge{
+      margin-left:6px;
       font-size:16px;
-      cursor:pointer;
+      font-weight:800;
+      color:#f59e0b;
     }
 
-    .ranking-item{
-      font-size:14px;
-      margin:6px 0;
+    .pill{
+      display:inline-block;
+      padding: 6px 10px;
+      border: 1px solid rgba(15,23,42,0.10);
+      border-radius: 999px;
+      font-size:12px;
+      margin-right: 6px;
+      background: rgba(255,255,255,0.80);
     }
 
-    input, select, textarea{
-      width:100%;
-      padding:12px;
-      border-radius:12px;
-      border:1px solid #ddd;
-      margin-top:8px;
-      font-size:14px;
+    /* ====== ランキング ====== */
+    .rankCardTitle{
+      font-size: 16px;
+      font-weight: 900;
+      margin: 0 0 8px;
+    }
+    .rankHint{
+      font-size: 12px;
+      color: var(--sub);
+      margin: 0 0 8px;
+    }
+
+    .footer{
+      margin: 18px 0 8px;
+      color: var(--sub);
+      font-size: 12px;
+      text-align: center;
+      opacity: 0.9;
+    }
+
+    @media (max-width: 600px){
+      body{ padding: 12px; }
+      h1{ font-size: 22px; }
+      .card{ padding: 12px; }
+      .row{ grid-template-columns: 1fr; }
+      .pop{ font-size: 40px; min-width: 100px; }
+      .metaLine{ font-size: 15px; }
     }
   </style>
 </head>
 
 <body>
-<div class="wrap">
+  <div class="container">
 
-  <!-- 地点検索 -->
-  <div class="card">
-    <input id="place" placeholder="例：仙台 / Sendai" />
-    <button id="search" class="btn-main" style="margin-top:8px;">検索</button>
-    <select id="candidates" disabled style="margin-top:8px;"></select>
-    <div id="placeStatus" class="sub"></div>
-  </div>
+    <h1>たとえて、降水確率。
+      <div class="subtitle">－降水確率を“別の確率”で例えてみた。</div>
+    </h1>
 
-  <!-- モード -->
-  <div class="card">
-    <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
-    <label style="margin-left:12px;"><input type="radio" name="mode" value="fun"> お笑い</label>
-  </div>
+    <!-- 地点検索 -->
+    <div class="card">
+      <div class="small">天気予報を知りたい地点</div>
+      <div class="row" style="margin-top:10px;">
+        <input id="place" placeholder="例：仙台市 / Sendai / 仙台駅 / 仙台市青葉区" />
+        <button id="search" class="btnPrimary">検索</button>
+      </div>
 
-  <!-- 朝 -->
-  <div class="card row">
-    <div class="wx" id="wx_m">--</div>
-    <div class="pop" id="pop_m">--%</div>
-    <div class="meta" id="meta_m">---</div>
-    <button class="like" id="like_m">👍 <span id="likeCount_m">0</span></button>
-  </div>
-
-  <!-- 昼 -->
-  <div class="card row">
-    <div class="wx" id="wx_d">--</div>
-    <div class="pop" id="pop_d">--%</div>
-    <div class="meta" id="meta_d">---</div>
-    <button class="like" id="like_d">👍 <span id="likeCount_d">0</span></button>
-  </div>
-
-  <!-- 夜 -->
-  <div class="card row">
-    <div class="wx" id="wx_e">--</div>
-    <div class="pop" id="pop_e">--%</div>
-    <div class="meta" id="meta_e">---</div>
-    <button class="like" id="like_e">👍 <span id="likeCount_e">0</span></button>
-  </div>
-
-  <!-- 例え変更 -->
-  <div class="card">
-    <button id="refresh" class="btn-main">同じ確率で例えを変える</button>
-  </div>
-
-  <!-- 今日のランキング -->
-  <div class="card">
-    <h1>今日のランキング TOP3</h1>
-    <div id="todayRanking">
-      <div class="sub">まだランキングはありません</div>
+      <div style="margin-top:10px;">
+        <select id="candidates" disabled>
+          <option>検索結果がここに出ます</option>
+        </select>
+        <div id="placeStatus" class="muted" style="margin-top:8px;">
+          地点を入力して「検索」してください（APIキー不要）
+        </div>
+      </div>
     </div>
-  </div>
 
-  <!-- ネタ追加 -->
-  <div class="card">
-    <h1>ネタを追加（承認制）</h1>
-    <select id="newPhraseMode">
-      <option value="trivia">雑学</option>
-      <option value="fun">お笑い</option>
-    </select>
+    <!-- モード -->
+    <div class="card example-mode">
+      <div class="small">例えモード</div>
+      <div class="modeWrap">
+        <label><input type="radio" name="mode" value="trivia" checked> 雑学</label>
+        <label><input type="radio" name="mode" value="fun"> お笑い</label>
+      </div>
+      <div class="muted" style="margin-top:10px;">
+        ※同じ確率でも、毎回ちがうネタが出ます（👍で出やすくなります）
+      </div>
+    </div>
 
-    <select id="newPhraseBucket">
-      <option value="0">0%</option>
-      <option value="10">10%</option>
-      <option value="20">20%</option>
-      <option value="30">30%</option>
-      <option value="40">40%</option>
-      <option value="50">50%</option>
-      <option value="60">60%</option>
-      <option value="70">70%</option>
-      <option value="80">80%</option>
-      <option value="90">90%</option>
-      <option value="100">100%</option>
-    </select>
+    <!-- 降水確率（縦並び：朝→昼→夜） -->
+    <div class="card">
+      <div class="small">今日の降水確率（朝/昼/夜）</div>
+      <div class="small" id="popHint">地点を選ぶと自動取得します</div>
 
-    <input id="penName" placeholder="ペンネーム（任意）" />
-    <textarea id="newPhrase" placeholder="例えを書いてください"></textarea>
+      <!-- 朝 -->
+      <div class="slot">
+        <div class="slotHead">
+          <div class="slotLabel">朝（6–11時）</div>
+        </div>
+        <div class="slotMain">
+          <div class="wx" id="wx_m">--</div>
+          <div class="pop" id="pop_m">--%</div>
+        </div>
+        <div class="metaLine" id="meta_m"></div>
 
-    <button id="submitPendingBtn" class="btn-main" style="margin-top:8px;">
-      承認待ちへ送信
-    </button>
-    <div id="addStatus"></div>
-  </div>
+        <div class="actions">
+          <button id="del_m" style="display:none;">このネタを削除</button>
+          <button id="like_m" class="likeBtn">👍いいね (<span id="likeCount_m">0</span>)</button>
+          <span id="badge_m" class="badge"></span>
+        </div>
+      </div>
 
-</div>
+      <!-- 昼 -->
+      <div class="slot">
+        <div class="slotHead">
+          <div class="slotLabel">昼（12–17時）</div>
+        </div>
+        <div class="slotMain">
+          <div class="wx" id="wx_d">--</div>
+          <div class="pop" id="pop_d">--%</div>
+        </div>
+        <div class="metaLine" id="meta_d"></div>
 
-<script src="./script.js"></script>
+        <div class="actions">
+          <button id="del_d" style="display:none;">このネタを削除</button>
+          <button id="like_d" class="likeBtn">👍いいね (<span id="likeCount_d">0</span>)</button>
+          <span id="badge_d" class="badge"></span>
+        </div>
+      </div>
+
+      <!-- 夜 -->
+      <div class="slot">
+        <div class="slotHead">
+          <div class="slotLabel">夜（18–23時）</div>
+        </div>
+        <div class="slotMain">
+          <div class="wx" id="wx_e">--</div>
+          <div class="pop" id="pop_e">--%</div>
+        </div>
+        <div class="metaLine" id="meta_e"></div>
+
+        <div class="actions">
+          <button id="del_e" style="display:none;">このネタを削除</button>
+          <button id="like_e" class="likeBtn">👍いいね (<span id="likeCount_e">0</span>)</button>
+          <span id="badge_e" class="badge"></span>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <span class="pill" id="sourceTag">API: 未接続</span>
+        <span class="pill" id="tzTag">TZ: --</span>
+      </div>
+    </div>
+
+    <!-- ✅ 赤枠の総評（人間向け翻訳）ブロックは “完全削除” -->
+
+    <!-- 例えを変える -->
+    <div class="card">
+      <div class="actions" style="justify-content:center;">
+        <button id="refresh" class="btnPrimary" style="width:100%;">同じ確率でも例えを変える</button>
+      </div>
+
+      <!-- ランキングは “ボタン直下” -->
+      <div id="todayRankingWrap" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- ネタ追加 -->
+    <div class="card" id="addSection">
+      <div class="small"><b>ネタ追加（承認待ちへ送信）</b></div>
+      <div class="muted" style="margin-top:8px;">
+        ※送信すると承認待ちに入ります。承認されると全員に公開されます。
+      </div>
+
+      <div class="actions" style="margin-top:10px;">
+        <label class="small">モード：</label>
+        <select id="newPhraseMode" style="max-width: 220px;">
+          <option value="trivia">雑学</option>
+          <option value="fun">お笑い</option>
+        </select>
+
+        <label class="small">確率：</label>
+        <select id="newPhraseBucket" style="max-width: 140px;">
+          <option value="0">0%</option>
+          <option value="10">10%</option>
+          <option value="20">20%</option>
+          <option value="30">30%</option>
+          <option value="40">40%</option>
+          <option value="50">50%</option>
+          <option value="60">60%</option>
+          <option value="70">70%</option>
+          <option value="80">80%</option>
+          <option value="90">90%</option>
+          <option value="100">100%</option>
+        </select>
+
+        <button id="submitPendingBtn" class="btnPrimary">承認待ちへ送信</button>
+      </div>
+
+      <!-- ✅ ペンネーム -->
+      <div style="margin-top:10px;">
+        <input id="penName" placeholder="ペンネーム（任意）" />
+      </div>
+
+      <div style="margin-top:10px;">
+        <textarea id="newPhrase" rows="3" placeholder="例：日本の識字率は99％（約100％）"></textarea>
+      </div>
+
+      <div class="muted" id="addStatus" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="footer">
+      API: Open-Meteo / PWA対応（ホーム画面に追加OK）
+    </div>
+
+  </div><!-- /.container -->
+
+  <!-- ✅ 重要：ネタ（metaphors.js）を先に読む -->
+  <script src="metaphors.js?v=12"></script>
+  <!-- ✅ script.js はその次 -->
+  <script defer src="script.js?v=12"></script>
+
+  <!-- # END -->
 </body>
 </html>
