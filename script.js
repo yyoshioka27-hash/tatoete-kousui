@@ -12,7 +12,7 @@ function scheduleRender(){
   __renderQueued = true;
   requestAnimationFrame(() => {
     __renderQueued = false;
-    try { render(); } catch {}
+    try { render(); } catch (e) { console.warn("render error", e); }
   });
 }
 
@@ -524,7 +524,6 @@ function pickMetaphor(mode, bucket) {
   lastPickKey[key] = picked.text;
   return picked;
 }
-
 // =========================
 // ✅ ランキングが参照する “代表バケット”
 // =========================
@@ -1182,24 +1181,23 @@ function wireSubmit(){
   console.log("wireSubmit: bound OK", btn);
 }
 
-// ✅DOMができてから必ず結び付ける
-window.addEventListener("DOMContentLoaded", () => {
-  try { wireSubmit(); } catch(e){ console.warn(e); }
-});
-// ✅念のためロード済みでも一回呼ぶ
-try { if (document.readyState !== "loading") wireSubmit(); } catch {}
-
 // ==============================
-// ✅ 初期化
+// ✅ 初期化（※ここがあなたの貼り付けで崩れてたので修正）
+// - DOMContentLoaded を二重登録しない（機能維持）
+// - 初期表示で確実に render する
 // ==============================
-(async function init(){
+async function init(){
   try { ensureRankingDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
+  try { wireSubmit(); } catch (e) { console.warn(e); }
   try { scheduleRender(); } catch {}
-})();
-window.addEventListener("DOMContentLoaded", () => {
-  console.log("DOMContentLoaded: wireSubmit 再実行");
-  try { wireSubmit(); } catch(e){ console.error(e); }
-});
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", init, { once: true });
+} else {
+  // 既にDOMがある場合
+  init();
+}
 
 // # END
