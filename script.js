@@ -41,6 +41,18 @@ function scheduleRender(){
 
     /* ✅匿名を薄く */
     .pen-muted { opacity: .55; font-weight: 700; }
+
+    /* ✅殿堂入りバッジ */
+    .hof-badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12px;
+      border:1px solid rgba(15,23,42,.18);
+      background: rgba(255,255,255,.75);
+      margin-left:6px;
+    }
   `;
   document.head.appendChild(style);
 })();
@@ -123,7 +135,7 @@ async function submitToPending(mode, bucket, text, penName, penPin){
 
 // ==============================
 // publicネタ取得（Workers）
-// 返り値：[{id, text, penName}, ...]
+// 返り値：[{id, text, penName, totalLikes, hof}, ...]
 // ==============================
 async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   const params = new URLSearchParams();
@@ -137,12 +149,17 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   const data = await res.json().catch(()=>null);
   if (!data?.ok) throw new Error("public not ok");
 
+  // ✅ 殿堂入り閾値も受け取る（無ければ20）
+  state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+
   const items = Array.isArray(data.items) ? data.items : [];
   return items
     .map(it => ({
       id: String(it.id || "").trim(),
       text: String(it.text || "").trim(),
-      penName: (it.penName ? String(it.penName).trim() : null)
+      penName: (it.penName ? String(it.penName).trim() : null),
+      totalLikes: Number(it.totalLikes || 0),
+      hof: !!it.hof
     }))
     .filter(x => x.id && x.text);
 }
@@ -150,6 +167,7 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // ==============================
 // ✅ いいね（Workers）
 // - public/base/json すべて対象
+// - 返り値：{ likesToday, totalLikes, hof, hofThreshold }
 // ==============================
 async function likeAny(payload){
   const res = await fetch(`${API_BASE}/api/like`, {
@@ -159,6 +177,9 @@ async function likeAny(payload){
   });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
+
+  // ✅ 閾値を同期
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return data;
 }
 
@@ -173,6 +194,36 @@ async function fetchRankingToday(mode, bucket, limit = 3){
   const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, { method:"GET" });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking failed ${res.status}`);
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+// ==============================
+// ✅ 累計ランキング（Workers）
+// ==============================
+async function fetchRankingTotal(mode, bucket, limit = 3){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("bucket", String(bucket));
+  params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/ranking/total?${params.toString()}`, { method:"GET" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking total failed ${res.status}`);
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+// ==============================
+// ✅ 殿堂入り（Workers）
+// ==============================
+async function fetchHallOfFame(mode, bucket, limit = 50){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("bucket", String(bucket));
+  params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return Array.isArray(data.items) ? data.items : [];
 }
 
@@ -225,7 +276,7 @@ function getSharedItems(mode, bucket) {
 // ==============================
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
-const publicCache = new Map(); // "mode_bucket" => [{id,text,penName}, ...]
+const publicCache = new Map(); // "mode_bucket" => [{id,text,penName,totalLikes,hof}, ...]
 
 function keyMB(mode, bucket){
   const m = (mode === "fun" ? "fun" : "trivia");
@@ -262,7 +313,9 @@ function getPublicItems(mode, bucket){
     text: it.text,
     source: "public",
     id: it.id,
-    penName: it.penName || null
+    penName: it.penName || null,
+    totalLikes: Number(it.totalLikes || 0),
+    hof: !!it.hof
   }));
 }
 
@@ -283,10 +336,14 @@ let state = {
   placeLabel: null,
   tz: null,
   source: "API: 未接続",
+
+  // ✅ 殿堂入り閾値（サーバから受け取る）
+  hofThreshold: 20,
+
   currentPhrases: {
-    m: { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null },
-    d: { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null },
-    e: { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null }
+    m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null },
+    d: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null },
+    e: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null }
   }
 };
 
@@ -355,11 +412,19 @@ function ensureLikeDom(slot){
   btn.style.background = "rgba(255,255,255,.8)";
   btn.style.cursor = "pointer";
 
+  // ✅ 今日カウント
   const count = document.createElement("span");
   count.id = `likeCount_${slot}`;
   count.className = "muted";
   count.textContent = "0";
 
+  // ✅ 累計カウント
+  const total = document.createElement("span");
+  total.id = `likeTotal_${slot}`;
+  total.className = "muted";
+  total.textContent = "累計👍0";
+
+  // ✅ バッジ（候補/殿堂入り）
   const badge = document.createElement("span");
   badge.id = `badge_${slot}`;
   badge.className = "muted";
@@ -369,6 +434,7 @@ function ensureLikeDom(slot){
 
   wrap.appendChild(btn);
   wrap.appendChild(count);
+  wrap.appendChild(total);
   wrap.appendChild(badge);
 
   metaEl.insertAdjacentElement("afterend", wrap);
@@ -400,14 +466,18 @@ function buildCandidatePool(mode, bucket) {
     text,
     source: "base",
     id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
-    penName: null
+    penName: null,
+    totalLikes: 0,
+    hof: false
   }));
 
   const jsonItems = getSharedItems(m, b).map(x => ({
     text: x.text,
     source: "json",
     id: makeGlobalId({ mode: m, bucket: b, text: x.text, source: "json" }),
-    penName: null
+    penName: null,
+    totalLikes: 0,
+    hof: false
   }));
 
   const publicItems = getPublicItems(m, b);
@@ -426,7 +496,11 @@ function buildCandidatePool(mode, bucket) {
       text: t,
       source: item.source || "base",
       id: item.id || makeGlobalId({ mode: m, bucket: b, text: t, source: item.source || "base" }),
-      penName: item.penName || null
+      penName: item.penName || null,
+
+      // ✅ public は totalLikes/hof を引き継ぐ（base/json は0）
+      totalLikes: Number(item.totalLikes || 0),
+      hof: !!item.hof
     });
   }
   return out;
@@ -435,7 +509,7 @@ function buildCandidatePool(mode, bucket) {
 function pickMetaphor(mode, bucket) {
   const b = window.bucket10(bucket);
   const pool = buildCandidatePool(mode, b);
-  if (!pool.length) return { text: "データなし", source: null, id: null, penName: null };
+  if (!pool.length) return { text: "データなし", source: null, id: null, penName: null, totalLikes: 0, hof: false };
 
   const key = `${mode}_${b}`;
   let picked = pool[Math.floor(Math.random() * pool.length)];
@@ -470,6 +544,7 @@ function updateLikeUI(slot) {
   const phraseObj = state.currentPhrases[slot];
   const btnEl = document.getElementById(`like_${slot}`);
   const countEl = document.getElementById(`likeCount_${slot}`);
+  const totalEl = document.getElementById(`likeTotal_${slot}`);
   const badgeEl = document.getElementById(`badge_${slot}`);
 
   if (!btnEl) return;
@@ -479,17 +554,31 @@ function updateLikeUI(slot) {
 
   if (!ok) {
     if (countEl) countEl.textContent = "0";
+    if (totalEl) totalEl.textContent = "累計👍0";
     if (badgeEl) { badgeEl.textContent = ""; badgeEl.style.display = "none"; }
     btnEl.onclick = null;
     return;
   }
 
   const likesToday = Number(phraseObj.likesToday || 0);
+  const totalLikes = Number(phraseObj.totalLikes || 0);
+  const hof = !!phraseObj.hof || (totalLikes >= Number(state.hofThreshold || 20));
+
   if (countEl) countEl.textContent = String(likesToday);
+  if (totalEl) totalEl.textContent = `累計👍${totalLikes}`;
 
   if (badgeEl) {
-    badgeEl.textContent = (likesToday >= 5 ? "⭐候補！" : "");
-    badgeEl.style.display = (likesToday >= 5 ? "" : "none");
+    // ✅ 優先：殿堂入り → 候補
+    if (hof) {
+      badgeEl.innerHTML = `👑<span class="hof-badge">殿堂入り</span>`;
+      badgeEl.style.display = "";
+    } else if (likesToday >= 5) {
+      badgeEl.textContent = "⭐候補！";
+      badgeEl.style.display = "";
+    } else {
+      badgeEl.textContent = "";
+      badgeEl.style.display = "none";
+    }
   }
 
   btnEl.disabled = false;
@@ -510,6 +599,9 @@ function updateLikeUI(slot) {
       likeFxPlusOne(btnEl);
 
       state.currentPhrases[slot].likesToday = Number(out.likesToday || 0);
+      state.currentPhrases[slot].totalLikes = Number(out.totalLikes || state.currentPhrases[slot].totalLikes || 0);
+      state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
+
       updateLikeUI(slot);
       try { renderRanking(); } catch {}
     }catch(e){
@@ -588,7 +680,7 @@ function render() {
       if (metaEl) metaEl.textContent = "データなし";
       setIcon(slotKey, null);
 
-      state.currentPhrases[slotKey] = { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null };
+      state.currentPhrases[slotKey] = { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null };
       updateLikeUI(slotKey);
       updateDeleteUI(slotKey);
       return null;
@@ -606,25 +698,39 @@ function render() {
       ? String(picked.penName).trim()
       : "匿名";
 
+    const totalLikesPicked = Number(picked.totalLikes || 0);
+    const hofPicked = !!picked.hof || (totalLikesPicked >= Number(state.hofThreshold || 20));
+
     if (metaEl) {
       const penHtml = (displayPen === "匿名")
         ? `<span class="pen-muted">（匿名）</span>`
         : `<span class="muted">（${escapeHtml(displayPen)}）</span>`;
-      metaEl.innerHTML = `${escapeHtml(label)}：${escapeHtml(picked.text)} ${penHtml}`;
+
+      const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
+
+      metaEl.innerHTML = `${escapeHtml(label)}：${escapeHtml(picked.text)} ${penHtml}${hofHtml}`;
     }
 
     const prevId = state.currentPhrases[slotKey]?.id || null;
     const nextId = picked.id || null;
-    const nextLikes = (prevId && nextId && prevId === nextId)
+
+    // 同じネタを引いた時は今日カウントを維持（累計は picked 側の値を優先）
+    const nextLikesToday = (prevId && nextId && prevId === nextId)
       ? Number(state.currentPhrases[slotKey]?.likesToday || 0)
       : 0;
+
+    const nextTotalLikes = (prevId && nextId && prevId === nextId)
+      ? Number(state.currentPhrases[slotKey]?.totalLikes || totalLikesPicked || 0)
+      : Number(totalLikesPicked || 0);
 
     state.currentPhrases[slotKey] = {
       text: picked.text,
       source: picked.source || null,
       id: nextId,
       penName: displayPen,
-      likesToday: nextLikes,
+      likesToday: nextLikesToday,
+      totalLikes: nextTotalLikes,
+      hof: hofPicked,
       mode,
       bucket: rounded
     };
@@ -677,7 +783,7 @@ function renderEmpty() {
 
     setIcon(k, null);
 
-    state.currentPhrases[k] = { text: null, source: null, id: null, penName: null, likesToday: 0, mode: null, bucket: null };
+    state.currentPhrases[k] = { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null };
     updateLikeUI(k);
     updateDeleteUI(k);
   });
@@ -758,6 +864,9 @@ function ensureRankingDom(){
 
 // =========================
 // ランキング表示（例えを変えるボタンの下）
+// - 今日TOP3
+// - 累計TOP3
+// - 殿堂入り（累計閾値以上）
 // =========================
 async function renderRanking(){
   ensureRankingDom();
@@ -772,42 +881,118 @@ async function renderRanking(){
     return;
   }
 
+  const hofTh = Number(state.hofThreshold || 20);
+
   wrap.innerHTML = `
-    <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+    <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
       <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
       <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（毎日0:00にリセット）</div>
-      <div class="muted" id="rankingBody">読み込み中…</div>
+      <div class="muted" id="rankingBodyToday">読み込み中…</div>
+    </div>
+
+    <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">累計ランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
+      <div class="muted" style="margin-bottom:8px;">※累計👍（全期間）で集計</div>
+      <div class="muted" id="rankingBodyTotal">読み込み中…</div>
+    </div>
+
+    <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（累計👍${hofTh}以上）</div>
+      <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
+      <div class="muted" id="rankingBodyHof">読み込み中…</div>
     </div>
   `;
 
-  const body = document.getElementById("rankingBody");
+  const bodyToday = document.getElementById("rankingBodyToday");
+  const bodyTotal = document.getElementById("rankingBodyTotal");
+  const bodyHof   = document.getElementById("rankingBodyHof");
 
+  // ---- 今日TOP3 ----
   try{
     const items = await fetchRankingToday(mode, bucket, 3);
 
     if (!items.length) {
-      if (body) body.textContent = "まだランキングがありません（今日の👍が0件）";
-      return;
+      if (bodyToday) bodyToday.textContent = "まだランキングがありません（今日の👍が0件）";
+    } else {
+      const rows = items.map((it, idx) => {
+        const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+        const pen = (p === "匿名")
+          ? ` <span class="pen-muted">（匿名）</span>`
+          : ` <span class="muted">（${escapeHtml(p)}）</span>`;
+        const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
+        return `
+          <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${src}</div>
+            <div class="muted">今日の👍：${Number(it.likes||0)}</div>
+          </div>
+        `;
+      }).join("");
+      if (bodyToday) bodyToday.innerHTML = rows;
     }
-
-    const rows = items.map((it, idx) => {
-      const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
-      const pen = (p === "匿名")
-        ? ` <span class="pen-muted">（匿名）</span>`
-        : ` <span class="muted">（${escapeHtml(p)}）</span>`;
-      const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
-      return `
-        <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-          <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${src}</div>
-          <div class="muted">今日の👍：${Number(it.likes||0)}</div>
-        </div>
-      `;
-    }).join("");
-
-    if (body) body.innerHTML = rows;
-
   } catch (e) {
-    if (body) body.textContent = `ランキング取得に失敗：${e?.message || e}`;
+    if (bodyToday) bodyToday.textContent = `ランキング取得に失敗：${e?.message || e}`;
+  }
+
+  // ---- 累計TOP3 ----
+  try{
+    const items = await fetchRankingTotal(mode, bucket, 3);
+
+    if (!items.length) {
+      if (bodyTotal) bodyTotal.textContent = "まだ累計ランキングがありません（累計👍が0件）";
+    } else {
+      const rows = items.map((it, idx) => {
+        const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+        const pen = (p === "匿名")
+          ? ` <span class="pen-muted">（匿名）</span>`
+          : ` <span class="muted">（${escapeHtml(p)}）</span>`;
+        const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
+        const totalLikes = Number(it.totalLikes || 0);
+        const hof = !!it.hof || (totalLikes >= Number(state.hofThreshold || 20));
+        const hofTag = hof ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
+        return `
+          <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${src}${hofTag}</div>
+            <div class="muted">累計👍：${totalLikes}</div>
+          </div>
+        `;
+      }).join("");
+      if (bodyTotal) bodyTotal.innerHTML = rows;
+    }
+  } catch (e) {
+    if (bodyTotal) bodyTotal.textContent = `累計ランキング取得に失敗：${e?.message || e}`;
+  }
+
+  // ---- 殿堂入り ----
+  try{
+    const items = await fetchHallOfFame(mode, bucket, 50);
+    const hofTh2 = Number(state.hofThreshold || 20);
+
+    if (!items.length) {
+      if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
+    } else {
+      const rows = items.slice(0, 20).map((it, idx) => {
+        const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+        const pen = (p === "匿名")
+          ? ` <span class="pen-muted">（匿名）</span>`
+          : ` <span class="muted">（${escapeHtml(p)}）</span>`;
+        const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
+        const totalLikes = Number(it.totalLikes || 0);
+        return `
+          <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+            <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${src} <span class="hof-badge">👑殿堂入り</span></div>
+            <div class="muted">累計👍：${totalLikes}</div>
+          </div>
+        `;
+      }).join("");
+
+      const more = (items.length > 20)
+        ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${items.length}件）</div>`
+        : "";
+
+      if (bodyHof) bodyHof.innerHTML = rows + more;
+    }
+  } catch (e) {
+    if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
   }
 }
 
@@ -922,11 +1107,6 @@ document.getElementById("refresh").onclick = () => scheduleRender();
 // - ✅ ペンネーム指定時はPIN必須（救済なし）
 // - ✅ ペンネーム空欄ならPIN不要（= 匿名投稿）
 // ==============================
-// ==============================
-// ✅ ネタ追加（承認待ちへ送信）
-// - ✅ ペンネーム指定時はPIN必須（救済なし）
-// - ✅ ペンネーム空欄ならPIN不要（= 匿名投稿）
-// ==============================
 function wireSubmit(){
   // 1) まずは従来IDで探す
   let btn = document.getElementById("submit");
@@ -1021,3 +1201,5 @@ window.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded: wireSubmit 再実行");
   try { wireSubmit(); } catch(e){ console.error(e); }
 });
+
+// # END
