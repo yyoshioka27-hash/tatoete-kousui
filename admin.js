@@ -1,148 +1,121 @@
-// admin.js
-(() => {
-  const $ = (id) => document.getElementById(id);
+<!-- admin.html -->
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>管理（承認待ち）</title>
+  <style>
+    :root{ --line:rgba(15,23,42,.12); --sub:#64748b; }
+    body{ font-family: system-ui, -apple-system; margin:0; padding:16px; }
+    .card{ border:1px solid var(--line); border-radius:16px; padding:12px; margin:12px 0; }
+    input{ width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--line); border-radius:12px; }
+    button{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#0f172a; color:#fff; cursor:pointer; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:end; }
+    .muted{ color:var(--sub); font-size:13px; }
+    .item{ border-top:1px dashed var(--line); padding-top:10px; margin-top:10px; }
+    .item:first-child{ border-top:none; padding-top:0; margin-top:0; }
+  </style>
+</head>
+<body>
+  <h2>承認待ち 管理</h2>
 
-  const LS_API = "tatoete_api_base_v1";
-  const LS_KEY = "tatoete_admin_key_v1";
+  <div class="card">
+    <div class="row">
+      <div style="flex:1; min-width:260px;">
+        <div class="muted">ADMIN_KEY</div>
+        <input id="key" placeholder="x-admin-key を入力" />
+      </div>
+      <div style="flex:2; min-width:360px;">
+        <div class="muted">API_BASE</div>
+        <input id="api" value="https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev" />
+      </div>
+      <div>
+        <button id="load">一覧取得</button>
+      </div>
+    </div>
+    <div id="msg" class="muted" style="margin-top:10px;"></div>
+  </div>
 
-  function esc(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  <div class="card">
+    <div style="font-weight:700;">承認待ち一覧</div>
+    <div id="list" class="muted" style="margin-top:8px;">未取得</div>
+  </div>
+
+<script>
+  const $ = (id)=>document.getElementById(id);
+  const esc = (s)=>String(s||"").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  async function adminGET(path){
+    const API = $("api").value.trim();
+    const key = $("key").value.trim();
+    const res = await fetch(`${API}${path}`, { headers: { "x-admin-key": key }});
+    const data = await res.json().catch(()=>null);
+    if(!res.ok || !data?.ok) throw new Error(data?.error || `GET failed ${res.status}`);
+    return data;
   }
-
-  function setStatus(msg, ok=true){
-    const el = $("status");
-    el.className = "meta " + (ok ? "ok" : "ng");
-    el.textContent = msg;
-  }
-
-  function getApiBase() {
-    const v = $("apiBase").value.trim();
-    return v.replace(/\/+$/, ""); // 末尾スラッシュ除去
-  }
-  function getAdminKey() {
-    return $("adminKey").value.trim();
-  }
-
-  async function api(path, opts = {}) {
-    const base = getApiBase();
-    if (!base) throw new Error("API_BASE が空です");
-    const url = base + path;
-
-    const headers = Object.assign({}, opts.headers || {});
-    const key = getAdminKey();
-    if (key) headers["x-admin-key"] = key;
-
-    const res = await fetch(url, { ...opts, headers });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data?.ok === false) {
-      const msg = data?.error || `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
+  async function adminPOST(path, body){
+    const API = $("api").value.trim();
+    const key = $("key").value.trim();
+    const res = await fetch(`${API}${path}`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "x-admin-key": key },
+      body: JSON.stringify(body||{})
+    });
+    const data = await res.json().catch(()=>null);
+    if(!res.ok || !data?.ok) throw new Error(data?.error || `POST failed ${res.status}`);
     return data;
   }
 
-  function render(items) {
-    const root = $("list");
-    if (!items || !items.length) {
-      root.innerHTML = `<p class="meta">承認待ちはありません。</p>`;
+  function render(items){
+    if(!items.length){
+      $("list").innerHTML = "承認待ちは0件";
       return;
     }
-
-    root.innerHTML = items.map(it => {
-      const id = esc(it.id);
-      const mode = esc(it.mode);
-      const bucket = esc(it.bucket);
-      const from = esc(it.from || "");
-      const created = new Date(Number(it.createdAt || 0)).toLocaleString();
-      const text = esc(it.text || "");
-
-      return `
-        <div class="card" data-id="${id}">
-          <div class="meta">
-            <b>ID</b>: <code>${id}</code>　
-            <b>mode</b>: ${mode}　
-            <b>bucket</b>: ${bucket}　
-            <b>from</b>: ${from || "-"}　
-            <b>at</b>: ${created}
-          </div>
-          <div class="text">${text}</div>
-          <div class="row" style="margin-top:10px;">
-            <button class="primary" data-act="approve">承認</button>
-            <button class="danger" data-act="reject">却下</button>
-          </div>
+    $("list").innerHTML = items.map(x=>`
+      <div class="item">
+        <div style="font-weight:700; color:#0f172a;">${esc(x.text)}</div>
+        <div class="muted">mode=${esc(x.mode)} / bucket=${esc(x.bucket)} / pen=${esc(x.penName||"")}</div>
+        <div class="row" style="margin-top:8px;">
+          <button data-a="${esc(x.id)}">承認</button>
+          <button data-r="${esc(x.id)}" style="background:#ef4444;">却下</button>
+          <span class="muted">${esc(x.id)}</span>
         </div>
-      `;
-    }).join("");
-  }
+      </div>
+    `).join("");
 
-  async function refresh() {
-    setStatus("取得中…");
-    const data = await api("/api/pending", { method: "GET" });
-    render(data.items || []);
-    setStatus(`承認待ち: ${(data.items || []).length} 件`, true);
-  }
-
-  async function approve(id) {
-    setStatus("承認中…");
-    await api("/api/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id })
+    document.querySelectorAll("[data-a]").forEach(b=>{
+      b.onclick = async ()=>{
+        b.disabled = true;
+        try{ await adminPOST("/api/admin/approve", { id: b.getAttribute("data-a") }); await load(); }
+        catch(e){ $("msg").textContent = "エラー: " + e.message; }
+        finally{ b.disabled = false; }
+      };
     });
-    setStatus("承認しました ✅");
-    await refresh();
-  }
-
-  async function reject(id) {
-    setStatus("却下中…", true);
-    await api("/api/reject", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id })
+    document.querySelectorAll("[data-r]").forEach(b=>{
+      b.onclick = async ()=>{
+        b.disabled = true;
+        try{ await adminPOST("/api/admin/reject", { id: b.getAttribute("data-r") }); await load(); }
+        catch(e){ $("msg").textContent = "エラー: " + e.message; }
+        finally{ b.disabled = false; }
+      };
     });
-    setStatus("却下しました ✅");
-    await refresh();
   }
 
-  // events
-  document.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    const act = btn.getAttribute("data-act");
-    const card = btn.closest(".card");
-    const id = card?.getAttribute("data-id");
-    if (!id) return;
-
-    try {
-      if (act === "approve") await approve(id);
-      if (act === "reject") await reject(id);
-    } catch (err) {
-      setStatus(`エラー: ${err.message}`, false);
-      console.error(err);
+  async function load(){
+    $("msg").textContent = "読み込み中…";
+    try{
+      const data = await adminGET("/api/admin/pending");
+      render(data.items || []);
+      $("msg").textContent = `取得OK（${(data.items||[]).length}件）`;
+    }catch(e){
+      $("msg").textContent = "エラー: " + e.message;
     }
-  });
+  }
 
-  $("saveKey").addEventListener("click", () => {
-    localStorage.setItem(LS_API, $("apiBase").value.trim());
-    localStorage.setItem(LS_KEY, $("adminKey").value.trim());
-    setStatus("保存しました");
-  });
+  $("load").onclick = load;
+</script>
+</body>
+</html>
 
-  $("refresh").addEventListener("click", async () => {
-    try { await refresh(); }
-    catch (err) {
-      setStatus(`エラー: ${err.message}`, false);
-      console.error(err);
-    }
-  });
-
-  // init
-  $("apiBase").value = localStorage.getItem(LS_API) || "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
-  $("adminKey").value = localStorage.getItem(LS_KEY) || "";
-  refresh().catch(err => setStatus(`エラー: ${err.message}`, false));
-})();
+<!-- END -->
