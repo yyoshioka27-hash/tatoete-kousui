@@ -6,7 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
   <title>管理（承認待ち／一般公開）</title>
-
   <style>
     :root{
       --bg:#ffffff;
@@ -161,19 +160,22 @@
         <label>ADMIN_KEY</label>
         <input id="adminKey" class="mono" placeholder="例：2355" />
       </div>
+
       <div class="row" style="gap:8px; align-items:flex-end;">
         <button id="btnSave" class="btnPrimary">保存</button>
         <button id="btnHealth">health</button>
         <button id="btnRefresh">更新（表示中タブ）</button>
         <button id="btnImportSeed">初期ネタを取り込み</button>
       </div>
+
       <div class="right row" style="gap:8px;">
         <span class="pill" id="pillHealth">health: 未確認</span>
         <span class="pill" id="pillAdmin">admin: 未確認</span>
       </div>
     </div>
+
     <div class="muted" style="margin-top:10px;">
-      ※ 管理操作は x-admin-key ヘッダで送ります。<span class="mono">ADMIN_KEY</span> が間違うと 403 になります。
+      ※ 管理操作は <span class="mono">x-admin-key</span> ヘッダで送ります。<span class="mono">ADMIN_KEY</span> が間違うと 403 になります。
     </div>
   </div>
 
@@ -205,7 +207,7 @@
     <div class="muted" style="margin-top:10px;">
       ※ 承認待ち: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span><br/>
       ※ 公開: <span class="mono">/api/admin/list</span> / 削除: <span class="mono">/api/admin/delete</span><br/>
-      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span> / 削除: <span class="mono">/api/admin/delete</span>
+      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span>（表示のみ） / 削除: <span class="mono">/api/admin/delete</span>
     </div>
 
     <div class="list" id="list"></div>
@@ -253,7 +255,7 @@
   let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
   let itemsPublic  = [];
-  let itemsAll     = []; // { ...it, status:"public"|"pending" } を想定
+  let itemsAll     = []; // { ...it, status:"public"|"pending" }
   let selectedIds = new Set();
 
   function apiBase(){
@@ -290,7 +292,9 @@
     }catch{ return "--"; }
   }
 
-  // ✅ GET
+  // -----------------------
+  // API
+  // -----------------------
   async function apiGet(path){
     const res = await fetch(`${apiBase()}${path}`, {
       method: "GET",
@@ -304,7 +308,6 @@
     return data;
   }
 
-  // ✅ POST（ここが “唯一の apiPost”）
   async function apiPost(path, body){
     const res = await fetch(`${apiBase()}${path}`, {
       method: "POST",
@@ -322,30 +325,15 @@
     return data;
   }
 
-  function setTab(tab){
-    activeTab = tab;
-    selectedIds.clear();
-    chkAll.checked = false;
-
-    tabPending.classList.toggle("active", tab==="pending");
-    tabPublic.classList.toggle("active", tab==="public");
-    tabAll.classList.toggle("active", tab==="all");
-
-    // 削除ボタン：public / all で表示
-    btnBulkDelete.style.display = (tab==="public" || tab==="all") ? "" : "none";
-    // 承認/却下ボタン：pending / all で表示（allは pending のみが対象）
-    btnBulkApprove.style.display = (tab==="pending" || tab==="all") ? "" : "none";
-    btnBulkReject.style.display  = (tab==="pending" || tab==="all") ? "" : "none";
-
-    renderList();
+  // -----------------------
+  // 表示
+  // -----------------------
+  function renderCounts(){
+    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
   }
 
   function updateSelUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
-  }
-
-  function renderCounts(){
-    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
   }
 
   function getActiveItems(){
@@ -357,6 +345,24 @@
   function statusOfIdInAll(id){
     const hit = itemsAll.find(x => x && x.id === id);
     return hit?.status || null;
+  }
+
+  function setTab(tab){
+    activeTab = tab;
+    selectedIds.clear();
+    chkAll.checked = false;
+
+    tabPending.classList.toggle("active", tab==="pending");
+    tabPublic.classList.toggle("active",  tab==="public");
+    tabAll.classList.toggle("active",     tab==="all");
+
+    // 削除ボタン：public / all で表示
+    btnBulkDelete.style.display = (tab==="public" || tab==="all") ? "" : "none";
+    // 承認/却下ボタン：pending / all で表示（allの場合は pendingだけに適用する）
+    btnBulkApprove.style.display = (tab==="pending" || tab==="all") ? "" : "none";
+    btnBulkReject.style.display  = (tab==="pending" || tab==="all") ? "" : "none";
+
+    renderList();
   }
 
   function renderList(){
@@ -410,11 +416,10 @@
         actionBtns = `
           <button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
           <button class="btnDanger" data-act="reject" data-id="${id}">却下</button>
-        `;
-      } else if (activeTab === "public") {
-        actionBtns = `
           <button class="btnDanger" data-act="delete" data-id="${id}">削除</button>
         `;
+      } else if (activeTab === "public") {
+        actionBtns = `<button class="btnDanger" data-act="delete" data-id="${id}">削除</button>`;
       } else {
         if (status === "pending") {
           actionBtns += `<button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
@@ -442,68 +447,74 @@
         </div>
       `;
     }).join("");
+  }
 
-    listEl.onclick = async (ev) => {
-      const t = ev.target;
-      if (!t) return;
+  // クリック委譲（リスト上のボタン/チェック）
+  listEl.addEventListener("click", async (ev) => {
+    const t = ev.target;
+    if (!t) return;
 
-      const act = t.getAttribute("data-act");
-      const id  = t.getAttribute("data-id");
-      if (!act || !id) return;
+    const act = t.getAttribute("data-act");
+    const id  = t.getAttribute("data-id");
+    if (!act || !id) return;
 
-      if (act === "toggle"){
-        if (selectedIds.has(id)) selectedIds.delete(id);
-        else selectedIds.add(id);
-        updateSelUI();
+    if (act === "toggle"){
+      if (selectedIds.has(id)) selectedIds.delete(id);
+      else selectedIds.add(id);
+      updateSelUI();
 
-        const items2 = getActiveItems();
-        chkAll.checked = (items2.length > 0 && selectedIds.size === items2.length);
+      const items2 = getActiveItems();
+      chkAll.checked = (items2.length > 0 && selectedIds.size === items2.length);
+      return;
+    }
+
+    try{
+      if (act === "approve"){
+        if (!confirm(`承認しますか？\n${id}`)) return;
+        await apiPost("/api/admin/approve", { id });
+        await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+        renderList();
         return;
       }
 
-      try{
-        if (act === "approve"){
-          if (!confirm(`承認しますか？\n${id}`)) return;
-          await apiPost("/api/admin/approve", { id });
-          await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-          renderList();
-        }
-
-        if (act === "reject"){
-          if (!confirm(`却下しますか？\n${id}`)) return;
-          await apiPost("/api/admin/reject", { id });
-          await Promise.all([refreshPending(), refreshAll()]);
-          renderList();
-        }
-
-        if (act === "delete"){
-          if (!confirm(`削除しますか？（A: 完全抹消）\n${id}`)) return;
-          const scope = (activeTab === "all") ? "both" : (activeTab === "public" ? "public" : "pending");
-          await apiPost("/api/admin/delete", { id, scope });
-          await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-          renderList();
-        }
-      }catch(e){
-        alert(`操作失敗：${e?.message || e}`);
+      if (act === "reject"){
+        if (!confirm(`却下しますか？\n${id}`)) return;
+        await apiPost("/api/admin/reject", { id });
+        await Promise.all([refreshPending(), refreshAll()]);
+        renderList();
+        return;
       }
-    };
-  }
 
-  async function doHealth(){
-    try{
-      await apiGet("/api/health");
-      setPill(pillHealth, "health: OK", true);
+      if (act === "delete"){
+        if (!confirm(`削除しますか？\n${id}`)) return;
 
-      try{
-        await apiGet("/api/admin/check");
-        setPill(pillAdmin, "admin: OK", true);
-      }catch{
-        setPill(pillAdmin, "admin: NG", false);
+        // scope: public / pending / both（allタブ）
+        let scope = "public";
+        if (activeTab === "pending") scope = "pending";
+        else if (activeTab === "all") scope = "both";
+
+        await apiPost("/api/admin/delete", { id, scope });
+        await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+        renderList();
+        return;
       }
     }catch(e){
-      setPill(pillHealth, "health: NG", false);
-      setPill(pillAdmin,  "admin: NG", false);
-      throw e;
+      alert(`操作失敗：${e?.message || e}`);
+    }
+  });
+
+  // -----------------------
+  // health / refresh
+  // -----------------------
+  async function doHealth(){
+    await apiGet("/api/health");
+    setPill(pillHealth, "health: OK", true);
+
+    try{
+      await apiGet("/api/admin/check");
+      setPill(pillAdmin, "admin: OK", true);
+    }catch{
+      setPill(pillAdmin, "admin: NG", false);
     }
   }
 
@@ -511,22 +522,18 @@
     const data = await apiGet("/api/admin/pending");
     itemsPending = Array.isArray(data.items) ? data.items : [];
     renderCounts();
-    if (activeTab === "pending") renderList();
   }
 
   async function refreshPublic(){
     const data = await apiGet("/api/admin/list?limit=5000");
     itemsPublic = Array.isArray(data.items) ? data.items : [];
     renderCounts();
-    if (activeTab === "public") renderList();
   }
 
   async function refreshAll(){
     const data = await apiGet("/api/admin/all?scope=both&limit=5000");
-    console.log("ALL RAW:", data.items);
     itemsAll = Array.isArray(data.items) ? data.items : [];
     renderCounts();
-    if (activeTab === "all") renderList();
   }
 
   async function refreshActive(){
@@ -538,7 +545,16 @@
   // -----------------------
   // 一括操作
   // -----------------------
-  async function bulkApprove(){
+  chkAll.addEventListener("change", () => {
+    const items = getActiveItems();
+    selectedIds.clear();
+    if (chkAll.checked){
+      for (const it of items) if (it?.id) selectedIds.add(it.id);
+    }
+    renderList();
+  });
+
+  btnBulkApprove.addEventListener("click", async () => {
     const ids0 = Array.from(selectedIds);
     if (!ids0.length) return alert("選択が0件です");
 
@@ -563,9 +579,9 @@
     }finally{
       btnBulkApprove.disabled = false;
     }
-  }
+  });
 
-  async function bulkReject(){
+  btnBulkReject.addEventListener("click", async () => {
     const ids0 = Array.from(selectedIds);
     if (!ids0.length) return alert("選択が0件です");
 
@@ -583,24 +599,28 @@
       }
       selectedIds.clear();
       chkAll.checked = false;
-      await Promise.all([refreshPending(), refreshAll()]);
+      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
       renderList();
     }catch(e){
       alert(`一括却下失敗：${e?.message || e}`);
     }finally{
       btnBulkReject.disabled = false;
     }
-  }
+  });
 
-  async function bulkDelete(){
+  btnBulkDelete.addEventListener("click", async () => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return alert("選択が0件です");
-    if (!confirm(`選択を削除しますか？（A: 完全抹消）\n${ids.length}件`)) return;
+    if (!confirm(`選択を削除しますか？\n${ids.length}件`)) return;
 
     btnBulkDelete.disabled = true;
     try{
-      const scope = (activeTab === "all") ? "both" : (activeTab === "public" ? "public" : "pending");
-      await apiPost("/api/admin/delete", { ids, scope }); // ✅ ids 一括で渡す前提（Worker側もこれ）
+      for (const id of ids){
+        let scope = "public";
+        if (activeTab === "pending") scope = "pending";
+        else if (activeTab === "all") scope = "both";
+        await apiPost("/api/admin/delete", { id, scope });
+      }
       selectedIds.clear();
       chkAll.checked = false;
       await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
@@ -610,106 +630,112 @@
     }finally{
       btnBulkDelete.disabled = false;
     }
-  }
+  });
 
   // -----------------------
-  // 初期ネタ取り込み
+  // 初期ネタ取り込み（metaphors.js -> KV）
   // -----------------------
   async function importSeed(){
     if (!confirm("metaphors.js の初期ネタをKVへ取り込みます。よろしいですか？")) return;
 
-    const res = await fetch("./metaphors.js", { cache: "no-store" });
-    if (!res.ok) return alert("metaphors.js が読み込めません（パス確認）");
-    const code = await res.text();
+    btnImportSeed.disabled = true;
+    btnImportSeed.textContent = "取り込み中...";
 
-    const tmp = {};
-    (function(window){ eval(code); })(tmp);
+    try{
+      // 1) metaphors.js を取得（同一GitHub Pages上）
+      const res = await fetch("./metaphors.js", { cache: "no-store" });
+      if (!res.ok) throw new Error(`metaphors.js が読めません（${res.status}）`);
+      const code = await res.text();
 
-    const items = [];
+      // 2) 一時windowに評価（metaphors.js は window.NETA_TRIVIA / window.NETA を定義する想定）
+      const tmp = {};
+      (function(window){ eval(code); })(tmp);
 
-    const t = tmp.NETA_TRIVIA || {};
-    Object.keys(t).forEach(k => {
-      const bucket = Number(k);
-      (t[k] || []).forEach(text => items.push({ mode:"trivia", bucket, text }));
-    });
+      const items = [];
 
-    const f = tmp.NETA || {};
-    Object.keys(f).forEach(k => {
-      const bucket = Number(k);
-      (f[k] || []).forEach(text => items.push({ mode:"fun", bucket, text }));
-    });
+      const t = tmp.NETA_TRIVIA || {};
+      Object.keys(t).forEach(k => {
+        const bucket = Number(k);
+        (t[k] || []).forEach(text => items.push({ mode:"trivia", bucket, text }));
+      });
 
-    if (!items.length) return alert("初期ネタが見つかりません（NETA / NETA_TRIVIA を確認）");
+      const f = tmp.NETA || {};
+      Object.keys(f).forEach(k => {
+        const bucket = Number(k);
+        (f[k] || []).forEach(text => items.push({ mode:"fun", bucket, text }));
+      });
 
-    const r = await apiPost("/api/admin/import_seed", { items });
-    alert(`取り込み完了：追加 ${r.put ?? 0} / スキップ ${r.skipped ?? 0}`);
+      if (!items.length) throw new Error("初期ネタが見つかりません（NETA_TRIVIA / NETA が空）");
 
-    await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-    renderList();
+      // 3) Workerへ送信
+      // ✅ ここが Network に POST /api/admin/import_seed として出ます
+      const r = await apiPost("/api/admin/import_seed", { items });
+
+      alert(`取り込み完了：追加 ${r.put} 件 / スキップ ${r.skipped} 件`);
+
+      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+      renderList();
+    }catch(e){
+      alert(`取り込み失敗：${e?.message || e}`);
+      console.error(e);
+    }finally{
+      btnImportSeed.disabled = false;
+      btnImportSeed.textContent = "初期ネタを取り込み";
+    }
   }
 
   // -----------------------
-  // イベント
+  // UIイベント
   // -----------------------
-  btnSave.onclick = () => {
+  btnSave.addEventListener("click", () => {
     localStorage.setItem(LS_API, apiBase());
     localStorage.setItem(LS_KEY, adminKey());
     alert("保存しました");
-  };
+  });
 
-  btnHealth.onclick = async () => {
+  btnHealth.addEventListener("click", async () => {
     try{
       await doHealth();
       alert("health OK");
     }catch(e){
       alert(`health NG：${e?.message || e}`);
     }
-  };
+  });
 
-  btnRefresh.onclick = async () => {
+  btnRefresh.addEventListener("click", async () => {
     try{
       await doHealth();
       await refreshActive();
+      renderList();
     }catch(e){
       alert(`更新失敗：${e?.message || e}`);
     }
-  };
+  });
 
-  btnImportSeed.onclick = () => importSeed();
+  btnImportSeed.addEventListener("click", importSeed);
 
-  tabPending.onclick = () => setTab("pending");
-  tabPublic.onclick  = () => setTab("public");
-  tabAll.onclick     = () => setTab("all");
-
-  chkAll.onchange = () => {
-    const items = getActiveItems();
-    selectedIds.clear();
-    if (chkAll.checked){
-      for (const it of items) if (it?.id) selectedIds.add(it.id);
-    }
-    renderList();
-  };
-
-  btnBulkApprove.onclick = bulkApprove;
-  btnBulkReject.onclick  = bulkReject;
-  btnBulkDelete.onclick  = bulkDelete;
+  tabPending.addEventListener("click", () => setTab("pending"));
+  tabPublic.addEventListener("click",  () => setTab("public"));
+  tabAll.addEventListener("click",     () => setTab("all"));
 
   // -----------------------
   // 初期化
   // -----------------------
-  function init(){
+  async function init(){
     elApiBase.value  = localStorage.getItem(LS_API) || DEFAULT_API_BASE;
     elAdminKey.value = localStorage.getItem(LS_KEY) || "";
+
     setPill(pillHealth, "health: 未確認", null);
     setPill(pillAdmin,  "admin: 未確認", null);
 
-    doHealth()
-      .then(() => Promise.all([refreshPending(), refreshPublic(), refreshAll()]))
-      .then(() => renderList())
-      .catch((e) => {
-        console.warn(e);
-        renderList();
-      });
+    try{
+      await doHealth();
+      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+    }catch(e){
+      console.warn(e);
+    }finally{
+      renderList();
+    }
   }
 
   if (document.readyState === "loading") {
