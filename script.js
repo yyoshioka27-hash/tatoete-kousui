@@ -409,24 +409,59 @@ function setIcon(slotKey, roundedPop) {
 function ensureLikeDom(slot){
   // 既存のHTMLがある前提（like_m / likeCount_m / badge_m）
   const btn = document.getElementById(`like_${slot}`);
-  const count = document.getElementById(`likeCount_${slot}`);
-  const badge = document.getElementById(`badge_${slot}`);
+  let count = document.getElementById(`likeCount_${slot}`);
+  let badge = document.getElementById(`badge_${slot}`);
+
+  if (!btn) return;
 
   // ✅ 既存ボタンに演出クラスを付与
-  if (btn) btn.classList.add("like-btn-pop");
+  btn.classList.add("like-btn-pop");
+
+  // ✅ likeCount が無ければ作る（"??"対策の本丸）
+  // 期待する見た目：ボタン内に「👍 <span id=likeCount_x>0</span>」の形に寄せる
+  if (!count) {
+    // ボタン内のテキストが "??" などでも確実に置き換えられるように、span を作る
+    const span = document.createElement("span");
+    span.id = `likeCount_${slot}`;
+    span.textContent = "0";
+    span.style.fontWeight = "900";
+    span.style.marginLeft = "6px";
+
+    // ボタン内を整理（既存HTMLがどうであれ壊れにくいように）
+    // 例：btn.textContent が "👍??" でも、一旦 "👍" にして count を差す
+    const baseLabel = "👍";
+    btn.textContent = baseLabel;
+    btn.appendChild(span);
+
+    count = span;
+  }
 
   // ✅ 累計が無ければ作る（古いHTML対策）
   const totalId = `likeTotal_${slot}`;
   let total = document.getElementById(totalId);
   if (!total) {
-    if (btn && btn.parentElement) {
-      total = document.createElement("span");
-      total.id = totalId;
-      total.className = "muted";
-      total.textContent = "累計👍0";
-      btn.insertAdjacentElement("afterend", total);
+    // like ボタンの直後に累計を置く
+    total = document.createElement("span");
+    total.id = totalId;
+    total.className = "muted";
+    total.textContent = "累計👍0";
+    total.style.marginLeft = "10px";
+    btn.insertAdjacentElement("afterend", total);
+  }
+
+  // ✅ badge が無ければ作る（古いHTML対策）
+  if (!badge) {
+    const wrap = btn.parentElement;
+    if (wrap) {
+      const b = document.createElement("span");
+      b.id = `badge_${slot}`;
+      b.style.marginLeft = "6px";
+      wrap.appendChild(b);
+      badge = b;
     }
   }
+}
+
 
   // ✅ badge が無ければ作る（古いHTML対策）
   if (!badge) {
