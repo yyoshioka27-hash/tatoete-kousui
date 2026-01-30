@@ -3,17 +3,17 @@
     {
       "mode": "trivia",
       "bucket": 40,
-      "text": "共有テスト：40%（雑学）"
+      "text": "40%（雑学）"
     },
     {
       "mode": "fun",
       "bucket": 40,
-      "text": "共有テスト：40%（お笑い）"
+      "text": "40%（お笑い）"
     },
     {
       "mode": "trivia",
       "bucket": 20,
-      "text": "共有テスト：20%（雑学）"
+      "text": "20%（雑学）"
     }
   ]
 }
