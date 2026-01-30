@@ -356,12 +356,18 @@
         : `<div class="itemText">${escapeHtml(text)}</div>`;
 
       const perActions = [];
-      if (activeTab === "pending"){
-        perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
-        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下</button>`);
-      } else {
-        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`);
-      }
+
+// ★ 承認待ちでも delete を使う（後退防止）
+if (activeTab === "pending"){
+  perActions.push(
+    `<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`
+  );
+} else {
+  perActions.push(
+    `<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`
+  );
+}
+
 
       // all タブは表示のみが基本だが、削除は許可（要望）
       if (activeTab === "all"){
