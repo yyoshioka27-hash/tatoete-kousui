@@ -163,6 +163,8 @@
         <button id="btnSave" class="btnPrimary">保存</button>
         <button id="btnHealth">health</button>
         <button id="btnRefresh">更新（表示中タブ）</button>
+        <button id="btnImportSeed" onclick="importSeed()">初期ネタを取り込み</button>
+
       </div>
       <div class="right row" style="gap:8px;">
         <span class="pill" id="pillHealth">health: 未確認</span>
@@ -729,6 +731,51 @@
 
   const r = await apiPost("/api/admin/import_seed", { items });
   alert(`取り込み完了：追加 ${r.put} / スキップ ${r.skipped}`);
+
+  await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+  renderList();
+}
+async function importSeed(){
+  if (!confirm("metaphors.js の初期ネタをKVへ取り込みます。よろしいですか？")) return;
+
+  // metaphors.js を読み込む
+  const res = await fetch("./metaphors.js", { cache: "no-store" });
+  const code = await res.text();
+
+  // 一時windowに評価
+  const tmp = {};
+  (function(window){
+    eval(code);
+  })(tmp);
+
+  const items = [];
+
+  // 雑学
+  const t = tmp.NETA_TRIVIA || {};
+  Object.keys(t).forEach(k => {
+    const bucket = Number(k);
+    (t[k] || []).forEach(text => {
+      items.push({ mode: "trivia", bucket, text });
+    });
+  });
+
+  // お笑い
+  const f = tmp.NETA || {};
+  Object.keys(f).forEach(k => {
+    const bucket = Number(k);
+    (f[k] || []).forEach(text => {
+      items.push({ mode: "fun", bucket, text });
+    });
+  });
+
+  if (!items.length) {
+    alert("初期ネタが見つかりません");
+    return;
+  }
+
+  // Workerへ送信
+  const r = await apiPost("/api/admin/import_seed", { items });
+  alert(`取り込み完了：追加 ${r.put} 件 / スキップ ${r.skipped} 件`);
 
   await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
   renderList();
