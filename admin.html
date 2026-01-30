@@ -700,6 +700,40 @@
     init();
   }
 })();
+  async function importSeed(){
+  if (!confirm("metaphors.js の初期ネタをKVへ取り込みます。よろしいですか？")) return;
+
+  const res = await fetch("./metaphors.js", { cache: "no-store" });
+  const code = await res.text();
+
+  const tmp = {};
+  (function(window){
+    eval(code);
+  })(tmp);
+
+  const items = [];
+
+  const t = tmp.NETA_TRIVIA || {};
+  Object.keys(t).forEach(k => {
+    const bucket = Number(k);
+    (t[k] || []).forEach(text => items.push({ mode:"trivia", bucket, text }));
+  });
+
+  const f = tmp.NETA || {};
+  Object.keys(f).forEach(k => {
+    const bucket = Number(k);
+    (f[k] || []).forEach(text => items.push({ mode:"fun", bucket, text }));
+  });
+
+  if (!items.length) return alert("初期ネタが見つかりません");
+
+  const r = await apiPost("/api/admin/import_seed", { items });
+  alert(`取り込み完了：追加 ${r.put} / スキップ ${r.skipped}`);
+
+  await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+  renderList();
+}
+
 </script>
   <script src="./shared-metaphors.js"></script>
   <input id="adminKey" placeholder="ADMIN KEY">
