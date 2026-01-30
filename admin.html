@@ -4,7 +4,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>管理（承認待ち / 一般公開）</title>
+  <meta name="theme-color" content="#ffffff" />
+  <title>管理（承認待ち／一般公開）</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -19,896 +20,593 @@
       --btn:#0f172a;
       --btnText:#fff;
       --mutedBg:rgba(15,23,42,.04);
-      --amber:#f59e0b;
+      --radius:16px;
     }
     body{
       margin:0;
-      font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      padding:18px;
+      font-family:-apple-system,system-ui,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;
       background:var(--bg);
       color:var(--text);
     }
-    .wrap{
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 18px 16px 40px;
+    .container{ max-width:980px; margin:0 auto; }
+    h1{ margin:6px 0 16px; font-size:24px; letter-spacing:-.2px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:14px;
+      margin:12px 0;
     }
-    h1{
-      font-size: 28px;
-      margin: 8px 0 14px;
-    }
-    .row{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .field{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      margin: 6px 0;
-      flex-wrap:wrap;
-    }
-    label{
-      font-size: 13px;
-      color:var(--sub);
-      width: 84px;
-      flex: 0 0 auto;
-    }
+    .muted{ color:var(--sub); font-size:12px; }
+    label{ font-size:12px; color:var(--sub); display:block; margin-bottom:6px; }
     input, select{
+      padding:10px 12px;
+      border-radius:12px;
       border:1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 14px;
-      min-width: 220px;
-      max-width: 100%;
-    }
-    input.wide{ min-width: 360px; }
-    button{
-      border:1px solid transparent;
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 14px;
-      cursor:pointer;
-      background: var(--btn);
-      color: var(--btnText);
-    }
-    button.secondary{
+      min-width:280px;
+      font-size:14px;
       background:#fff;
-      color:var(--text);
-      border-color:var(--line);
+      outline:none;
     }
-    button.blue{ background: var(--blue); }
-    button.red{ background: var(--red); }
-    button.amber{ background: var(--amber); color:#111827; }
-    button:disabled{
-      opacity:.6;
-      cursor:not-allowed;
+    input:focus, select:focus{
+      border-color: rgba(37,99,235,0.55);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
     }
-    .statusbar{
-      margin-top: 10px;
-      padding: 10px 12px;
+    button{
+      padding:10px 12px;
+      border-radius:12px;
       border:1px solid var(--line);
-      border-radius: 12px;
-      background: var(--mutedBg);
-      color: var(--sub);
-      font-size: 13px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
+      background:#fff;
+      cursor:pointer;
+      font-size:14px;
+    }
+    button:disabled{ opacity:.55; cursor:not-allowed; }
+    .btnPrimary{
+      background:var(--blue);
+      color:#fff;
+      border-color:rgba(37,99,235,0.55);
+      font-weight:800;
+    }
+    .btnDanger{
+      background:var(--red);
+      color:#fff;
+      border-color:rgba(239,68,68,.6);
+      font-weight:800;
     }
     .pill{
       display:inline-flex;
       align-items:center;
-      gap:6px;
-      padding: 4px 10px;
-      border-radius: 999px;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:var(--mutedBg);
+      font-size:12px;
+    }
+    .tabs{ display:flex; gap:10px; }
+    .tab{
+      padding:8px 12px;
+      border-radius:999px;
       border:1px solid var(--line);
       background:#fff;
-      color:var(--sub);
-      font-size: 12px;
+      font-weight:800;
     }
-    .pill.ok{ color: var(--green); border-color: rgba(22,163,74,.35); }
-    .pill.ng{ color: var(--red); border-color: rgba(239,68,68,.35); }
-    .small{
-      font-size: 12px;
-      color: var(--sub);
+    .tab.active{
+      background:var(--btn);
+      color:var(--btnText);
+      border-color:rgba(15,23,42,.35);
     }
-    .danger{
-      color: var(--red);
-      font-size: 13px;
-      margin-top: 10px;
-      white-space: pre-wrap;
-    }
-
-    /* tabs */
-    .tabs{
-      margin-top: 14px;
+    .toolbar{
       display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .tabbtn{
-      background:#fff;
-      color:var(--text);
-      border:1px solid var(--line);
-      border-radius: 999px;
-      padding: 9px 12px;
-      font-size: 13px;
-      cursor:pointer;
-    }
-    .tabbtn.active{
-      background: var(--text);
-      color:#fff;
-      border-color: var(--text);
-    }
-
-    .panel{
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top:1px solid var(--line);
-    }
-
-    .card{
-      border:1px solid var(--line);
-      border-radius: 14px;
-      background: var(--card);
-      box-shadow: var(--shadow);
-      padding: 12px 14px;
-      margin: 10px 0;
-    }
-    .meta{
-      font-size: 12px;
-      color: var(--sub);
-      margin-bottom: 8px;
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .text{
-      font-size: 16px;
-      line-height: 1.5;
-      margin: 0 0 10px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .actions{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .hint{
-      font-size: 12px;
-      color: var(--sub);
-      margin-top: 10px;
-      line-height: 1.6;
-    }
-
-    .top-actions{
-      margin-left:auto;
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-
-    .grid2{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap:10px;
-    }
-    @media (max-width: 820px){
-      .grid2{ grid-template-columns: 1fr; }
-      input.wide{ min-width: 240px; }
-    }
-
-    .mutedBox{
-      border:1px dashed rgba(15,23,42,.18);
-      border-radius: 12px;
-      padding: 10px 12px;
-      background: rgba(15,23,42,.02);
-      color: var(--sub);
-      font-size: 12px;
-      line-height: 1.6;
-      margin-top: 10px;
-    }
-
-    /* ? 追加：一括操作バー */
-    .bulkbar{
-      margin: 10px 0 8px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #fff;
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
       align-items:center;
       justify-content:space-between;
-    }
-    .bulkleft{
-      display:flex;
       gap:10px;
       flex-wrap:wrap;
-      align-items:center;
+      padding:10px 0 0;
+      border-top:1px solid rgba(15,23,42,.08);
+      margin-top:10px;
     }
-    .chk{
-      display:inline-flex;
-      gap:8px;
-      align-items:center;
-      font-size: 13px;
-      color: var(--sub);
-      user-select:none;
-      cursor:pointer;
-    }
-    .chk input{ min-width:auto; }
-    .bulkright{
+    .list{
+      margin-top:10px;
       display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-items:center;
+      flex-direction:column;
+      gap:10px;
     }
-    .countpill{
+    .item{
+      border:1px solid rgba(15,23,42,.10);
+      border-radius:14px;
+      padding:12px;
+      background:rgba(255,255,255,.9);
+    }
+    .itemTop{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .itemText{ font-size:15px; line-height:1.55; font-weight:700; margin:8px 0; white-space:pre-wrap; }
+    .itemMeta{ display:flex; gap:10px; flex-wrap:wrap; }
+    .badge{
       display:inline-flex;
       align-items:center;
-      padding: 5px 10px;
-      border:1px solid var(--line);
-      border-radius: 999px;
-      font-size: 12px;
-      color: var(--sub);
-      background: var(--mutedBg);
+      gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(15,23,42,.12);
+      background:rgba(255,255,255,.75);
+      font-size:12px;
+      color:var(--sub);
+      font-weight:800;
     }
+    .actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .chk{ transform:translateY(1px); }
+    .right{ margin-left:auto; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
   </style>
 </head>
-
 <body>
-  <div class="wrap">
-    <h1>管理（承認待ち / 一般公開）</h1>
+<div class="container">
+  <h1>管理（承認待ち／一般公開）</h1>
 
+  <div class="card">
     <div class="row">
-      <div style="flex:1; min-width: 520px;">
-        <div class="field">
-          <label for="apiBase">API_BASE:</label>
-          <input id="apiBase" class="wide" type="text" value="https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev" />
-        </div>
-        <div class="field">
-          <label for="adminKey">ADMIN_KEY:</label>
-          <input id="adminKey" type="password" placeholder="例: 2355" />
-          <button class="blue" id="btnSave">保存</button>
-        </div>
+      <div>
+        <label>API_BASE</label>
+        <input id="apiBase" class="mono" />
       </div>
-
-      <div class="top-actions">
-        <button class="secondary" id="btnHealth">health</button>
-        <button class="secondary" id="btnRefresh">更新（表示中タブ）</button>
+      <div>
+        <label>ADMIN_KEY</label>
+        <input id="adminKey" class="mono" placeholder="例：2355" />
       </div>
-    </div>
-
-    <div class="statusbar">
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="row" style="gap:8px; align-items:flex-end;">
+        <button id="btnSave" class="btnPrimary">保存</button>
+        <button id="btnHealth">health</button>
+        <button id="btnRefresh">更新（表示中タブ）</button>
+      </div>
+      <div class="right row" style="gap:8px;">
         <span class="pill" id="pillHealth">health: 未確認</span>
         <span class="pill" id="pillAdmin">admin: 未確認</span>
       </div>
-      <div class="small">
-        承認待ち: <strong id="countPending">0</strong> 件 / 公開: <strong id="countPublic">0</strong> 件
-      </div>
     </div>
-
-    <div class="danger" id="errBox" style="display:none;"></div>
-
-    <!-- tabs -->
-    <div class="tabs">
-      <button class="tabbtn active" id="tabPending"> 承認待ち</button>
-      <button class="tabbtn" id="tabPublic"> 一般公開</button>
+    <div class="muted" style="margin-top:10px;">
+      ※ 管理操作は x-admin-key ヘッダで送ります。<span class="mono">ADMIN_KEY</span> が間違うと 403 になります。
     </div>
-
-    <!-- Pending Panel -->
-    <div class="panel" id="panelPending">
-
-      <!-- ? 一括操作（承認待ち） -->
-      <div class="bulkbar">
-        <div class="bulkleft">
-          <label class="chk"><input type="checkbox" id="chkAllPending"> 全選択</label>
-          <span class="countpill">選択: <strong id="selPending">0</strong> 件</span>
-        </div>
-        <div class="bulkright">
-          <button class="blue" id="btnBulkApprove" disabled>一括承認</button>
-          <button class="red"  id="btnBulkReject"  disabled>一括却下</button>
-        </div>
-      </div>
-
-      <div id="pendingList">
-        <p class="small">「更新（表示中タブ）」を押すと、承認待ちが表示されます。</p>
-      </div>
-
-      <p class="hint">
-        ※ 取得: <code>/api/pending</code> / 承認: <code>/api/approve</code> / 却下: <code>/api/reject</code><br>
-        ※ Worker の返却が <code>{ ok:true, items:[...] }</code> の前提です。
-      </p>
-    </div>
-
-    <!-- Public Panel -->
-    <div class="panel" id="panelPublic" style="display:none;">
-      <div class="grid2">
-        <div class="field">
-          <label for="pubMode">mode:</label>
-          <select id="pubMode">
-            <option value="">全て</option>
-            <option value="trivia">trivia（雑学）</option>
-            <option value="fun">fun（お笑い）</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="pubBucket">bucket:</label>
-          <select id="pubBucket">
-            <option value="">全て</option>
-            <option value="0">0</option><option value="10">10</option><option value="20">20</option><option value="30">30</option>
-            <option value="40">40</option><option value="50">50</option><option value="60">60</option><option value="70">70</option>
-            <option value="80">80</option><option value="90">90</option><option value="100">100</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="pubLimit">limit:</label>
-        <select id="pubLimit">
-          <option value="50">50</option>
-          <option value="200" selected>200</option>
-          <option value="500">500</option>
-        </select>
-        <button class="secondary" id="btnPublicReload">公開一覧を取得</button>
-      </div>
-
-      <!-- ? 一括操作（公開） -->
-      <div class="bulkbar">
-        <div class="bulkleft">
-          <label class="chk"><input type="checkbox" id="chkAllPublic"> 全選択</label>
-          <span class="countpill">選択: <strong id="selPublic">0</strong> 件</span>
-        </div>
-        <div class="bulkright">
-          <button class="red" id="btnBulkDeletePublic" disabled>一括削除（危険）</button>
-        </div>
-      </div>
-
-      <div class="mutedBox">
-        ? 「管理削除」は <strong>サーバ（KV）から削除</strong>します。<br>
-        → つまり <strong>全員の一般公開から消えます</strong>。<br>
-        ※この操作は取り消しできません（復活は再投稿が必要）。
-      </div>
-
-      <div id="publicList">
-        <p class="small">「公開一覧を取得」を押すと、一般公開のネタが表示されます。</p>
-      </div>
-
-      <p class="hint">
-        ※ 一般公開の取得は <code>/api/admin/list</code>（admin only）を使います。<br>
-        ※ 削除は <code>/api/admin/delete</code>（admin only）です。
-      </p>
-    </div>
-
   </div>
 
-  <script>
-    // ===========================
-    // admin.html (pending + public manager)
-    // ===========================
+  <div class="card">
+    <div class="row" style="justify-content:space-between;">
+      <div class="tabs">
+        <button id="tabPending" class="tab active">承認待ち</button>
+        <button id="tabPublic" class="tab">一般公開</button>
+      </div>
+      <div class="muted" id="counts">承認待ち: 0件 / 公開: 0件</div>
+    </div>
 
-    const LS_API_BASE  = "tatoete_admin_api_base_v1";
-    const LS_ADMIN_KEY = "tatoete_admin_key_v1";
-    const LS_ACTIVE_TAB = "tatoete_admin_tab_v1"; // "pending" | "public"
+    <div class="toolbar">
+      <div class="row" style="gap:12px;">
+        <label style="margin:0; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="chkAll" class="chk" />
+          全選択
+        </label>
+        <span class="pill" id="selCount">選択: 0件</span>
+      </div>
+      <div class="actions">
+        <button id="btnBulkApprove" class="btnPrimary">一括承認</button>
+        <button id="btnBulkReject" class="btnDanger">一括却下</button>
+        <button id="btnBulkDeletePublic" class="btnDanger" style="display:none;">選択を削除</button>
+      </div>
+    </div>
 
-    const $ = (id) => document.getElementById(id);
+    <div class="muted" style="margin-top:10px;">
+      「更新（表示中タブ）」を押すと、承認待ちが表示されます。<br/>
+      ※ 取得: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span><br/>
+      ※ 公開一覧: <span class="mono">/api/admin/list</span> / 削除: <span class="mono">/api/admin/delete</span>
+    </div>
 
-    function setErr(msg) {
-      const box = $("errBox");
-      if (!msg) {
-        box.style.display = "none";
-        box.textContent = "";
-        return;
-      }
-      box.style.display = "block";
-      box.textContent = String(msg);
+    <div class="list" id="list"></div>
+  </div>
+
+  <div class="muted" style="text-align:center; margin:14px 0 8px;">
+    admin.html（堅牢版） / # END
+  </div>
+</div>
+
+<script>
+(() => {
+  // -----------------------
+  // 設定
+  // -----------------------
+  const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+  const LS_API = "tatoete_admin_api_base";
+  const LS_KEY = "tatoete_admin_key";
+
+  const $ = (id) => document.getElementById(id);
+
+  const elApiBase = $("apiBase");
+  const elAdminKey = $("adminKey");
+  const pillHealth = $("pillHealth");
+  const pillAdmin  = $("pillAdmin");
+  const countsEl   = $("counts");
+  const listEl     = $("list");
+
+  const tabPending = $("tabPending");
+  const tabPublic  = $("tabPublic");
+  const chkAll     = $("chkAll");
+  const selCount   = $("selCount");
+
+  const btnSave    = $("btnSave");
+  const btnHealth  = $("btnHealth");
+  const btnRefresh = $("btnRefresh");
+
+  const btnBulkApprove = $("btnBulkApprove");
+  const btnBulkReject  = $("btnBulkReject");
+  const btnBulkDeletePublic = $("btnBulkDeletePublic");
+
+  let activeTab = "pending"; // pending | public
+  let itemsPending = [];
+  let itemsPublic = [];
+  let selectedIds = new Set();
+
+  function apiBase(){
+    return String(elApiBase.value || "").trim().replace(/\/+$/,"");
+  }
+  function adminKey(){
+    return String(elAdminKey.value || "").trim();
+  }
+
+  function setPill(el, text, ok=null){
+    el.textContent = text;
+    el.style.borderColor = ok===true ? "rgba(22,163,74,.45)"
+                      : ok===false ? "rgba(239,68,68,.45)"
+                      : "rgba(15,23,42,.12)";
+    el.style.background = ok===true ? "rgba(22,163,74,.08)"
+                      : ok===false ? "rgba(239,68,68,.08)"
+                      : "rgba(15,23,42,.04)";
+  }
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function fmtTime(ts){
+    if (!ts) return "--";
+    try{
+      const d = new Date(Number(ts));
+      return d.toLocaleString("ja-JP");
+    }catch{ return "--"; }
+  }
+
+  async function apiGet(path){
+    const res = await fetch(`${apiBase()}${path}`, {
+      method: "GET",
+      headers: adminKey() ? { "x-admin-key": adminKey() } : {}
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      const msg = data?.error || data?.message || `${path} failed ${res.status}`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  async function apiPost(path, body){
+    const res = await fetch(`${apiBase()}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type":"application/json",
+        ...(adminKey() ? { "x-admin-key": adminKey() } : {})
+      },
+      body: JSON.stringify(body || {})
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      const msg = data?.error || data?.message || `${path} failed ${res.status}`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  function setTab(tab){
+    activeTab = tab;
+    selectedIds.clear();
+    chkAll.checked = false;
+
+    tabPending.classList.toggle("active", tab==="pending");
+    tabPublic.classList.toggle("active", tab==="public");
+
+    // 公開タブだけ削除ボタンを出す
+    btnBulkDeletePublic.style.display = (tab==="public") ? "" : "none";
+    btnBulkApprove.style.display = (tab==="pending") ? "" : "none";
+    btnBulkReject.style.display  = (tab==="pending") ? "" : "none";
+
+    renderList();
+  }
+
+  function updateSelUI(){
+    selCount.textContent = `選択: ${selectedIds.size}件`;
+  }
+
+  function renderCounts(){
+    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件`;
+  }
+
+  function renderList(){
+    const items = (activeTab==="pending") ? itemsPending : itemsPublic;
+
+    renderCounts();
+    updateSelUI();
+
+    if (!items.length){
+      listEl.innerHTML = `<div class="muted">表示するデータがありません。</div>`;
+      return;
     }
 
-    function setPill(el, text, ok=null) {
-      el.textContent = text;
-      el.classList.remove("ok","ng");
-      if (ok === true) el.classList.add("ok");
-      if (ok === false) el.classList.add("ng");
-    }
+    listEl.innerHTML = items.map(it => {
+      const id = escapeHtml(it.id || "");
+      const text = escapeHtml(it.text || "");
+      const mode = escapeHtml(it.mode || "");
+      const bucket = escapeHtml(String(it.bucket ?? ""));
+      const pen = escapeHtml(it.penName || "匿名");
+      const createdAt = fmtTime(it.createdAt);
+      const approvedAt = fmtTime(it.approvedAt);
 
-    function loadSaved() {
-      const api = localStorage.getItem(LS_API_BASE);
-      const key = localStorage.getItem(LS_ADMIN_KEY);
-      const tab = localStorage.getItem(LS_ACTIVE_TAB);
-      if (api) $("apiBase").value = api;
-      if (key) $("adminKey").value = key;
-      if (tab === "public") setActiveTab("public");
-      else setActiveTab("pending");
-    }
+      const checked = selectedIds.has(it.id) ? "checked" : "";
 
-    function saveInputs() {
-      localStorage.setItem(LS_API_BASE, $("apiBase").value.trim());
-      localStorage.setItem(LS_ADMIN_KEY, ($("adminKey").value || "").trim());
-    }
+      const topBadges = [
+        `<span class="badge">mode: ${mode}</span>`,
+        `<span class="badge">bucket: ${bucket}</span>`,
+        `<span class="badge">pen: ${pen}</span>`,
+        `<span class="badge">id: <span class="mono">${id}</span></span>`
+      ].join(" ");
 
-    function getApiBase() {
-      return $("apiBase").value.trim().replace(/\/+$/,"");
-    }
+      const timeBadges = (activeTab==="pending")
+        ? `<span class="badge">created: ${createdAt}</span>`
+        : `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`;
 
-    // ★超重要：ADMIN_KEYが空ならpromptで聞く→入力欄＆localStorageへ反映
-    function getAdminKey({ forcePrompt = false } = {}) {
-      let k = ($("adminKey").value || "").trim();
-
-      if (forcePrompt || !k) {
-        const p = (prompt("ADMIN_KEY を入れて") || "").trim();
-        if (p) {
-          $("adminKey").value = p;
-          k = p;
-          localStorage.setItem(LS_ADMIN_KEY, k);
-        }
-      }
-      return k;
-    }
-
-    function fmtTime(ms) {
-      const d = new Date(Number(ms || 0));
-      if (Number.isNaN(d.getTime())) return "";
-      const yy = d.getFullYear();
-      const mm = String(d.getMonth()+1).padStart(2,"0");
-      const dd = String(d.getDate()).padStart(2,"0");
-      const hh = String(d.getHours()).padStart(2,"0");
-      const mi = String(d.getMinutes()).padStart(2,"0");
-      const ss = String(d.getSeconds()).padStart(2,"0");
-      return `${yy}/${mm}/${dd} ${hh}:${mi}:${ss}`;
-    }
-
-    async function apiGet(path, admin=false) {
-      const url = `${getApiBase()}${path}`;
-      const headers = {};
-
-      if (admin) {
-        const k = getAdminKey();
-        if (!k) throw new Error("ADMIN_KEY が空です（入力または保存してください）");
-        headers["x-admin-key"] = k;
-      }
-
-      const res = await fetch(url, { headers });
-      const data = await res.json().catch(() => null);
-      return { res, data };
-    }
-
-    async function apiPost(path, body, admin=false) {
-      const url = `${getApiBase()}${path}`;
-      const headers = { "Content-Type":"application/json" };
-
-      if (admin) {
-        const k = getAdminKey();
-        if (!k) throw new Error("ADMIN_KEY が空です（入力または保存してください）");
-        headers["x-admin-key"] = k;
-      }
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body || {})
-      });
-      const data = await res.json().catch(() => null);
-      return { res, data };
-    }
-
-    function escapeHtml(s) {
-      return String(s)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    // ---------------------------
-    // Tabs
-    // ---------------------------
-    function setActiveTab(tab){
-      const isPending = (tab === "pending");
-      $("panelPending").style.display = isPending ? "block" : "none";
-      $("panelPublic").style.display  = isPending ? "none"  : "block";
-      $("tabPending").classList.toggle("active", isPending);
-      $("tabPublic").classList.toggle("active", !isPending);
-      localStorage.setItem(LS_ACTIVE_TAB, tab);
-    }
-
-    $("tabPending").addEventListener("click", () => setActiveTab("pending"));
-    $("tabPublic").addEventListener("click", () => setActiveTab("public"));
-
-    function getCurrentTab(){
-      return localStorage.getItem(LS_ACTIVE_TAB) === "public" ? "public" : "pending";
-    }
-
-    // ---------------------------
-    // ? Bulk helpers
-    // ---------------------------
-    function qsa(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
-
-    function updatePendingSelectionUI(){
-      const checks = qsa("input[data-pick='pending']");
-      const checked = checks.filter(c => c.checked);
-      $("selPending").textContent = String(checked.length);
-      $("btnBulkApprove").disabled = checked.length === 0;
-      $("btnBulkReject").disabled  = checked.length === 0;
-
-      const all = checks.length > 0 && checked.length === checks.length;
-      $("chkAllPending").checked = all;
-    }
-
-    function updatePublicSelectionUI(){
-      const checks = qsa("input[data-pick='public']");
-      const checked = checks.filter(c => c.checked);
-      $("selPublic").textContent = String(checked.length);
-      $("btnBulkDeletePublic").disabled = checked.length === 0;
-
-      const all = checks.length > 0 && checked.length === checks.length;
-      $("chkAllPublic").checked = all;
-    }
-
-    async function bulkRun(ids, fn){
-      for (let i=0; i<ids.length; i++){
-        await fn(ids[i], i, ids.length);
-      }
-    }
-
-    // ---------------------------
-    // Pending render
-    // ---------------------------
-    function renderPending(items) {
-      const list = $("pendingList");
-      list.innerHTML = "";
-
-      const arr = Array.isArray(items) ? items : [];
-      $("countPending").textContent = String(arr.length);
-
-      // ? 一括UI初期化
-      $("chkAllPending").checked = false;
-      $("selPending").textContent = "0";
-      $("btnBulkApprove").disabled = true;
-      $("btnBulkReject").disabled  = true;
-
-      if (arr.length === 0) {
-        list.innerHTML = `<p class="small">承認待ちはありません。</p>`;
-        return;
-      }
-
-      for (const it of arr) {
-        const id = it?.id || "";
-        const mode = it?.mode  "";
-        const bucket = it?.bucket  "";
-        const from = it?.from ? `from: ${it.from}` : "";
-        const at = it?.createdAt ? fmtTime(it.createdAt) : "";
-        const text = it?.text  "";
-
-        const card = document.createElement("div");
-        card.className = "card";
-
-        card.innerHTML = `
-          <div class="meta">
-            <label class="chk" style="color:var(--text);">
-              <input type="checkbox" data-pick="pending" data-id="${escapeHtml(id)}">
-              選択
-            </label>
-            <span>ID: <code>${escapeHtml(id)}</code></span>
-            <span>mode: <code>${escapeHtml(mode)}</code></span>
-            <span>bucket: <code>${escapeHtml(bucket)}</code></span>
-            ${from ? `<span>${escapeHtml(from)}</span>` : ""}
-            ${at ? `<span>at: ${escapeHtml(at)}</span>` : ""}
-          </div>
-
-          <p class="text">${escapeHtml(text)}</p>
-
-          <div class="actions">
-            <button class="blue" data-act="approve" data-id="${escapeHtml(id)}">承認</button>
-            <button class="red"  data-act="reject"  data-id="${escapeHtml(id)}">却下</button>
-          </div>
+      const actionBtns = (activeTab==="pending")
+        ? `
+          <button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
+          <button class="btnDanger" data-act="reject" data-id="${id}">却下</button>
+        `
+        : `
+          <button class="btnDanger" data-act="delete" data-id="${id}">削除</button>
         `;
 
-        list.appendChild(card);
-      }
+      return `
+        <div class="item">
+          <div class="itemTop">
+            <label style="margin:0; display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" class="chk" data-act="toggle" data-id="${id}" ${checked} />
+              選択
+            </label>
+            <div class="itemMeta">${topBadges}</div>
+          </div>
 
-      // チェックUI
-      qsa("input[data-pick='pending']", list).forEach(chk => {
-        chk.addEventListener("change", updatePendingSelectionUI);
-      });
-      updatePendingSelectionUI();
+          <div class="itemText">${text}</div>
 
-      // event delegation
-      list.querySelectorAll("button[data-act]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const act = btn.getAttribute("data-act");
-          const id  = btn.getAttribute("data-id");
-          if (!id) return;
+          <div class="row" style="justify-content:space-between;">
+            <div class="itemMeta">${timeBadges}</div>
+            <div class="actions">${actionBtns}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
 
-          btn.disabled = true;
-          setErr("");
+    // クリック委譲（壊れにくい）
+    listEl.onclick = async (ev) => {
+      const t = ev.target;
+      if (!t) return;
 
-          try {
-            if (act === "approve") {
-              const { res, data } = await apiPost("/api/approve", { id }, true);
-              if (!res.ok || !data?.ok) throw new Error(data?.error || `approve failed ${res.status}`);
-            } else if (act === "reject") {
-              const { res, data } = await apiPost("/api/reject", { id }, true);
-              if (!res.ok || !data?.ok) throw new Error(data?.error || `reject failed ${res.status}`);
-            }
-            await fetchPending(); // refresh
-          } catch (e) {
-            setErr(e?.message || String(e));
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
-    }
+      const act = t.getAttribute("data-act");
+      const id  = t.getAttribute("data-id");
 
-    async function fetchPending() {
-      setErr("");
-      try {
-        const { res, data } = await apiGet("/api/pending", true);
-        if (!res.ok || !data?.ok) {
-          setPill($("pillAdmin"), "admin: NG", false);
-          throw new Error(data?.error || `pending failed ${res.status}`);
-        }
-        setPill($("pillAdmin"), "admin: OK", true);
-        renderPending(data.items);
-      } catch (e) {
-        setPill($("pillAdmin"), "admin: NG", false);
-        setErr(e?.message || String(e));
-        renderPending([]);
-      }
-    }
+      if (!act || !id) return;
 
-    // ? Pending bulk
-    $("chkAllPending").addEventListener("change", () => {
-      const on = $("chkAllPending").checked;
-      qsa("input[data-pick='pending']").forEach(c => c.checked = on);
-      updatePendingSelectionUI();
-    });
+      if (act === "toggle"){
+        if (selectedIds.has(id)) selectedIds.delete(id);
+        else selectedIds.add(id);
+        updateSelUI();
 
-    $("btnBulkApprove").addEventListener("click", async () => {
-      const ids = qsa("input[data-pick='pending']:checked").map(c => c.getAttribute("data-id")).filter(Boolean);
-      if (!ids.length) return;
-
-      const ok = confirm(`選択した ${ids.length} 件を一括承認します。よろしいですか？`);
-      if (!ok) return;
-
-      $("btnBulkApprove").disabled = true;
-      $("btnBulkReject").disabled  = true;
-
-      try{
-        await bulkRun(ids, async (id) => {
-          const { res, data } = await apiPost("/api/approve", { id }, true);
-          if (!res.ok || !data?.ok) throw new Error(data?.error || `approve failed ${res.status}`);
-        });
-        await fetchPending();
-      }catch(e){
-        setErr(e?.message || String(e));
-        await fetchPending();
-      }
-    });
-
-    $("btnBulkReject").addEventListener("click", async () => {
-      const ids = qsa("input[data-pick='pending']:checked").map(c => c.getAttribute("data-id")).filter(Boolean);
-      if (!ids.length) return;
-
-      const ok = confirm(`選択した ${ids.length} 件を一括却下します。よろしいですか？`);
-      if (!ok) return;
-
-      $("btnBulkApprove").disabled = true;
-      $("btnBulkReject").disabled  = true;
-
-      try{
-        await bulkRun(ids, async (id) => {
-          const { res, data } = await apiPost("/api/reject", { id }, true);
-          if (!res.ok || !data?.ok) throw new Error(data?.error || `reject failed ${res.status}`);
-        });
-        await fetchPending();
-      }catch(e){
-        setErr(e?.message || String(e));
-        await fetchPending();
-      }
-    });
-
-    // ---------------------------
-    // Public render (admin list + admin delete)
-    // ---------------------------
-    function renderPublic(items) {
-      const list = $("publicList");
-      list.innerHTML = "";
-
-      const arr = Array.isArray(items) ? items : [];
-      $("countPublic").textContent = String(arr.length);
-
-      // ? 一括UI初期化
-      $("chkAllPublic").checked = false;
-      $("selPublic").textContent = "0";
-      $("btnBulkDeletePublic").disabled = true;
-
-      if (arr.length === 0) {
-        list.innerHTML = `<p class="small">一般公開のネタはありません（または条件に該当なし）。</p>`;
+        // 全選択チェック同期
+        const items2 = (activeTab==="pending") ? itemsPending : itemsPublic;
+        chkAll.checked = (items2.length > 0 && selectedIds.size === items2.length);
         return;
       }
 
-      for (const it of arr) {
-        const id = it?.id || "";
-        const mode = it?.mode  "";
-        const bucket = it?.bucket  "";
-        const at = it?.createdAt ? fmtTime(it.createdAt) : "";
-        const text = it?.text  "";
-
-        const card = document.createElement("div");
-        card.className = "card";
-
-        card.innerHTML = `
-          <div class="meta">
-            <label class="chk" style="color:var(--text);">
-              <input type="checkbox" data-pick="public" data-id="${escapeHtml(id)}">
-              選択
-            </label>
-            <span>ID: <code>${escapeHtml(id)}</code></span>
-            <span>mode: <code>${escapeHtml(mode)}</code></span>
-            <span>bucket: <code>${escapeHtml(bucket)}</code></span>
-            ${at ? `<span>at: ${escapeHtml(at)}</span>` : ""}
-          </div>
-
-          <p class="text">${escapeHtml(text)}</p>
-
-          <div class="actions">
-            <button class="red" data-act="deletePublic" data-id="${escapeHtml(id)}">管理削除（全員から消える）</button>
-          </div>
-        `;
-
-        list.appendChild(card);
-      }
-
-      // チェックUI
-      qsa("input[data-pick='public']", list).forEach(chk => {
-        chk.addEventListener("change", updatePublicSelectionUI);
-      });
-      updatePublicSelectionUI();
-
-      list.querySelectorAll("button[data-act='deletePublic']").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const id = btn.getAttribute("data-id");
-          if (!id) return;
-
-          const ok = confirm(
-            "このネタをサーバから削除します。\n全員の一般公開から消えます。\nよろしいですか？"
-          );
-          if (!ok) return;
-
-          btn.disabled = true;
-          setErr("");
-
-          try {
-            const { res, data } = await apiPost("/api/admin/delete", { id }, true);
-            if (!res.ok || !data?.ok) throw new Error(data?.error || `delete failed ${res.status}`);
-            await fetchPublic(); // refresh
-          } catch (e) {
-            setErr(e?.message || String(e));
-          } finally {
-            btn.disabled = false;
-          }
-        });
-      });
-    }
-
-    async function fetchPublic() {
-      setErr("");
-
-      const mode = ($("pubMode").value || "").trim();
-      const bucket = ($("pubBucket").value || "").trim();
-      const limit = Number(($("pubLimit").value || "200").trim());
-
-      const qs = new URLSearchParams();
-      if (mode) qs.set("mode", mode);
-      if (bucket) qs.set("bucket", bucket);
-      qs.set("limit", String(Math.max(1, Math.min(500, Number.isFinite(limit) ? limit : 200))));
-
-      try {
-        const { res, data } = await apiGet(`/api/admin/list?${qs.toString()}`, true);
-        if (!res.ok || !data?.ok) {
-          setPill($("pillAdmin"), "admin: NG", false);
-          throw new Error(data?.error || `admin/list failed ${res.status}`);
-        }
-        setPill($("pillAdmin"), "admin: OK", true);
-        renderPublic(data.items);
-      } catch (e) {
-        setPill($("pillAdmin"), "admin: NG", false);
-        setErr(e?.message || String(e));
-        renderPublic([]);
-      }
-    }
-
-    // ? Public bulk
-    $("chkAllPublic").addEventListener("change", () => {
-      const on = $("chkAllPublic").checked;
-      qsa("input[data-pick='public']").forEach(c => c.checked = on);
-      updatePublicSelectionUI();
-    });
-
-    $("btnBulkDeletePublic").addEventListener("click", async () => {
-      const ids = qsa("input[data-pick='public']:checked").map(c => c.getAttribute("data-id")).filter(Boolean);
-      if (!ids.length) return;
-
-      const ok1 = confirm(`選択した ${ids.length} 件を一括削除します。\n（全員から消えます）\nよろしいですか？`);
-      if (!ok1) return;
-
-      const ok2 = prompt("誤操作防止：DELETE と入力すると実行します");
-      if ((ok2 || "").trim().toUpperCase() !== "DELETE") return;
-
-      $("btnBulkDeletePublic").disabled = true;
-
       try{
-        await bulkRun(ids, async (id) => {
-          const { res, data } = await apiPost("/api/admin/delete", { id }, true);
-          if (!res.ok || !data?.ok) throw new Error(data?.error || `delete failed ${res.status}`);
-        });
-        await fetchPublic();
-      }catch(e){
-        setErr(e?.message || String(e));
-        await fetchPublic();
-      }
-    });
-
-    // ---------------------------
-    // Health
-    // ---------------------------
-    async function checkHealth() {
-      setErr("");
-      try {
-        const { res, data } = await apiGet("/api/health", false);
-        if (!res.ok || !data?.ok) {
-          setPill($("pillHealth"), "health: NG", false);
-          throw new Error(data?.error || `health failed ${res.status}`);
+        if (act === "approve"){
+          if (!confirm(`承認しますか？\n${id}`)) return;
+          await apiPost("/api/admin/approve", { id });
+          await refreshPending();
         }
-        setPill($("pillHealth"), `health: OK (kv:${data.kv ? "true":"false"})`, true);
-        return true;
-      } catch (e) {
-        setPill($("pillHealth"), "health: NG", false);
-        setErr(e?.message || String(e));
-        return false;
+        if (act === "reject"){
+          if (!confirm(`却下しますか？\n${id}`)) return;
+          await apiPost("/api/admin/reject", { id });
+          await refreshPending();
+        }
+        if (act === "delete"){
+          if (!confirm(`削除しますか？\n${id}`)) return;
+          await apiPost("/api/admin/delete", { id });
+          await refreshPublic();
+        }
+      }catch(e){
+        alert(`操作失敗：${e?.message || e}`);
       }
+    };
+  }
+
+  async function doHealth(){
+    try{
+      const data = await apiGet("/api/health");
+      setPill(pillHealth, "health: OK", true);
+
+      // admin check
+      try{
+        await apiGet("/api/admin/check");
+        setPill(pillAdmin, "admin: OK", true);
+      }catch(e){
+        setPill(pillAdmin, "admin: NG", false);
+      }
+
+      return data;
+    }catch(e){
+      setPill(pillHealth, "health: NG", false);
+      setPill(pillAdmin,  "admin: NG", false);
+      throw e;
     }
+  }
 
-    // ---------------------------
-    // Bind
-    // ---------------------------
-    $("btnSave").addEventListener("click", () => {
-      saveInputs();
-      setErr("");
-    });
+  async function refreshPending(){
+    const data = await apiGet("/api/admin/pending");
+    itemsPending = Array.isArray(data.items) ? data.items : [];
+    if (activeTab === "pending") renderList();
+    renderCounts();
+  }
 
-    $("btnHealth").addEventListener("click", async () => {
-      await checkHealth();
-    });
+  async function refreshPublic(){
+    const data = await apiGet("/api/admin/list");
+    itemsPublic = Array.isArray(data.items) ? data.items : [];
+    if (activeTab === "public") renderList();
+    renderCounts();
+  }
 
-    $("btnRefresh").addEventListener("click", async () => {
-      const tab = getCurrentTab();
-      if (tab === "public") await fetchPublic();
-      else await fetchPending();
-    });
+  async function refreshActive(){
+    if (activeTab === "pending") return refreshPending();
+    return refreshPublic();
+  }
 
-    $("btnPublicReload").addEventListener("click", async () => {
-      await fetchPublic();
-    });
+  // -----------------------
+  // 一括操作
+  // -----------------------
+  async function bulkApprove(){
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return alert("選択が0件です");
+    if (!confirm(`一括承認しますか？\n${ids.length}件`)) return;
 
-    // init
-    loadSaved();
-    checkHealth(); // healthだけ先に
+    btnBulkApprove.disabled = true;
+    try{
+      for (const id of ids){
+        await apiPost("/api/admin/approve", { id });
+      }
+      selectedIds.clear();
+      chkAll.checked = false;
+      await refreshPending();
+    }catch(e){
+      alert(`一括承認失敗：${e?.message || e}`);
+    }finally{
+      btnBulkApprove.disabled = false;
+    }
+  }
 
-    // # END
-  </script>
+  async function bulkReject(){
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return alert("選択が0件です");
+    if (!confirm(`一括却下しますか？\n${ids.length}件`)) return;
 
+    btnBulkReject.disabled = true;
+    try{
+      for (const id of ids){
+        await apiPost("/api/admin/reject", { id });
+      }
+      selectedIds.clear();
+      chkAll.checked = false;
+      await refreshPending();
+    }catch(e){
+      alert(`一括却下失敗：${e?.message || e}`);
+    }finally{
+      btnBulkReject.disabled = false;
+    }
+  }
+
+  async function bulkDeletePublic(){
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return alert("選択が0件です");
+    if (!confirm(`選択を削除しますか？\n${ids.length}件`)) return;
+
+    btnBulkDeletePublic.disabled = true;
+    try{
+      await apiPost("/api/admin/delete", { ids });
+      selectedIds.clear();
+      chkAll.checked = false;
+      await refreshPublic();
+    }catch(e){
+      alert(`一括削除失敗：${e?.message || e}`);
+    }finally{
+      btnBulkDeletePublic.disabled = false;
+    }
+  }
+
+  // -----------------------
+  // イベント
+  // -----------------------
+  btnSave.onclick = () => {
+    localStorage.setItem(LS_API, apiBase());
+    localStorage.setItem(LS_KEY, adminKey());
+    alert("保存しました");
+  };
+
+  btnHealth.onclick = async () => {
+    try{
+      await doHealth();
+      alert("health OK");
+    }catch(e){
+      alert(`health NG：${e?.message || e}`);
+    }
+  };
+
+  btnRefresh.onclick = async () => {
+    try{
+      await doHealth();
+      await refreshActive();
+    }catch(e){
+      alert(`更新失敗：${e?.message || e}`);
+    }
+  };
+
+  tabPending.onclick = () => setTab("pending");
+  tabPublic.onclick  = () => setTab("public");
+
+  chkAll.onchange = () => {
+    const items = (activeTab==="pending") ? itemsPending : itemsPublic;
+    selectedIds.clear();
+    if (chkAll.checked){
+      for (const it of items) if (it?.id) selectedIds.add(it.id);
+    }
+    renderList();
+  };
+
+  btnBulkApprove.onclick = bulkApprove;
+  btnBulkReject.onclick  = bulkReject;
+  btnBulkDeletePublic.onclick = bulkDeletePublic;
+
+  // -----------------------
+  // 初期化
+  // -----------------------
+  function init(){
+    elApiBase.value  = localStorage.getItem(LS_API) || DEFAULT_API_BASE;
+    elAdminKey.value = localStorage.getItem(LS_KEY) || "";
+    setPill(pillHealth, "health: 未確認", null);
+    setPill(pillAdmin,  "admin: 未確認", null);
+
+    // 起動時に一覧を取りにいく（失敗してもUIは死なない）
+    doHealth()
+      .then(() => Promise.all([refreshPending(), refreshPublic()]))
+      .then(() => renderList())
+      .catch((e) => {
+        console.warn(e);
+        renderList();
+      });
+  }
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", init, { once:true });
+  } else {
+    init();
+  }
+})();
+</script>
 </body>
 </html>
