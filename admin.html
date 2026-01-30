@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
   <title>管理（承認待ち／一般公開）</title>
+
   <style>
     :root{
       --bg:#ffffff;
@@ -145,6 +146,7 @@
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
   </style>
 </head>
+
 <body>
 <div class="container">
   <h1>管理（承認待ち／一般公開）</h1>
@@ -163,8 +165,7 @@
         <button id="btnSave" class="btnPrimary">保存</button>
         <button id="btnHealth">health</button>
         <button id="btnRefresh">更新（表示中タブ）</button>
-        <button id="btnImportSeed" onclick="importSeed()">初期ネタを取り込み</button>
-
+        <button id="btnImportSeed">初期ネタを取り込み</button>
       </div>
       <div class="right row" style="gap:8px;">
         <span class="pill" id="pillHealth">health: 未確認</span>
@@ -197,14 +198,14 @@
       <div class="actions">
         <button id="btnBulkApprove" class="btnPrimary">一括承認</button>
         <button id="btnBulkReject" class="btnDanger">一括却下</button>
-        <button id="btnBulkDeletePublic" class="btnDanger" style="display:none;">選択を削除</button>
+        <button id="btnBulkDelete" class="btnDanger" style="display:none;">選択を削除</button>
       </div>
     </div>
 
     <div class="muted" style="margin-top:10px;">
       ※ 承認待ち: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span><br/>
       ※ 公開: <span class="mono">/api/admin/list</span> / 削除: <span class="mono">/api/admin/delete</span><br/>
-      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span>（表示のみ） / 削除: <span class="mono">/api/admin/delete</span>（A: 完全抹消想定）
+      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span> / 削除: <span class="mono">/api/admin/delete</span>
     </div>
 
     <div class="list" id="list"></div>
@@ -243,10 +244,11 @@
   const btnSave    = $("btnSave");
   const btnHealth  = $("btnHealth");
   const btnRefresh = $("btnRefresh");
+  const btnImportSeed = $("btnImportSeed");
 
   const btnBulkApprove = $("btnBulkApprove");
   const btnBulkReject  = $("btnBulkReject");
-  const btnBulkDeletePublic = $("btnBulkDeletePublic");
+  const btnBulkDelete  = $("btnBulkDelete");
 
   let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
@@ -288,6 +290,7 @@
     }catch{ return "--"; }
   }
 
+  // ✅ GET
   async function apiGet(path){
     const res = await fetch(`${apiBase()}${path}`, {
       method: "GET",
@@ -301,6 +304,7 @@
     return data;
   }
 
+  // ✅ POST（ここが “唯一の apiPost”）
   async function apiPost(path, body){
     const res = await fetch(`${apiBase()}${path}`, {
       method: "POST",
@@ -328,8 +332,8 @@
     tabAll.classList.toggle("active", tab==="all");
 
     // 削除ボタン：public / all で表示
-    btnBulkDeletePublic.style.display = (tab==="public" || tab==="all") ? "" : "none";
-    // 承認/却下ボタン：pending / all で表示（allの場合は pendingだけに適用する）
+    btnBulkDelete.style.display = (tab==="public" || tab==="all") ? "" : "none";
+    // 承認/却下ボタン：pending / all で表示（allは pending のみが対象）
     btnBulkApprove.style.display = (tab==="pending" || tab==="all") ? "" : "none";
     btnBulkReject.style.display  = (tab==="pending" || tab==="all") ? "" : "none";
 
@@ -377,7 +381,6 @@
 
       const checked = selectedIds.has(idRaw) ? "checked" : "";
 
-      // allタブなら status バッジ
       const status = it.status || (activeTab==="pending" ? "pending" : (activeTab==="public" ? "public" : ""));
       const statusBadge = (activeTab==="all")
         ? (status === "public"
@@ -398,8 +401,7 @@
           ? `<span class="badge">created: ${createdAt}</span>`
           : (activeTab==="public")
             ? `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`
-            : // all
-              (status === "pending"
+            : (status === "pending"
                 ? `<span class="badge">created: ${createdAt}</span>`
                 : `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`);
 
@@ -414,7 +416,6 @@
           <button class="btnDanger" data-act="delete" data-id="${id}">削除</button>
         `;
       } else {
-        // all: pending なら承認/却下、どちらでも削除
         if (status === "pending") {
           actionBtns += `<button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
                          <button class="btnDanger" data-act="reject" data-id="${id}">却下</button>`;
@@ -442,7 +443,6 @@
       `;
     }).join("");
 
-    // クリック委譲（壊れにくい）
     listEl.onclick = async (ev) => {
       const t = ev.target;
       if (!t) return;
@@ -466,9 +466,6 @@
           if (!confirm(`承認しますか？\n${id}`)) return;
           await apiPost("/api/admin/approve", { id });
           await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-          if (activeTab === "pending") await refreshPending();
-          if (activeTab === "public") await refreshPublic();
-          if (activeTab === "all") await refreshAll();
           renderList();
         }
 
@@ -476,18 +473,13 @@
           if (!confirm(`却下しますか？\n${id}`)) return;
           await apiPost("/api/admin/reject", { id });
           await Promise.all([refreshPending(), refreshAll()]);
-          if (activeTab === "pending") await refreshPending();
-          if (activeTab === "all") await refreshAll();
           renderList();
         }
 
         if (act === "delete"){
           if (!confirm(`削除しますか？（A: 完全抹消）\n${id}`)) return;
-
-          // ✅ A運用：allタブは scope both。publicタブは public。
-          const scope = (activeTab === "all") ? "both" : "public";
+          const scope = (activeTab === "all") ? "both" : (activeTab === "public" ? "public" : "pending");
           await apiPost("/api/admin/delete", { id, scope });
-
           await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
           renderList();
         }
@@ -530,13 +522,12 @@
   }
 
   async function refreshAll(){
-  const data = await apiGet("/api/admin/all?scope=both&limit=5000");
-  console.log("ALL RAW:", data.items);
-  itemsAll = Array.isArray(data.items) ? data.items : [];
-  renderCounts();
-  if (activeTab === "all") renderList();
-}
-
+    const data = await apiGet("/api/admin/all?scope=both&limit=5000");
+    console.log("ALL RAW:", data.items);
+    itemsAll = Array.isArray(data.items) ? data.items : [];
+    renderCounts();
+    if (activeTab === "all") renderList();
+  }
 
   async function refreshActive(){
     if (activeTab === "pending") return refreshPending();
@@ -551,13 +542,11 @@
     const ids0 = Array.from(selectedIds);
     if (!ids0.length) return alert("選択が0件です");
 
-    // allタブなら pendingだけに絞る
     const ids = (activeTab === "all")
       ? ids0.filter(id => statusOfIdInAll(id) === "pending")
       : ids0;
 
     if (!ids.length) return alert("承認できる（承認待ちの）選択がありません");
-
     if (!confirm(`一括承認しますか？\n${ids.length}件`)) return;
 
     btnBulkApprove.disabled = true;
@@ -585,7 +574,6 @@
       : ids0;
 
     if (!ids.length) return alert("却下できる（承認待ちの）選択がありません");
-
     if (!confirm(`一括却下しますか？\n${ids.length}件`)) return;
 
     btnBulkReject.disabled = true;
@@ -609,20 +597,10 @@
     if (!ids.length) return alert("選択が0件です");
     if (!confirm(`選択を削除しますか？（A: 完全抹消）\n${ids.length}件`)) return;
 
-    btnBulkDeletePublic.disabled = true;
+    btnBulkDelete.disabled = true;
     try{
-      // ✅ publicタブなら public、allタブなら both
-      const scope = (activeTab === "all") ? "both" : "public";
-      await Promise.all(ids.map(id => {
-  const where = (activeTab === "pending")
-    ? "pending"
-    : (activeTab === "public")
-      ? "public"
-      : statusOfIdInAll(id); // ← allタブ用
-
-  return apiPost("/api/admin/delete", { where, id });
-}));
-
+      const scope = (activeTab === "all") ? "both" : (activeTab === "public" ? "public" : "pending");
+      await apiPost("/api/admin/delete", { ids, scope }); // ✅ ids 一括で渡す前提（Worker側もこれ）
       selectedIds.clear();
       chkAll.checked = false;
       await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
@@ -630,8 +608,44 @@
     }catch(e){
       alert(`一括削除失敗：${e?.message || e}`);
     }finally{
-      btnBulkDeletePublic.disabled = false;
+      btnBulkDelete.disabled = false;
     }
+  }
+
+  // -----------------------
+  // 初期ネタ取り込み
+  // -----------------------
+  async function importSeed(){
+    if (!confirm("metaphors.js の初期ネタをKVへ取り込みます。よろしいですか？")) return;
+
+    const res = await fetch("./metaphors.js", { cache: "no-store" });
+    if (!res.ok) return alert("metaphors.js が読み込めません（パス確認）");
+    const code = await res.text();
+
+    const tmp = {};
+    (function(window){ eval(code); })(tmp);
+
+    const items = [];
+
+    const t = tmp.NETA_TRIVIA || {};
+    Object.keys(t).forEach(k => {
+      const bucket = Number(k);
+      (t[k] || []).forEach(text => items.push({ mode:"trivia", bucket, text }));
+    });
+
+    const f = tmp.NETA || {};
+    Object.keys(f).forEach(k => {
+      const bucket = Number(k);
+      (f[k] || []).forEach(text => items.push({ mode:"fun", bucket, text }));
+    });
+
+    if (!items.length) return alert("初期ネタが見つかりません（NETA / NETA_TRIVIA を確認）");
+
+    const r = await apiPost("/api/admin/import_seed", { items });
+    alert(`取り込み完了：追加 ${r.put ?? 0} / スキップ ${r.skipped ?? 0}`);
+
+    await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+    renderList();
   }
 
   // -----------------------
@@ -661,6 +675,8 @@
     }
   };
 
+  btnImportSeed.onclick = () => importSeed();
+
   tabPending.onclick = () => setTab("pending");
   tabPublic.onclick  = () => setTab("public");
   tabAll.onclick     = () => setTab("all");
@@ -676,7 +692,7 @@
 
   btnBulkApprove.onclick = bulkApprove;
   btnBulkReject.onclick  = bulkReject;
-  btnBulkDeletePublic.onclick = bulkDelete;
+  btnBulkDelete.onclick  = bulkDelete;
 
   // -----------------------
   // 初期化
@@ -702,111 +718,7 @@
     init();
   }
 })();
-  async function importSeed(){
-  if (!confirm("metaphors.js の初期ネタをKVへ取り込みます。よろしいですか？")) return;
-
-  const res = await fetch("./metaphors.js", { cache: "no-store" });
-  const code = await res.text();
-
-  const tmp = {};
-  (function(window){
-    eval(code);
-  })(tmp);
-
-  const items = [];
-
-  const t = tmp.NETA_TRIVIA || {};
-  Object.keys(t).forEach(k => {
-    const bucket = Number(k);
-    (t[k] || []).forEach(text => items.push({ mode:"trivia", bucket, text }));
-  });
-
-  const f = tmp.NETA || {};
-  Object.keys(f).forEach(k => {
-    const bucket = Number(k);
-    (f[k] || []).forEach(text => items.push({ mode:"fun", bucket, text }));
-  });
-
-  if (!items.length) return alert("初期ネタが見つかりません");
-
-  const r = await apiPost("/api/admin/import_seed", { items });
-  alert(`取り込み完了：追加 ${r.put} / スキップ ${r.skipped}`);
-
-  await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-  renderList();
-}
-async function importSeed(){
-  if (!confirm("metaphors.js の初期ネタをKVへ取り込みます。よろしいですか？")) return;
-
-  // metaphors.js を読み込む
-  const res = await fetch("./metaphors.js", { cache: "no-store" });
-  const code = await res.text();
-
-  // 一時windowに評価
-  const tmp = {};
-  (function(window){
-    eval(code);
-  })(tmp);
-
-  const items = [];
-
-  // 雑学
-  const t = tmp.NETA_TRIVIA || {};
-  Object.keys(t).forEach(k => {
-    const bucket = Number(k);
-    (t[k] || []).forEach(text => {
-      items.push({ mode: "trivia", bucket, text });
-    });
-  });
-
-  // お笑い
-  const f = tmp.NETA || {};
-  Object.keys(f).forEach(k => {
-    const bucket = Number(k);
-    (f[k] || []).forEach(text => {
-      items.push({ mode: "fun", bucket, text });
-    });
-  });
-
-  if (!items.length) {
-    alert("初期ネタが見つかりません");
-    return;
-  }
-
-  // Workerへ送信
-  const r = await apiPost("/api/admin/import_seed", { items });
-  alert(`取り込み完了：追加 ${r.put} 件 / スキップ ${r.skipped} 件`);
-
-  await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-  renderList();
-}
-
 </script>
-  async function apiPost(path, body){
-  const base = elApiBase.value.trim();
-  const key  = elAdminKey.value.trim();
-
-  const res = await fetch(base + path, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-key": key
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data?.ok) {
-    throw new Error(data?.error || `POST ${path} failed`);
-  }
-  return data;
-}
-
-  <script src="./shared-metaphors.js"></script>
-  <input id="adminKey" placeholder="ADMIN KEY">
-<button onclick="testAdmin()">テスト</button>
-
 
 </body>
 </html>
-
