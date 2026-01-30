@@ -22,127 +22,43 @@
       --mutedBg:rgba(15,23,42,.04);
       --radius:16px;
     }
-    body{
-      margin:0;
-      padding:18px;
-      font-family:-apple-system,system-ui,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;
-      background:var(--bg);
-      color:var(--text);
-    }
+    body{ margin:0; padding:18px; font-family:-apple-system,system-ui,"Segoe UI",Roboto,"Noto Sans JP",sans-serif; background:var(--bg); color:var(--text); }
     .container{ max-width:980px; margin:0 auto; }
     h1{ margin:6px 0 16px; font-size:24px; letter-spacing:-.2px; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .card{
-      background:var(--card);
-      border:1px solid var(--line);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:14px;
-      margin:12px 0;
-    }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; margin:12px 0; }
     .muted{ color:var(--sub); font-size:12px; }
     label{ font-size:12px; color:var(--sub); display:block; margin-bottom:6px; }
-    input, select{
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid var(--line);
-      min-width:280px;
-      font-size:14px;
-      background:#fff;
-      outline:none;
-    }
-    input:focus, select:focus{
-      border-color: rgba(37,99,235,0.55);
-      box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
-    }
-    button{
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid var(--line);
-      background:#fff;
-      cursor:pointer;
-      font-size:14px;
-      user-select:none;
-    }
+    input, select{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); min-width:280px; font-size:14px; background:#fff; outline:none; }
+    input:focus, select:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+    button{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:14px; user-select:none; }
     button:disabled{ opacity:.55; cursor:not-allowed; }
-    .btnPrimary{
-      background:var(--blue);
-      color:#fff;
-      border-color:rgba(37,99,235,0.55);
-      font-weight:800;
-    }
-    .btnDanger{
-      background:var(--red);
-      color:#fff;
-      border-color:rgba(239,68,68,.6);
-      font-weight:800;
-    }
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:var(--mutedBg);
-      font-size:12px;
-    }
+    .btnPrimary{ background:var(--blue); color:#fff; border-color:rgba(37,99,235,0.55); font-weight:800; }
+    .btnDanger{ background:var(--red); color:#fff; border-color:rgba(239,68,68,.6); font-weight:800; }
+    .pill{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:var(--mutedBg); font-size:12px; }
     .tabs{ display:flex; gap:10px; flex-wrap:wrap; }
-    .tab{
-      padding:8px 12px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:#fff;
-      font-weight:800;
-    }
-    .tab.active{
-      background:var(--btn);
-      color:var(--btnText);
-      border-color:rgba(15,23,42,.35);
-    }
-    .toolbar{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      flex-wrap:wrap;
-      padding:10px 0 0;
-      border-top:1px solid rgba(15,23,42,.08);
-      margin-top:10px;
-    }
-    .list{
-      margin-top:10px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-    .item{
-      border:1px solid rgba(15,23,42,.10);
-      border-radius:14px;
-      padding:12px;
-      background:rgba(255,255,255,.9);
-    }
+    .tab{ padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:#fff; font-weight:800; }
+    .tab.active{ background:var(--btn); color:var(--btnText); border-color:rgba(15,23,42,.35); }
+    .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px 0 0; border-top:1px solid rgba(15,23,42,.08); margin-top:10px; }
+    .list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+    .item{ border:1px solid rgba(15,23,42,.10); border-radius:14px; padding:12px; background:rgba(255,255,255,.9); }
     .itemTop{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
     .itemText{ font-size:15px; line-height:1.55; font-weight:700; margin:8px 0; white-space:pre-wrap; }
     .itemMeta{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid rgba(15,23,42,.12);
-      background:rgba(255,255,255,.75);
-      font-size:12px;
-      color:var(--sub);
-      font-weight:800;
-    }
+    .badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; border:1px solid rgba(15,23,42,.12); background:rgba(255,255,255,.75); font-size:12px; color:var(--sub); font-weight:800; }
     .badgePublic{ border-color: rgba(22,163,74,.25); background: rgba(22,163,74,.07); color: #166534; }
     .badgePending{ border-color: rgba(239,68,68,.25); background: rgba(239,68,68,.07); color: #991b1b; }
     .actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .chk{ transform:translateY(1px); }
     .right{ margin-left:auto; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .smallBtn{ padding:8px 10px; border-radius:10px; font-size:13px; }
+    .btnGhost{ background:#fff; }
+    .btnOk{ background:var(--green); color:#fff; border-color: rgba(22,163,74,.6); font-weight:800; }
+    .divider{ height:1px; background:rgba(15,23,42,.08); margin:10px 0; }
+    .warn{ color:#b45309; font-weight:800; }
+    details > summary{ cursor:pointer; user-select:none; color:var(--sub); font-size:12px; }
+    pre{ margin:8px 0 0; padding:10px; border-radius:12px; background:rgba(15,23,42,.04); overflow:auto; }
   </style>
 </head>
 
@@ -165,6 +81,7 @@
         <button id="btnSave" class="btnPrimary">保存</button>
         <button id="btnHealth">health</button>
         <button id="btnRefresh">更新（表示中タブ）</button>
+        <button id="btnRefreshAllTabs">更新（全タブ）</button>
         <button id="btnImportSeed">初期ネタを取り込み</button>
       </div>
 
@@ -196,9 +113,10 @@
           全選択
         </label>
         <span class="pill" id="selCount">選択: 0件</span>
+        <span class="pill" id="pillBusy" style="display:none;">通信中…</span>
       </div>
       <div class="actions">
-        <button id="btnBulkApprove" class="btnPrimary">一括承認</button>
+        <button id="btnBulkApprove" class="btnOk">一括承認</button>
         <button id="btnBulkReject" class="btnDanger">一括却下</button>
         <button id="btnBulkDelete" class="btnDanger" style="display:none;">選択を削除</button>
       </div>
@@ -220,9 +138,6 @@
 
 <script>
 (() => {
-  // -----------------------
-  // 設定
-  // -----------------------
   const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
   const LS_API = "tatoete_admin_api_base";
   const LS_KEY = "tatoete_admin_key";
@@ -242,10 +157,12 @@
 
   const chkAll     = $("chkAll");
   const selCount   = $("selCount");
+  const pillBusy   = $("pillBusy");
 
   const btnSave    = $("btnSave");
   const btnHealth  = $("btnHealth");
   const btnRefresh = $("btnRefresh");
+  const btnRefreshAllTabs = $("btnRefreshAllTabs");
   const btnImportSeed = $("btnImportSeed");
 
   const btnBulkApprove = $("btnBulkApprove");
@@ -255,8 +172,12 @@
   let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
   let itemsPublic  = [];
-  let itemsAll     = []; // { ...it, status:"public"|"pending" }
+  let itemsAll     = [];
   let selectedIds = new Set();
+
+  // in-flight制御（多重更新防止）
+  let __busy = false;
+  let __ctrl = null;
 
   function apiBase(){
     return String(elApiBase.value || "").trim().replace(/\/+$/,"");
@@ -269,482 +190,539 @@
     el.textContent = text;
     el.style.borderColor = ok===true ? "rgba(22,163,74,.45)"
                       : ok===false ? "rgba(239,68,68,.45)"
-                      : "rgba(15,23,42,.12)";
-    el.style.background = ok===true ? "rgba(22,163,74,.08)"
-                      : ok===false ? "rgba(239,68,68,.08)"
-                      : "rgba(15,23,42,.04)";
+                      : "rgba(15,23,42,.20)";
   }
 
+  function setBusy(on){
+    __busy = !!on;
+    pillBusy.style.display = __busy ? "inline-flex" : "none";
+    // 重要：操作ボタンをまとめて止める（固まり防止）
+    const dis = __busy;
+    [btnSave, btnHealth, btnRefresh, btnRefreshAllTabs, btnImportSeed,
+     tabPending, tabPublic, tabAll,
+     btnBulkApprove, btnBulkReject, btnBulkDelete].forEach(b => { try{ b.disabled = dis; }catch{} });
+  }
+
+  function abortInFlight(){
+    try{ if (__ctrl) __ctrl.abort(); }catch{}
+    __ctrl = null;
+    __busy = false;
+    setBusy(false);
+  }
+
+  async function fetchJSON(path, { method="GET", body=null, admin=false, signal=null } = {}){
+    const base = apiBase();
+    if (!base) throw new Error("API_BASE が空です");
+
+    const url = base + path;
+    const headers = { "Content-Type":"application/json" };
+    if (admin){
+      const k = adminKey();
+      if (!k) throw new Error("ADMIN_KEY が空です");
+      headers["x-admin-key"] = k;
+    }
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : null,
+      signal
+    });
+
+    const data = await res.json().catch(()=>null);
+
+    if (!res.ok || !data?.ok){
+      const msg = data?.error || `HTTP ${res.status}`;
+      const e = new Error(msg);
+      e.status = res.status;
+      e.data = data;
+      throw e;
+    }
+    return data;
+  }
+
+  function formatTs(ts){
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    const d = new Date(n);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mi = String(d.getMinutes()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  }
+
+  function safeText(v){
+    return (v == null) ? "" : String(v);
+  }
+
+  function normalizeItems(arr, scope){
+    // 期待：{ id, text, bucket, mode, likes, penName, createdAt, ... }
+    // scope: "pending" | "public" | "both"
+    return (Array.isArray(arr) ? arr : []).map(x => ({
+      id: safeText(x.id ?? x.key ?? x._id ?? ""),
+      text: safeText(x.text ?? x.metaphor ?? x.value ?? ""),
+      bucket: (x.bucket ?? x.b ?? null),
+      mode: safeText(x.mode ?? x.m ?? ""),
+      likes: (x.likes ?? x.like ?? 0),
+      penName: safeText(x.penName ?? x.pen ?? x.author ?? ""),
+      createdAt: (x.createdAt ?? x.ts ?? x.time ?? 0),
+      scope: scope || safeText(x.scope ?? "")
+    })).filter(x => x.id);
+  }
+
+  function updateCounts(){
+    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
+  }
+
+  function updateSelectionUI(){
+    selCount.textContent = `選択: ${selectedIds.size}件`;
+    // 全選択の見た目
+    const current = getActiveItems();
+    const allIds = current.map(x => x.id);
+    const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
+    chkAll.checked = allSelected;
+    chkAll.indeterminate = (!allSelected && selectedIds.size > 0);
+
+    // タブに応じて一括ボタンの見せ方
+    if (activeTab === "pending"){
+      btnBulkApprove.style.display = "";
+      btnBulkReject.style.display  = "";
+      btnBulkDelete.style.display  = "none";
+    } else {
+      btnBulkApprove.style.display = "none";
+      btnBulkReject.style.display  = "none";
+      btnBulkDelete.style.display  = "";
+    }
+  }
+
+  function setActiveTab(tab){
+    activeTab = tab;
+    tabPending.classList.toggle("active", tab==="pending");
+    tabPublic.classList.toggle("active",  tab==="public");
+    tabAll.classList.toggle("active",     tab==="all");
+    selectedIds = new Set(); // タブ切替で選択はリセット（事故防止）
+    render();
+  }
+
+  function getActiveItems(){
+    if (activeTab === "pending") return itemsPending;
+    if (activeTab === "public")  return itemsPublic;
+    return itemsAll;
+  }
+
+  function render(){
+    updateCounts();
+
+    const items = getActiveItems();
+    updateSelectionUI();
+
+    if (!items.length){
+      listEl.innerHTML = `<div class="muted">（データがありません）</div>`;
+      return;
+    }
+
+    const html = items.map(item => {
+      const checked = selectedIds.has(item.id) ? "checked" : "";
+      const isPending = (activeTab === "pending") || (item.scope === "pending");
+      const isPublic  = (activeTab === "public")  || (item.scope === "public");
+
+      const badgeScope = (activeTab === "all")
+        ? (isPending
+            ? `<span class="badge badgePending">pending</span>`
+            : `<span class="badge badgePublic">public</span>`)
+        : (activeTab === "pending"
+            ? `<span class="badge badgePending">pending</span>`
+            : `<span class="badge badgePublic">public</span>`);
+
+      const metaParts = [];
+      if (item.mode) metaParts.push(`<span class="badge">mode: ${escapeHtml(item.mode)}</span>`);
+      if (item.bucket != null && item.bucket !== "") metaParts.push(`<span class="badge">bucket: ${escapeHtml(item.bucket)}</span>`);
+      metaParts.push(`<span class="badge">likes: ${escapeHtml(item.likes)}</span>`);
+      if (item.penName) metaParts.push(`<span class="badge">pen: ${escapeHtml(item.penName)}</span>`);
+      const ts = formatTs(item.createdAt);
+      if (ts) metaParts.push(`<span class="badge">${escapeHtml(ts)}</span>`);
+
+      const text = item.text || "";
+      const tooLong = text.length > 240;
+      const textHtml = tooLong
+        ? `
+          <details>
+            <summary>本文を展開（${text.length}文字）</summary>
+            <div class="itemText">${escapeHtml(text)}</div>
+          </details>
+        `
+        : `<div class="itemText">${escapeHtml(text)}</div>`;
+
+      const perActions = [];
+      if (activeTab === "pending"){
+        perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
+        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下</button>`);
+      } else {
+        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`);
+      }
+
+      // all タブは表示のみが基本だが、削除は許可（要望）
+      if (activeTab === "all"){
+        perActions.length = 0;
+        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`);
+      }
+
+      return `
+        <div class="item" data-item="${escapeAttr(item.id)}">
+          <div class="itemTop">
+            <div class="itemMeta">
+              <label style="margin:0; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" class="chk itemChk" data-id="${escapeAttr(item.id)}" ${checked} />
+                <span class="muted mono">${escapeHtml(item.id)}</span>
+              </label>
+              ${badgeScope}
+              ${metaParts.join("")}
+            </div>
+            <div class="actions">
+              ${perActions.join("")}
+            </div>
+          </div>
+          ${textHtml}
+        </div>
+      `;
+    }).join("");
+
+    listEl.innerHTML = html;
+  }
+
+  // XSS対策（表示だけでも守る）
   function escapeHtml(s){
-    return String(s)
+    return String(s ?? "")
       .replaceAll("&","&amp;")
       .replaceAll("<","&lt;")
       .replaceAll(">","&gt;")
       .replaceAll('"',"&quot;")
       .replaceAll("'","&#039;");
   }
+  function escapeAttr(s){
+    return escapeHtml(s).replaceAll("`","&#096;");
+  }
 
-  function fmtTime(ts){
-    if (!ts) return "--";
+  function saveSettings(){
+    localStorage.setItem(LS_API, apiBase() || DEFAULT_API_BASE);
+    localStorage.setItem(LS_KEY, adminKey() || "");
+  }
+
+  function loadSettings(){
+    const a = localStorage.getItem(LS_API) || DEFAULT_API_BASE;
+    const k = localStorage.getItem(LS_KEY) || "";
+    elApiBase.value = a;
+    elAdminKey.value = k;
+  }
+
+  async function doHealth(){
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
     try{
-      const d = new Date(Number(ts));
-      return d.toLocaleString("ja-JP");
-    }catch{ return "--"; }
-  }
+      const data = await fetchJSON("/api/health", { signal: __ctrl.signal });
+      // 例：{ ok:true, status:"ok", kv:true, hofThreshold:20 }
+      const kv = (data.kv === true) ? "kv:OK" : "kv:?" ;
+      setPill(pillHealth, `health: OK (${kv})`, true);
 
-  // -----------------------
-  // API
-  // -----------------------
-  async function apiGet(path){
-    const res = await fetch(`${apiBase()}${path}`, {
-      method: "GET",
-      headers: adminKey() ? { "x-admin-key": adminKey() } : {}
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.ok) {
-      const msg = data?.error || data?.message || `${path} failed ${res.status}`;
-      throw new Error(msg);
+      // admin確認は「軽く pending を叩いて 403/OK を判定」
+      try{
+        await fetchJSON("/api/admin/pending?limit=1", { admin:true, signal: __ctrl.signal });
+        setPill(pillAdmin, "admin: OK", true);
+      } catch(e){
+        if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+        else setPill(pillAdmin, `admin: NG（${e.message}）`, false);
+      }
+    } catch(e){
+      setPill(pillHealth, `health: NG（${e.message}）`, false);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
     }
-    return data;
   }
 
-  async function apiPost(path, body){
-    const res = await fetch(`${apiBase()}${path}`, {
-      method: "POST",
-      headers: {
-        "Content-Type":"application/json",
-        ...(adminKey() ? { "x-admin-key": adminKey() } : {})
-      },
-      body: JSON.stringify(body || {})
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.ok) {
-      const msg = data?.error || data?.message || `${path} failed ${res.status}`;
-      throw new Error(msg);
+  async function loadPending(){
+    const data = await fetchJSON("/api/admin/pending", { admin:true, signal: __ctrl.signal });
+    // 期待：{ ok:true, items:[...] }
+    itemsPending = normalizeItems(data.items || data.pending || [], "pending");
+  }
+  async function loadPublic(){
+    const data = await fetchJSON("/api/admin/list", { admin:true, signal: __ctrl.signal });
+    itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
+  }
+  async function loadAll(){
+    // 期待：{ ok:true, items:[{...,scope:"pending/public"}] }
+    const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal: __ctrl.signal });
+    const raw = data.items || data.all || [];
+    // scopeが無い場合は両方混ざってても見えるように fallback
+    itemsAll = normalizeItems(raw, "both").map(x => ({
+      ...x,
+      scope: x.scope && x.scope !== "both" ? x.scope : (x._scope || x.scope || "")
+    }));
+
+    // scope が付かない実装もあり得るので、id が pending/public に重複する場合は避ける
+    // （必要なら worker 側で scope を付けるのが正）
+  }
+
+  async function refreshCurrentTab(){
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+
+    try{
+      if (activeTab === "pending") await loadPending();
+      else if (activeTab === "public") await loadPublic();
+      else await loadAll();
+      updateSelectionUI();
+      render();
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`更新に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
     }
-    return data;
   }
 
-  // -----------------------
-  // 表示
-  // -----------------------
-  function renderCounts(){
-    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
-  }
-
-  function updateSelUI(){
-    selCount.textContent = `選択: ${selectedIds.size}件`;
-  }
-
-  function getActiveItems(){
-    if (activeTab==="pending") return itemsPending;
-    if (activeTab==="public")  return itemsPublic;
-    return itemsAll;
-  }
-
-  function statusOfIdInAll(id){
-    const hit = itemsAll.find(x => x && x.id === id);
-    return hit?.status || null;
-  }
-
-  function setTab(tab){
-    activeTab = tab;
-    selectedIds.clear();
-    chkAll.checked = false;
-
-    tabPending.classList.toggle("active", tab==="pending");
-    tabPublic.classList.toggle("active",  tab==="public");
-    tabAll.classList.toggle("active",     tab==="all");
-
-    // 削除ボタン：public / all で表示
-    btnBulkDelete.style.display = (tab==="public" || tab==="all") ? "" : "none";
-    // 承認/却下ボタン：pending / all で表示（allの場合は pendingだけに適用する）
-    btnBulkApprove.style.display = (tab==="pending" || tab==="all") ? "" : "none";
-    btnBulkReject.style.display  = (tab==="pending" || tab==="all") ? "" : "none";
-
-    renderList();
-  }
-
-  function renderList(){
-    const items = getActiveItems();
-    renderCounts();
-    updateSelUI();
-
-    if (!items.length){
-      listEl.innerHTML = `<div class="muted">表示するデータがありません。</div>`;
-      return;
+  async function refreshAllTabs(){
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    try{
+      await Promise.all([loadPending(), loadPublic(), loadAll()]);
+      render();
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`更新に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
     }
+  }
 
-    listEl.innerHTML = items.map(it => {
-      const idRaw = it.id || "";
-      const id = escapeHtml(idRaw);
-      const text = escapeHtml(it.text || "");
-      const mode = escapeHtml(it.mode || "");
-      const bucket = escapeHtml(String(it.bucket ?? ""));
-      const pen = escapeHtml(it.penName || "匿名");
-      const createdAt = fmtTime(it.createdAt);
-      const approvedAt = fmtTime(it.approvedAt);
+  function getSelectedIds(){
+    return Array.from(selectedIds);
+  }
 
-      const checked = selectedIds.has(idRaw) ? "checked" : "";
+  async function approveIds(ids){
+    if (!ids.length) return;
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    try{
+      await fetchJSON("/api/admin/approve", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
+      // 更新
+      await loadPending();
+      await loadPublic();
+      await loadAll();
+      selectedIds = new Set();
+      render();
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`承認に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
 
-      const status = it.status || (activeTab==="pending" ? "pending" : (activeTab==="public" ? "public" : ""));
-      const statusBadge = (activeTab==="all")
-        ? (status === "public"
-            ? `<span class="badge badgePublic">公開</span>`
-            : `<span class="badge badgePending">承認待ち</span>`)
-        : "";
+  async function rejectIds(ids){
+    if (!ids.length) return;
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    try{
+      await fetchJSON("/api/admin/reject", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
+      await loadPending();
+      await loadAll();
+      selectedIds = new Set();
+      render();
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`却下に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
 
-      const topBadges = [
-        statusBadge,
-        `<span class="badge">mode: ${mode}</span>`,
-        `<span class="badge">bucket: ${bucket}</span>`,
-        `<span class="badge">pen: ${pen}</span>`,
-        `<span class="badge">id: <span class="mono">${id}</span></span>`
-      ].filter(Boolean).join(" ");
+  async function deleteIds(ids){
+    if (!ids.length) return;
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    try{
+      await fetchJSON("/api/admin/delete", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
+      await loadPublic();
+      await loadAll();
+      // pending から削除する実装の場合もあるので念のため
+      await loadPending();
+      selectedIds = new Set();
+      render();
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`削除に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
 
-      const timeBadges =
-        (activeTab==="pending")
-          ? `<span class="badge">created: ${createdAt}</span>`
-          : (activeTab==="public")
-            ? `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`
-            : (status === "pending"
-                ? `<span class="badge">created: ${createdAt}</span>`
-                : `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`);
+  async function importSeed(){
+    // ※ worker 側の実装名が違う可能性があるので、候補を順に試す（止まらない）
+    const candidates = [
+      "/api/admin/import-seed",
+      "/api/admin/seed",
+      "/api/admin/seed/import",
+      "/api/admin/importSeed"
+    ];
 
-      let actionBtns = "";
-      if (activeTab === "pending") {
-        actionBtns = `
-          <button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
-          <button class="btnDanger" data-act="reject" data-id="${id}">却下</button>
-          <button class="btnDanger" data-act="delete" data-id="${id}">削除</button>
-        `;
-      } else if (activeTab === "public") {
-        actionBtns = `<button class="btnDanger" data-act="delete" data-id="${id}">削除</button>`;
-      } else {
-        if (status === "pending") {
-          actionBtns += `<button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
-                         <button class="btnDanger" data-act="reject" data-id="${id}">却下</button>`;
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+
+    let ok = false;
+    let lastErr = null;
+
+    try{
+      for (const p of candidates){
+        try{
+          await fetchJSON(p, { method:"POST", admin:true, body:{}, signal: __ctrl.signal });
+          ok = true;
+          break;
+        } catch(e){
+          lastErr = e;
+          // 404 は次候補へ
+          if (e?.status === 404) continue;
+          // 403 は即終了
+          if (e?.status === 403) throw e;
+          // その他も次へ（ただし abort などは止める）
+          continue;
         }
-        actionBtns += `<button class="btnDanger" data-act="delete" data-id="${id}">削除</button>`;
       }
 
-      return `
-        <div class="item">
-          <div class="itemTop">
-            <label style="margin:0; display:flex; align-items:center; gap:8px;">
-              <input type="checkbox" class="chk" data-act="toggle" data-id="${id}" ${checked} />
-              選択
-            </label>
-            <div class="itemMeta">${topBadges}</div>
-          </div>
-
-          <div class="itemText">${text}</div>
-
-          <div class="row" style="justify-content:space-between;">
-            <div class="itemMeta">${timeBadges}</div>
-            <div class="actions">${actionBtns}</div>
-          </div>
-        </div>
-      `;
-    }).join("");
+      if (!ok){
+        const msg = lastErr ? lastErr.message : "不明";
+        alert(`初期ネタ取り込みに失敗（エンドポイント未実装の可能性）: ${msg}`);
+      } else {
+        await refreshAllTabs();
+        alert("初期ネタを取り込みました。");
+      }
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`初期ネタ取り込みに失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
   }
 
-  // クリック委譲（リスト上のボタン/チェック）
-  listEl.addEventListener("click", async (ev) => {
-    const t = ev.target;
-    if (!t) return;
-
-    const act = t.getAttribute("data-act");
-    const id  = t.getAttribute("data-id");
-    if (!act || !id) return;
-
-    if (act === "toggle"){
-      if (selectedIds.has(id)) selectedIds.delete(id);
-      else selectedIds.add(id);
-      updateSelUI();
-
-      const items2 = getActiveItems();
-      chkAll.checked = (items2.length > 0 && selectedIds.size === items2.length);
-      return;
-    }
-
-    try{
-      if (act === "approve"){
-        if (!confirm(`承認しますか？\n${id}`)) return;
-        await apiPost("/api/admin/approve", { id });
-        await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-        renderList();
-        return;
-      }
-
-      if (act === "reject"){
-        if (!confirm(`却下しますか？\n${id}`)) return;
-        await apiPost("/api/admin/reject", { id });
-        await Promise.all([refreshPending(), refreshAll()]);
-        renderList();
-        return;
-      }
-
-      if (act === "delete"){
-        if (!confirm(`削除しますか？\n${id}`)) return;
-
-        // scope: public / pending / both（allタブ）
-        let scope = "public";
-        if (activeTab === "pending") scope = "pending";
-        else if (activeTab === "all") scope = "both";
-
-        await apiPost("/api/admin/delete", { id, scope });
-        await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-        renderList();
-        return;
-      }
-    }catch(e){
-      alert(`操作失敗：${e?.message || e}`);
-    }
+  // ====== イベント ======
+  btnSave.addEventListener("click", () => {
+    saveSettings();
+    alert("保存しました（このブラウザに記憶）");
   });
 
-  // -----------------------
-  // health / refresh
-  // -----------------------
-  async function doHealth(){
-    await apiGet("/api/health");
-    setPill(pillHealth, "health: OK", true);
+  btnHealth.addEventListener("click", doHealth);
+  btnRefresh.addEventListener("click", refreshCurrentTab);
+  btnRefreshAllTabs.addEventListener("click", refreshAllTabs);
+  btnImportSeed.addEventListener("click", importSeed);
 
-    try{
-      await apiGet("/api/admin/check");
-      setPill(pillAdmin, "admin: OK", true);
-    }catch{
-      setPill(pillAdmin, "admin: NG", false);
-    }
-  }
+  tabPending.addEventListener("click", () => setActiveTab("pending"));
+  tabPublic.addEventListener("click",  () => setActiveTab("public"));
+  tabAll.addEventListener("click",     () => setActiveTab("all"));
 
-  async function refreshPending(){
-    const data = await apiGet("/api/admin/pending");
-    itemsPending = Array.isArray(data.items) ? data.items : [];
-    renderCounts();
-  }
-
-  async function refreshPublic(){
-    const data = await apiGet("/api/admin/list?limit=5000");
-    itemsPublic = Array.isArray(data.items) ? data.items : [];
-    renderCounts();
-  }
-
-  async function refreshAll(){
-    const data = await apiGet("/api/admin/all?scope=both&limit=5000");
-    itemsAll = Array.isArray(data.items) ? data.items : [];
-    renderCounts();
-  }
-
-  async function refreshActive(){
-    if (activeTab === "pending") return refreshPending();
-    if (activeTab === "public")  return refreshPublic();
-    return refreshAll();
-  }
-
-  // -----------------------
-  // 一括操作
-  // -----------------------
   chkAll.addEventListener("change", () => {
     const items = getActiveItems();
-    selectedIds.clear();
     if (chkAll.checked){
-      for (const it of items) if (it?.id) selectedIds.add(it.id);
+      items.forEach(x => selectedIds.add(x.id));
+    } else {
+      // 現在タブの分だけ外す
+      items.forEach(x => selectedIds.delete(x.id));
     }
-    renderList();
+    updateSelectionUI();
+    // チェック反映
+    listEl.querySelectorAll(".itemChk").forEach(chk => {
+      const id = chk.getAttribute("data-id");
+      chk.checked = selectedIds.has(id);
+    });
   });
 
   btnBulkApprove.addEventListener("click", async () => {
-    const ids0 = Array.from(selectedIds);
-    if (!ids0.length) return alert("選択が0件です");
-
-    const ids = (activeTab === "all")
-      ? ids0.filter(id => statusOfIdInAll(id) === "pending")
-      : ids0;
-
-    if (!ids.length) return alert("承認できる（承認待ちの）選択がありません");
-    if (!confirm(`一括承認しますか？\n${ids.length}件`)) return;
-
-    btnBulkApprove.disabled = true;
-    try{
-      for (const id of ids){
-        await apiPost("/api/admin/approve", { id });
-      }
-      selectedIds.clear();
-      chkAll.checked = false;
-      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-      renderList();
-    }catch(e){
-      alert(`一括承認失敗：${e?.message || e}`);
-    }finally{
-      btnBulkApprove.disabled = false;
-    }
+    const ids = getSelectedIds();
+    if (!ids.length) return alert("選択がありません");
+    if (!confirm(`選択 ${ids.length}件 を承認しますか？`)) return;
+    await approveIds(ids);
   });
 
   btnBulkReject.addEventListener("click", async () => {
-    const ids0 = Array.from(selectedIds);
-    if (!ids0.length) return alert("選択が0件です");
-
-    const ids = (activeTab === "all")
-      ? ids0.filter(id => statusOfIdInAll(id) === "pending")
-      : ids0;
-
-    if (!ids.length) return alert("却下できる（承認待ちの）選択がありません");
-    if (!confirm(`一括却下しますか？\n${ids.length}件`)) return;
-
-    btnBulkReject.disabled = true;
-    try{
-      for (const id of ids){
-        await apiPost("/api/admin/reject", { id });
-      }
-      selectedIds.clear();
-      chkAll.checked = false;
-      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-      renderList();
-    }catch(e){
-      alert(`一括却下失敗：${e?.message || e}`);
-    }finally{
-      btnBulkReject.disabled = false;
-    }
+    const ids = getSelectedIds();
+    if (!ids.length) return alert("選択がありません");
+    if (!confirm(`選択 ${ids.length}件 を却下しますか？`)) return;
+    await rejectIds(ids);
   });
 
   btnBulkDelete.addEventListener("click", async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return alert("選択が0件です");
-    if (!confirm(`選択を削除しますか？\n${ids.length}件`)) return;
+    const ids = getSelectedIds();
+    if (!ids.length) return alert("選択がありません");
+    if (!confirm(`選択 ${ids.length}件 を削除しますか？（元に戻せません）`)) return;
+    await deleteIds(ids);
+  });
 
-    btnBulkDelete.disabled = true;
-    try{
-      for (const id of ids){
-        let scope = "public";
-        if (activeTab === "pending") scope = "pending";
-        else if (activeTab === "all") scope = "both";
-        await apiPost("/api/admin/delete", { id, scope });
+  // リスト内のクリック（委譲）
+  listEl.addEventListener("click", async (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLElement)) return;
+
+    // チェックボックス
+    if (t.classList.contains("itemChk")){
+      const id = t.getAttribute("data-id");
+      if (!id) return;
+      if (t.checked) selectedIds.add(id);
+      else selectedIds.delete(id);
+      updateSelectionUI();
+      return;
+    }
+
+    const act = t.getAttribute("data-act");
+    const id = t.getAttribute("data-id");
+    if (!act || !id) return;
+
+    if (act === "approve"){
+      if (!confirm("この1件を承認しますか？")) return;
+      await approveIds([id]);
+    } else if (act === "reject"){
+      if (!confirm("この1件を却下しますか？")) return;
+      await rejectIds([id]);
+    } else if (act === "delete"){
+      if (!confirm("この1件を削除しますか？（元に戻せません）")) return;
+      await deleteIds([id]);
+    }
+  });
+
+  // Enterで保存/health しない（誤爆防止）
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter"){
+      const el = document.activeElement;
+      if (el === elApiBase || el === elAdminKey){
+        e.preventDefault();
+        // ここでは何もしない（誤爆で通信→固まり防止）
       }
-      selectedIds.clear();
-      chkAll.checked = false;
-      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-      renderList();
-    }catch(e){
-      alert(`一括削除失敗：${e?.message || e}`);
-    }finally{
-      btnBulkDelete.disabled = false;
     }
   });
 
-  // -----------------------
-  // 初期ネタ取り込み（metaphors.js -> KV）
-  // -----------------------
-  async function importSeed(){
-    if (!confirm("metaphors.js の初期ネタをKVへ取り込みます。よろしいですか？")) return;
+  // ====== 初期化 ======
+  loadSettings();
+  // 初回は軽く health を押せるようにする（自動通信はしない）
+  setPill(pillHealth, "health: 未確認", null);
+  setPill(pillAdmin,  "admin: 未確認", null);
+  render();
 
-    btnImportSeed.disabled = true;
-    btnImportSeed.textContent = "取り込み中...";
-
-    try{
-      // 1) metaphors.js を取得（同一GitHub Pages上）
-      const res = await fetch("./metaphors.js", { cache: "no-store" });
-      if (!res.ok) throw new Error(`metaphors.js が読めません（${res.status}）`);
-      const code = await res.text();
-
-      // 2) 一時windowに評価（metaphors.js は window.NETA_TRIVIA / window.NETA を定義する想定）
-      const tmp = {};
-      (function(window){ eval(code); })(tmp);
-
-      const items = [];
-
-      const t = tmp.NETA_TRIVIA || {};
-      Object.keys(t).forEach(k => {
-        const bucket = Number(k);
-        (t[k] || []).forEach(text => items.push({ mode:"trivia", bucket, text }));
-      });
-
-      const f = tmp.NETA || {};
-      Object.keys(f).forEach(k => {
-        const bucket = Number(k);
-        (f[k] || []).forEach(text => items.push({ mode:"fun", bucket, text }));
-      });
-
-      if (!items.length) throw new Error("初期ネタが見つかりません（NETA_TRIVIA / NETA が空）");
-
-      // 3) Workerへ送信
-      // ✅ ここが Network に POST /api/admin/import_seed として出ます
-      const r = await apiPost("/api/admin/import_seed", { items });
-
-      alert(`取り込み完了：追加 ${r.put} 件 / スキップ ${r.skipped} 件`);
-
-      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-      renderList();
-    }catch(e){
-      alert(`取り込み失敗：${e?.message || e}`);
-      console.error(e);
-    }finally{
-      btnImportSeed.disabled = false;
-      btnImportSeed.textContent = "初期ネタを取り込み";
-    }
-  }
-
-  // -----------------------
-  // UIイベント
-  // -----------------------
-  btnSave.addEventListener("click", () => {
-    localStorage.setItem(LS_API, apiBase());
-    localStorage.setItem(LS_KEY, adminKey());
-    alert("保存しました");
-  });
-
-  btnHealth.addEventListener("click", async () => {
-    try{
-      await doHealth();
-      alert("health OK");
-    }catch(e){
-      alert(`health NG：${e?.message || e}`);
-    }
-  });
-
-  btnRefresh.addEventListener("click", async () => {
-    try{
-      await doHealth();
-      await refreshActive();
-      renderList();
-    }catch(e){
-      alert(`更新失敗：${e?.message || e}`);
-    }
-  });
-
-  btnImportSeed.addEventListener("click", importSeed);
-
-  tabPending.addEventListener("click", () => setTab("pending"));
-  tabPublic.addEventListener("click",  () => setTab("public"));
-  tabAll.addEventListener("click",     () => setTab("all"));
-
-  // -----------------------
-  // 初期化
-  // -----------------------
-  async function init(){
-    elApiBase.value  = localStorage.getItem(LS_API) || DEFAULT_API_BASE;
-    elAdminKey.value = localStorage.getItem(LS_KEY) || "";
-
-    setPill(pillHealth, "health: 未確認", null);
-    setPill(pillAdmin,  "admin: 未確認", null);
-
-    try{
-      await doHealth();
-      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
-    }catch(e){
-      console.warn(e);
-    }finally{
-      renderList();
-    }
-  }
-
-  if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", init, { once:true });
-  } else {
-    init();
-  }
 })();
 </script>
 
 </body>
 </html>
+<!-- # END -->
