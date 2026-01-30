@@ -521,7 +521,7 @@
   }
 
   async function refreshPublic(){
-    const data = await apiGet("/api/admin/list");
+    const data = await apiGet("/api/admin/list?limit=5000");
     itemsPublic = Array.isArray(data.items) ? data.items : [];
     renderCounts();
     if (activeTab === "public") renderList();
