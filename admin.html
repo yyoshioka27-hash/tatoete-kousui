@@ -584,11 +584,11 @@
 
       for (const it of arr) {
         const id = it?.id || "";
-        const mode = it?.mode ?? "";
-        const bucket = it?.bucket ?? "";
+        const mode = it?.mode  "";
+        const bucket = it?.bucket  "";
         const from = it?.from ? `from: ${it.from}` : "";
         const at = it?.createdAt ? fmtTime(it.createdAt) : "";
-        const text = it?.text ?? "";
+        const text = it?.text  "";
 
         const card = document.createElement("div");
         card.className = "card";
@@ -741,10 +741,10 @@
 
       for (const it of arr) {
         const id = it?.id || "";
-        const mode = it?.mode ?? "";
-        const bucket = it?.bucket ?? "";
+        const mode = it?.mode  "";
+        const bucket = it?.bucket  "";
         const at = it?.createdAt ? fmtTime(it.createdAt) : "";
-        const text = it?.text ?? "";
+        const text = it?.text  "";
 
         const card = document.createElement("div");
         card.className = "card";
