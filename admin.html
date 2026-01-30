@@ -611,7 +611,16 @@
     try{
       // ✅ publicタブなら public、allタブなら both
       const scope = (activeTab === "all") ? "both" : "public";
-      await apiPost("/api/admin/delete", { ids, scope });
+      await Promise.all(ids.map(id => {
+  const where = (activeTab === "pending")
+    ? "pending"
+    : (activeTab === "public")
+      ? "public"
+      : statusOfIdInAll(id); // ← allタブ用
+
+  return apiPost("/api/admin/delete", { where, id });
+}));
+
       selectedIds.clear();
       chkAll.checked = false;
       await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
