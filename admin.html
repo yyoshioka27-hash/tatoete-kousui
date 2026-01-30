@@ -528,12 +528,13 @@
   }
 
   async function refreshAll(){
-    // ✅ 全ネタ
-    const data = await apiGet("/api/admin/all?scope=both&limit=5000");
-    itemsAll = Array.isArray(data.items) ? data.items : [];
-    renderCounts();
-    if (activeTab === "all") renderList();
-  }
+  const data = await apiGet("/api/admin/all?scope=both&limit=5000");
+  console.log("ALL RAW:", data.items);
+  itemsAll = Array.isArray(data.items) ? data.items : [];
+  renderCounts();
+  if (activeTab === "all") renderList();
+}
+
 
   async function refreshActive(){
     if (activeTab === "pending") return refreshPending();
