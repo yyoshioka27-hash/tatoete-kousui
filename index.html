@@ -34,28 +34,17 @@
     body{
       margin:0;
       padding: 18px;
-      font-family: -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+      /* ✅ 絵文字が ?? になりやすい環境対策（Windows優先） */
+      font-family: "Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",
+                   -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
       background: linear-gradient(180deg, var(--bg1), var(--bg2));
       color: var(--text);
     }
 
-    .container{
-      max-width: 860px;
-      margin: 0 auto;
-    }
+    .container{ max-width: 860px; margin: 0 auto; }
 
-    h1{
-      margin: 0 0 14px;
-      font-size: 26px;
-      letter-spacing: -0.2px;
-      line-height: 1.25;
-    }
-    .subtitle{
-      margin-top: 6px;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--sub);
-    }
+    h1{ margin: 0 0 14px; font-size: 26px; letter-spacing: -0.2px; line-height: 1.25; }
+    .subtitle{ margin-top: 6px; font-size: 14px; font-weight: 500; color: var(--sub); }
 
     .card{
       border-radius: var(--radius);
@@ -67,18 +56,8 @@
       backdrop-filter: blur(8px);
     }
 
-    .small{
-      color: var(--sub);
-      font-size: 13px;
-      line-height: 1.4;
-    }
-
-    .big{
-      font-size: 52px;
-      font-weight: 900;
-      letter-spacing: -1px;
-      line-height: 1;
-    }
+    .small{ color: var(--sub); font-size: 13px; line-height: 1.4; }
+    .big{ font-size: 52px; font-weight: 900; letter-spacing: -1px; line-height: 1; }
 
     input, select, textarea{
       padding: 12px 14px;
@@ -89,6 +68,7 @@
       font-size: 16px;
       background: rgba(255,255,255,0.90);
       outline: none;
+      font-family: inherit;
     }
     input:focus, select:focus, textarea:focus{
       border-color: rgba(37,99,235,0.55);
@@ -105,6 +85,7 @@
       font-size: 16px;
       transition: transform .06s ease, box-shadow .2s ease, border-color .2s ease;
       box-shadow: 0 8px 18px rgba(2,6,23,0.06);
+      font-family: inherit;
     }
     button:hover{
       border-color: rgba(37,99,235,0.35);
@@ -119,9 +100,7 @@
       color: #fff;
       box-shadow: 0 14px 28px rgba(37,99,235,0.18);
     }
-    .btnPrimary:hover{
-      box-shadow: 0 16px 34px rgba(37,99,235,0.22);
-    }
+    .btnPrimary:hover{ box-shadow: 0 16px 34px rgba(37,99,235,0.22); }
 
     .row{
       display: grid;
@@ -187,17 +166,7 @@
       transform: translateY(1px);
     }
 
-    #refreshArea{
-      position: relative;
-      overflow: hidden;
-    }
-    .floatAnim{
-      animation: floatUp .35s ease;
-    }
-    @keyframes floatUp{
-      0%{ transform: translateY(8px); opacity: .0; }
-      100%{ transform: translateY(0); opacity: 1; }
-    }
+    #refreshArea{ position: relative; overflow: hidden; }
 
     .footer{
       margin: 18px 0 8px;
@@ -270,8 +239,14 @@
 
         <div class="actions">
           <button id="del_m" style="display:none;">このネタを削除</button>
-          <button id="like_m">👍いいね (<span id="likeCount_m">0</span>)</button>
-          <span id="badge_m" style="margin-left:6px;font-size:20px;"></span>
+
+          <!-- ✅ 「??」対策：絵文字は数値参照 + JSがclass/onclick付与 -->
+          <button id="like_m">&#128077; いいね (<span id="likeCount_m">0</span>)</button>
+
+          <!-- ✅ script.js が参照する「累計」表示（無いとUI更新が中途半端） -->
+          <span class="muted" id="likeTotal_m">累計&#128077;0</span>
+
+          <span id="badge_m" style="margin-left:6px;"></span>
         </div>
       </div>
 
@@ -285,8 +260,9 @@
 
         <div class="actions">
           <button id="del_d" style="display:none;">このネタを削除</button>
-          <button id="like_d">👍いいね (<span id="likeCount_d">0</span>)</button>
-          <span id="badge_d" style="margin-left:6px;font-size:20px;"></span>
+          <button id="like_d">&#128077; いいね (<span id="likeCount_d">0</span>)</button>
+          <span class="muted" id="likeTotal_d">累計&#128077;0</span>
+          <span id="badge_d" style="margin-left:6px;"></span>
         </div>
       </div>
 
@@ -300,8 +276,9 @@
 
         <div class="actions">
           <button id="del_e" style="display:none;">このネタを削除</button>
-          <button id="like_e">👍いいね (<span id="likeCount_e">0</span>)</button>
-          <span id="badge_e" style="margin-left:6px;font-size:20px;"></span>
+          <button id="like_e">&#128077; いいね (<span id="likeCount_e">0</span>)</button>
+          <span class="muted" id="likeTotal_e">累計&#128077;0</span>
+          <span id="badge_e" style="margin-left:6px;"></span>
         </div>
       </div>
 
@@ -373,5 +350,3 @@
   <!-- # END -->
 </body>
 </html>
-
-
