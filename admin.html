@@ -62,6 +62,7 @@
       background:#fff;
       cursor:pointer;
       font-size:14px;
+      user-select:none;
     }
     button:disabled{ opacity:.55; cursor:not-allowed; }
     .btnPrimary{
@@ -86,7 +87,7 @@
       background:var(--mutedBg);
       font-size:12px;
     }
-    .tabs{ display:flex; gap:10px; }
+    .tabs{ display:flex; gap:10px; flex-wrap:wrap; }
     .tab{
       padding:8px 12px;
       border-radius:999px;
@@ -123,7 +124,7 @@
     }
     .itemTop{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
     .itemText{ font-size:15px; line-height:1.55; font-weight:700; margin:8px 0; white-space:pre-wrap; }
-    .itemMeta{ display:flex; gap:10px; flex-wrap:wrap; }
+    .itemMeta{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .badge{
       display:inline-flex;
       align-items:center;
@@ -136,6 +137,8 @@
       color:var(--sub);
       font-weight:800;
     }
+    .badgePublic{ border-color: rgba(22,163,74,.25); background: rgba(22,163,74,.07); color: #166534; }
+    .badgePending{ border-color: rgba(239,68,68,.25); background: rgba(239,68,68,.07); color: #991b1b; }
     .actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .chk{ transform:translateY(1px); }
     .right{ margin-left:auto; }
@@ -176,8 +179,9 @@
       <div class="tabs">
         <button id="tabPending" class="tab active">承認待ち</button>
         <button id="tabPublic" class="tab">一般公開</button>
+        <button id="tabAll" class="tab">全ネタ（public+pending）</button>
       </div>
-      <div class="muted" id="counts">承認待ち: 0件 / 公開: 0件</div>
+      <div class="muted" id="counts">承認待ち: 0件 / 公開: 0件 / 全: 0件</div>
     </div>
 
     <div class="toolbar">
@@ -196,9 +200,9 @@
     </div>
 
     <div class="muted" style="margin-top:10px;">
-      「更新（表示中タブ）」を押すと、承認待ちが表示されます。<br/>
-      ※ 取得: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span><br/>
-      ※ 公開一覧: <span class="mono">/api/admin/list</span> / 削除: <span class="mono">/api/admin/delete</span>
+      ※ 承認待ち: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span><br/>
+      ※ 公開: <span class="mono">/api/admin/list</span> / 削除: <span class="mono">/api/admin/delete</span><br/>
+      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span>（表示のみ） / 削除: <span class="mono">/api/admin/delete</span>（A: 完全抹消想定）
     </div>
 
     <div class="list" id="list"></div>
@@ -229,6 +233,8 @@
 
   const tabPending = $("tabPending");
   const tabPublic  = $("tabPublic");
+  const tabAll     = $("tabAll");
+
   const chkAll     = $("chkAll");
   const selCount   = $("selCount");
 
@@ -240,9 +246,10 @@
   const btnBulkReject  = $("btnBulkReject");
   const btnBulkDeletePublic = $("btnBulkDeletePublic");
 
-  let activeTab = "pending"; // pending | public
+  let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
-  let itemsPublic = [];
+  let itemsPublic  = [];
+  let itemsAll     = []; // { ...it, status:"public"|"pending" } を想定
   let selectedIds = new Set();
 
   function apiBase(){
@@ -316,11 +323,13 @@
 
     tabPending.classList.toggle("active", tab==="pending");
     tabPublic.classList.toggle("active", tab==="public");
+    tabAll.classList.toggle("active", tab==="all");
 
-    // 公開タブだけ削除ボタンを出す
-    btnBulkDeletePublic.style.display = (tab==="public") ? "" : "none";
-    btnBulkApprove.style.display = (tab==="pending") ? "" : "none";
-    btnBulkReject.style.display  = (tab==="pending") ? "" : "none";
+    // 削除ボタン：public / all で表示
+    btnBulkDeletePublic.style.display = (tab==="public" || tab==="all") ? "" : "none";
+    // 承認/却下ボタン：pending / all で表示（allの場合は pendingだけに適用する）
+    btnBulkApprove.style.display = (tab==="pending" || tab==="all") ? "" : "none";
+    btnBulkReject.style.display  = (tab==="pending" || tab==="all") ? "" : "none";
 
     renderList();
   }
@@ -330,12 +339,22 @@
   }
 
   function renderCounts(){
-    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件`;
+    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
+  }
+
+  function getActiveItems(){
+    if (activeTab==="pending") return itemsPending;
+    if (activeTab==="public")  return itemsPublic;
+    return itemsAll;
+  }
+
+  function statusOfIdInAll(id){
+    const hit = itemsAll.find(x => x && x.id === id);
+    return hit?.status || null;
   }
 
   function renderList(){
-    const items = (activeTab==="pending") ? itemsPending : itemsPublic;
-
+    const items = getActiveItems();
     renderCounts();
     updateSelUI();
 
@@ -345,7 +364,8 @@
     }
 
     listEl.innerHTML = items.map(it => {
-      const id = escapeHtml(it.id || "");
+      const idRaw = it.id || "";
+      const id = escapeHtml(idRaw);
       const text = escapeHtml(it.text || "");
       const mode = escapeHtml(it.mode || "");
       const bucket = escapeHtml(String(it.bucket ?? ""));
@@ -353,27 +373,52 @@
       const createdAt = fmtTime(it.createdAt);
       const approvedAt = fmtTime(it.approvedAt);
 
-      const checked = selectedIds.has(it.id) ? "checked" : "";
+      const checked = selectedIds.has(idRaw) ? "checked" : "";
+
+      // allタブなら status バッジ
+      const status = it.status || (activeTab==="pending" ? "pending" : (activeTab==="public" ? "public" : ""));
+      const statusBadge = (activeTab==="all")
+        ? (status === "public"
+            ? `<span class="badge badgePublic">公開</span>`
+            : `<span class="badge badgePending">承認待ち</span>`)
+        : "";
 
       const topBadges = [
+        statusBadge,
         `<span class="badge">mode: ${mode}</span>`,
         `<span class="badge">bucket: ${bucket}</span>`,
         `<span class="badge">pen: ${pen}</span>`,
         `<span class="badge">id: <span class="mono">${id}</span></span>`
-      ].join(" ");
+      ].filter(Boolean).join(" ");
 
-      const timeBadges = (activeTab==="pending")
-        ? `<span class="badge">created: ${createdAt}</span>`
-        : `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`;
+      const timeBadges =
+        (activeTab==="pending")
+          ? `<span class="badge">created: ${createdAt}</span>`
+          : (activeTab==="public")
+            ? `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`
+            : // all
+              (status === "pending"
+                ? `<span class="badge">created: ${createdAt}</span>`
+                : `<span class="badge">approved: ${approvedAt}</span><span class="badge">created: ${createdAt}</span>`);
 
-      const actionBtns = (activeTab==="pending")
-        ? `
+      let actionBtns = "";
+      if (activeTab === "pending") {
+        actionBtns = `
           <button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
           <button class="btnDanger" data-act="reject" data-id="${id}">却下</button>
-        `
-        : `
+        `;
+      } else if (activeTab === "public") {
+        actionBtns = `
           <button class="btnDanger" data-act="delete" data-id="${id}">削除</button>
         `;
+      } else {
+        // all: pending なら承認/却下、どちらでも削除
+        if (status === "pending") {
+          actionBtns += `<button class="btnPrimary" data-act="approve" data-id="${id}">承認</button>
+                         <button class="btnDanger" data-act="reject" data-id="${id}">却下</button>`;
+        }
+        actionBtns += `<button class="btnDanger" data-act="delete" data-id="${id}">削除</button>`;
+      }
 
       return `
         <div class="item">
@@ -402,7 +447,6 @@
 
       const act = t.getAttribute("data-act");
       const id  = t.getAttribute("data-id");
-
       if (!act || !id) return;
 
       if (act === "toggle"){
@@ -410,8 +454,7 @@
         else selectedIds.add(id);
         updateSelUI();
 
-        // 全選択チェック同期
-        const items2 = (activeTab==="pending") ? itemsPending : itemsPublic;
+        const items2 = getActiveItems();
         chkAll.checked = (items2.length > 0 && selectedIds.size === items2.length);
         return;
       }
@@ -420,17 +463,31 @@
         if (act === "approve"){
           if (!confirm(`承認しますか？\n${id}`)) return;
           await apiPost("/api/admin/approve", { id });
-          await refreshPending();
+          await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+          if (activeTab === "pending") await refreshPending();
+          if (activeTab === "public") await refreshPublic();
+          if (activeTab === "all") await refreshAll();
+          renderList();
         }
+
         if (act === "reject"){
           if (!confirm(`却下しますか？\n${id}`)) return;
           await apiPost("/api/admin/reject", { id });
-          await refreshPending();
+          await Promise.all([refreshPending(), refreshAll()]);
+          if (activeTab === "pending") await refreshPending();
+          if (activeTab === "all") await refreshAll();
+          renderList();
         }
+
         if (act === "delete"){
-          if (!confirm(`削除しますか？\n${id}`)) return;
-          await apiPost("/api/admin/delete", { id });
-          await refreshPublic();
+          if (!confirm(`削除しますか？（A: 完全抹消）\n${id}`)) return;
+
+          // ✅ A運用：allタブは scope both。publicタブは public。
+          const scope = (activeTab === "all") ? "both" : "public";
+          await apiPost("/api/admin/delete", { id, scope });
+
+          await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+          renderList();
         }
       }catch(e){
         alert(`操作失敗：${e?.message || e}`);
@@ -440,18 +497,15 @@
 
   async function doHealth(){
     try{
-      const data = await apiGet("/api/health");
+      await apiGet("/api/health");
       setPill(pillHealth, "health: OK", true);
 
-      // admin check
       try{
         await apiGet("/api/admin/check");
         setPill(pillAdmin, "admin: OK", true);
-      }catch(e){
+      }catch{
         setPill(pillAdmin, "admin: NG", false);
       }
-
-      return data;
     }catch(e){
       setPill(pillHealth, "health: NG", false);
       setPill(pillAdmin,  "admin: NG", false);
@@ -462,28 +516,45 @@
   async function refreshPending(){
     const data = await apiGet("/api/admin/pending");
     itemsPending = Array.isArray(data.items) ? data.items : [];
-    if (activeTab === "pending") renderList();
     renderCounts();
+    if (activeTab === "pending") renderList();
   }
 
   async function refreshPublic(){
     const data = await apiGet("/api/admin/list");
     itemsPublic = Array.isArray(data.items) ? data.items : [];
-    if (activeTab === "public") renderList();
     renderCounts();
+    if (activeTab === "public") renderList();
+  }
+
+  async function refreshAll(){
+    // ✅ 全ネタ
+    const data = await apiGet("/api/admin/all?scope=both&limit=5000");
+    itemsAll = Array.isArray(data.items) ? data.items : [];
+    renderCounts();
+    if (activeTab === "all") renderList();
   }
 
   async function refreshActive(){
     if (activeTab === "pending") return refreshPending();
-    return refreshPublic();
+    if (activeTab === "public")  return refreshPublic();
+    return refreshAll();
   }
 
   // -----------------------
   // 一括操作
   // -----------------------
   async function bulkApprove(){
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return alert("選択が0件です");
+    const ids0 = Array.from(selectedIds);
+    if (!ids0.length) return alert("選択が0件です");
+
+    // allタブなら pendingだけに絞る
+    const ids = (activeTab === "all")
+      ? ids0.filter(id => statusOfIdInAll(id) === "pending")
+      : ids0;
+
+    if (!ids.length) return alert("承認できる（承認待ちの）選択がありません");
+
     if (!confirm(`一括承認しますか？\n${ids.length}件`)) return;
 
     btnBulkApprove.disabled = true;
@@ -493,7 +564,8 @@
       }
       selectedIds.clear();
       chkAll.checked = false;
-      await refreshPending();
+      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+      renderList();
     }catch(e){
       alert(`一括承認失敗：${e?.message || e}`);
     }finally{
@@ -502,8 +574,15 @@
   }
 
   async function bulkReject(){
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return alert("選択が0件です");
+    const ids0 = Array.from(selectedIds);
+    if (!ids0.length) return alert("選択が0件です");
+
+    const ids = (activeTab === "all")
+      ? ids0.filter(id => statusOfIdInAll(id) === "pending")
+      : ids0;
+
+    if (!ids.length) return alert("却下できる（承認待ちの）選択がありません");
+
     if (!confirm(`一括却下しますか？\n${ids.length}件`)) return;
 
     btnBulkReject.disabled = true;
@@ -513,7 +592,8 @@
       }
       selectedIds.clear();
       chkAll.checked = false;
-      await refreshPending();
+      await Promise.all([refreshPending(), refreshAll()]);
+      renderList();
     }catch(e){
       alert(`一括却下失敗：${e?.message || e}`);
     }finally{
@@ -521,17 +601,20 @@
     }
   }
 
-  async function bulkDeletePublic(){
+  async function bulkDelete(){
     const ids = Array.from(selectedIds);
     if (!ids.length) return alert("選択が0件です");
-    if (!confirm(`選択を削除しますか？\n${ids.length}件`)) return;
+    if (!confirm(`選択を削除しますか？（A: 完全抹消）\n${ids.length}件`)) return;
 
     btnBulkDeletePublic.disabled = true;
     try{
-      await apiPost("/api/admin/delete", { ids });
+      // ✅ publicタブなら public、allタブなら both
+      const scope = (activeTab === "all") ? "both" : "public";
+      await apiPost("/api/admin/delete", { ids, scope });
       selectedIds.clear();
       chkAll.checked = false;
-      await refreshPublic();
+      await Promise.all([refreshPending(), refreshPublic(), refreshAll()]);
+      renderList();
     }catch(e){
       alert(`一括削除失敗：${e?.message || e}`);
     }finally{
@@ -568,9 +651,10 @@
 
   tabPending.onclick = () => setTab("pending");
   tabPublic.onclick  = () => setTab("public");
+  tabAll.onclick     = () => setTab("all");
 
   chkAll.onchange = () => {
-    const items = (activeTab==="pending") ? itemsPending : itemsPublic;
+    const items = getActiveItems();
     selectedIds.clear();
     if (chkAll.checked){
       for (const it of items) if (it?.id) selectedIds.add(it.id);
@@ -580,7 +664,7 @@
 
   btnBulkApprove.onclick = bulkApprove;
   btnBulkReject.onclick  = bulkReject;
-  btnBulkDeletePublic.onclick = bulkDeletePublic;
+  btnBulkDeletePublic.onclick = bulkDelete;
 
   // -----------------------
   // 初期化
@@ -591,9 +675,8 @@
     setPill(pillHealth, "health: 未確認", null);
     setPill(pillAdmin,  "admin: 未確認", null);
 
-    // 起動時に一覧を取りにいく（失敗してもUIは死なない）
     doHealth()
-      .then(() => Promise.all([refreshPending(), refreshPublic()]))
+      .then(() => Promise.all([refreshPending(), refreshPublic(), refreshAll()]))
       .then(() => renderList())
       .catch((e) => {
         console.warn(e);
