@@ -782,6 +782,26 @@ async function importSeed(){
 }
 
 </script>
+  async function apiPost(path, body){
+  const base = elApiBase.value.trim();
+  const key  = elAdminKey.value.trim();
+
+  const res = await fetch(base + path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": key
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || `POST ${path} failed`);
+  }
+  return data;
+}
+
   <script src="./shared-metaphors.js"></script>
   <input id="adminKey" placeholder="ADMIN KEY">
 <button onclick="testAdmin()">テスト</button>
