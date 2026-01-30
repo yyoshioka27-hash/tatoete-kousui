@@ -125,7 +125,7 @@
     <div class="muted" style="margin-top:10px;">
       ※ 承認待ち: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span><br/>
       ※ 公開: <span class="mono">/api/admin/list</span> / 削除: <span class="mono">/api/admin/delete</span><br/>
-      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span>（表示のみ） / 削除: <span class="mono">/api/admin/delete</span>
+      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span>（表示/削除OK）
     </div>
 
     <div class="list" id="list"></div>
@@ -196,7 +196,6 @@
   function setBusy(on){
     __busy = !!on;
     pillBusy.style.display = __busy ? "inline-flex" : "none";
-    // 重要：操作ボタンをまとめて止める（固まり防止）
     const dis = __busy;
     [btnSave, btnHealth, btnRefresh, btnRefreshAllTabs, btnImportSeed,
      tabPending, tabPublic, tabAll,
@@ -257,19 +256,27 @@
     return (v == null) ? "" : String(v);
   }
 
-  function normalizeItems(arr, scope){
-    // 期待：{ id, text, bucket, mode, likes, penName, createdAt, ... }
-    // scope: "pending" | "public" | "both"
-    return (Array.isArray(arr) ? arr : []).map(x => ({
-      id: safeText(x.id ?? x.key ?? x._id ?? ""),
-      text: safeText(x.text ?? x.metaphor ?? x.value ?? ""),
-      bucket: (x.bucket ?? x.b ?? null),
-      mode: safeText(x.mode ?? x.m ?? ""),
-      likes: (x.likes ?? x.like ?? 0),
-      penName: safeText(x.penName ?? x.pen ?? x.author ?? ""),
-      createdAt: (x.createdAt ?? x.ts ?? x.time ?? 0),
-      scope: scope || safeText(x.scope ?? "")
-    })).filter(x => x.id);
+  function normalizeScope(x, fallback){
+    // worker /api/admin/all は status を付けて返す（public/pending）
+    const s = (x?.scope ?? x?._scope ?? x?.status ?? fallback ?? "").toString().toLowerCase().trim();
+    if (s === "public" || s === "pending") return s;
+    return fallback || "";
+  }
+
+  function normalizeItems(arr, fallbackScope){
+    return (Array.isArray(arr) ? arr : []).map(x => {
+      const scope = normalizeScope(x, fallbackScope || "");
+      return {
+        id: safeText(x.id ?? x.key ?? x._id ?? ""),
+        text: safeText(x.text ?? x.metaphor ?? x.value ?? ""),
+        bucket: (x.bucket ?? x.b ?? null),
+        mode: safeText(x.mode ?? x.m ?? ""),
+        likes: (x.likes ?? x.like ?? x.totalLikes ?? 0), // totalLikes が来ても出せる
+        penName: safeText(x.penName ?? x.pen ?? x.author ?? ""),
+        createdAt: (x.createdAt ?? x.ts ?? x.time ?? x.approvedAt ?? 0),
+        scope
+      };
+    }).filter(x => x.id);
   }
 
   function updateCounts(){
@@ -278,14 +285,13 @@
 
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
-    // 全選択の見た目
+
     const current = getActiveItems();
     const allIds = current.map(x => x.id);
     const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
     chkAll.checked = allSelected;
     chkAll.indeterminate = (!allSelected && selectedIds.size > 0);
 
-    // タブに応じて一括ボタンの見せ方
     if (activeTab === "pending"){
       btnBulkApprove.style.display = "";
       btnBulkReject.style.display  = "";
@@ -302,7 +308,7 @@
     tabPending.classList.toggle("active", tab==="pending");
     tabPublic.classList.toggle("active",  tab==="public");
     tabAll.classList.toggle("active",     tab==="all");
-    selectedIds = new Set(); // タブ切替で選択はリセット（事故防止）
+    selectedIds = new Set();
     render();
   }
 
@@ -325,9 +331,8 @@
 
     const html = items.map(item => {
       const checked = selectedIds.has(item.id) ? "checked" : "";
-      const isPending = (activeTab === "pending") || (item.scope === "pending");
-      const isPublic  = (activeTab === "public")  || (item.scope === "public");
 
+      const isPending = (activeTab === "pending") || (item.scope === "pending");
       const badgeScope = (activeTab === "all")
         ? (isPending
             ? `<span class="badge badgePending">pending</span>`
@@ -357,22 +362,20 @@
 
       const perActions = [];
 
-// ★ 承認待ちでも delete を使う（後退防止）
-if (activeTab === "pending"){
-  perActions.push(
-    `<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`
-  );
-} else {
-  perActions.push(
-    `<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`
-  );
-}
-
-
-      // all タブは表示のみが基本だが、削除は許可（要望）
-      if (activeTab === "all"){
-        perActions.length = 0;
-        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-id="${escapeAttr(item.id)}">削除</button>`);
+      // ✅ pending は承認/却下/削除
+      if (activeTab === "pending"){
+        perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
+        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下</button>`);
+        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="pending" data-id="${escapeAttr(item.id)}">削除</button>`);
+      }
+      // ✅ public は削除のみ（scope=public）
+      else if (activeTab === "public"){
+        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="public" data-id="${escapeAttr(item.id)}">削除</button>`);
+      }
+      // ✅ all は scope を見て削除（事故防止）
+      else {
+        const scope = (item.scope === "pending") ? "pending" : "public";
+        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="${escapeAttr(scope)}" data-id="${escapeAttr(item.id)}">削除</button>`);
       }
 
       return `
@@ -398,7 +401,6 @@ if (activeTab === "pending"){
     listEl.innerHTML = html;
   }
 
-  // XSS対策（表示だけでも守る）
   function escapeHtml(s){
     return String(s ?? "")
       .replaceAll("&","&amp;")
@@ -429,13 +431,11 @@ if (activeTab === "pending"){
     setBusy(true);
     try{
       const data = await fetchJSON("/api/health", { signal: __ctrl.signal });
-      // 例：{ ok:true, status:"ok", kv:true, hofThreshold:20 }
       const kv = (data.kv === true) ? "kv:OK" : "kv:?" ;
       setPill(pillHealth, `health: OK (${kv})`, true);
 
-      // admin確認は「軽く pending を叩いて 403/OK を判定」
       try{
-        await fetchJSON("/api/admin/pending?limit=1", { admin:true, signal: __ctrl.signal });
+        await fetchJSON("/api/admin/pending", { admin:true, signal: __ctrl.signal });
         setPill(pillAdmin, "admin: OK", true);
       } catch(e){
         if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -451,7 +451,6 @@ if (activeTab === "pending"){
 
   async function loadPending(){
     const data = await fetchJSON("/api/admin/pending", { admin:true, signal: __ctrl.signal });
-    // 期待：{ ok:true, items:[...] }
     itemsPending = normalizeItems(data.items || data.pending || [], "pending");
   }
   async function loadPublic(){
@@ -459,17 +458,9 @@ if (activeTab === "pending"){
     itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
   }
   async function loadAll(){
-    // 期待：{ ok:true, items:[{...,scope:"pending/public"}] }
     const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal: __ctrl.signal });
     const raw = data.items || data.all || [];
-    // scopeが無い場合は両方混ざってても見えるように fallback
-    itemsAll = normalizeItems(raw, "both").map(x => ({
-      ...x,
-      scope: x.scope && x.scope !== "both" ? x.scope : (x._scope || x.scope || "")
-    }));
-
-    // scope が付かない実装もあり得るので、id が pending/public に重複する場合は避ける
-    // （必要なら worker 側で scope を付けるのが正）
+    itemsAll = normalizeItems(raw, ""); // status/scope を取り込む
   }
 
   async function refreshCurrentTab(){
@@ -481,7 +472,6 @@ if (activeTab === "pending"){
       if (activeTab === "pending") await loadPending();
       else if (activeTab === "public") await loadPublic();
       else await loadAll();
-      updateSelectionUI();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -519,10 +509,7 @@ if (activeTab === "pending"){
     setBusy(true);
     try{
       await fetchJSON("/api/admin/approve", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
-      // 更新
-      await loadPending();
-      await loadPublic();
-      await loadAll();
+      await refreshAllTabs();
       selectedIds = new Set();
       render();
     } catch(e){
@@ -541,8 +528,7 @@ if (activeTab === "pending"){
     setBusy(true);
     try{
       await fetchJSON("/api/admin/reject", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
-      await loadPending();
-      await loadAll();
+      await refreshAllTabs();
       selectedIds = new Set();
       render();
     } catch(e){
@@ -554,17 +540,20 @@ if (activeTab === "pending"){
     }
   }
 
-  async function deleteIds(ids){
+  // ✅ 事故防止：scope を必ず渡す
+  async function deleteIds(ids, scope){
     if (!ids.length) return;
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
     try{
-      await fetchJSON("/api/admin/delete", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
-      await loadPublic();
-      await loadAll();
-      // pending から削除する実装の場合もあるので念のため
-      await loadPending();
+      await fetchJSON("/api/admin/delete", {
+        method:"POST",
+        admin:true,
+        body:{ ids, scope: scope || "both" },
+        signal: __ctrl.signal
+      });
+      await refreshAllTabs();
       selectedIds = new Set();
       render();
     } catch(e){
@@ -577,8 +566,9 @@ if (activeTab === "pending"){
   }
 
   async function importSeed(){
-    // ※ worker 側の実装名が違う可能性があるので、候補を順に試す（止まらない）
+    // ✅ worker.js は /api/admin/import_seed
     const candidates = [
+      "/api/admin/import_seed",
       "/api/admin/import-seed",
       "/api/admin/seed",
       "/api/admin/seed/import",
@@ -595,16 +585,13 @@ if (activeTab === "pending"){
     try{
       for (const p of candidates){
         try{
-          await fetchJSON(p, { method:"POST", admin:true, body:{}, signal: __ctrl.signal });
+          await fetchJSON(p, { method:"POST", admin:true, body:{ items: [] }, signal: __ctrl.signal });
           ok = true;
           break;
         } catch(e){
           lastErr = e;
-          // 404 は次候補へ
           if (e?.status === 404) continue;
-          // 403 は即終了
           if (e?.status === 403) throw e;
-          // その他も次へ（ただし abort などは止める）
           continue;
         }
       }
@@ -645,11 +632,9 @@ if (activeTab === "pending"){
     if (chkAll.checked){
       items.forEach(x => selectedIds.add(x.id));
     } else {
-      // 現在タブの分だけ外す
       items.forEach(x => selectedIds.delete(x.id));
     }
     updateSelectionUI();
-    // チェック反映
     listEl.querySelectorAll(".itemChk").forEach(chk => {
       const id = chk.getAttribute("data-id");
       chk.checked = selectedIds.has(id);
@@ -673,8 +658,9 @@ if (activeTab === "pending"){
   btnBulkDelete.addEventListener("click", async () => {
     const ids = getSelectedIds();
     if (!ids.length) return alert("選択がありません");
+    const scope = (activeTab === "public") ? "public" : (activeTab === "all" ? "both" : "pending");
     if (!confirm(`選択 ${ids.length}件 を削除しますか？（元に戻せません）`)) return;
-    await deleteIds(ids);
+    await deleteIds(ids, scope);
   });
 
   // リスト内のクリック（委譲）
@@ -682,7 +668,6 @@ if (activeTab === "pending"){
     const t = ev.target;
     if (!(t instanceof HTMLElement)) return;
 
-    // チェックボックス
     if (t.classList.contains("itemChk")){
       const id = t.getAttribute("data-id");
       if (!id) return;
@@ -703,25 +688,23 @@ if (activeTab === "pending"){
       if (!confirm("この1件を却下しますか？")) return;
       await rejectIds([id]);
     } else if (act === "delete"){
+      const scope = t.getAttribute("data-scope") || (activeTab === "public" ? "public" : (activeTab === "pending" ? "pending" : "both"));
       if (!confirm("この1件を削除しますか？（元に戻せません）")) return;
-      await deleteIds([id]);
+      await deleteIds([id], scope);
     }
   });
 
-  // Enterで保存/health しない（誤爆防止）
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter"){
       const el = document.activeElement;
       if (el === elApiBase || el === elAdminKey){
         e.preventDefault();
-        // ここでは何もしない（誤爆で通信→固まり防止）
       }
     }
   });
 
   // ====== 初期化 ======
   loadSettings();
-  // 初回は軽く health を押せるようにする（自動通信はしない）
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
   render();
