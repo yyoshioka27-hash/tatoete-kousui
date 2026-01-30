@@ -17,6 +17,20 @@ function scheduleRender(){
 }
 
 // =========================
+// ✅ NGワード（表示から除外したい文字列）
+// 「データから削除」相当として、全ソース(base/json/public)で表示しない
+// =========================
+const NG_PHRASES = [
+  "共通テスト",
+];
+
+function isNgText(text){
+  const t = String(text || "");
+  if (!t) return true;
+  return NG_PHRASES.some(ng => ng && t.includes(ng));
+}
+
+// =========================
 // ✅ いいね演出用CSSを注入（HTML改修不要）
 // =========================
 (function injectLikeFxCSS(){
@@ -161,7 +175,8 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
       totalLikes: Number(it.totalLikes || 0),
       hof: !!it.hof
     }))
-    .filter(x => x.id && x.text);
+    .filter(x => x.id && x.text)
+    .filter(x => !isNgText(x.text)); // ✅ NG排除
 }
 
 // ==============================
@@ -249,7 +264,8 @@ async function loadSharedJSON() {
         bucket: window.bucket10(Number(it.bucket)),
         text: String(it.text || "").trim()
       }))
-      .filter(it => it.text);
+      .filter(it => it.text)
+      .filter(it => !isNgText(it.text)); // ✅ NG排除
 
     window.JSON_METAPHORS = items || [];
   } catch {
@@ -270,7 +286,9 @@ function getSharedItems(mode, bucket) {
         text: String(it?.text || "").trim()
       })).filter(x => x.text) : []);
 
-  return base.filter(x => x.mode === m && x.bucket === b);
+  return base
+    .filter(x => x.mode === m && x.bucket === b)
+    .filter(x => !isNgText(x.text)); // ✅ NG排除
 }
 
 // ==============================
@@ -386,58 +404,45 @@ function setIcon(slotKey, roundedPop) {
 }
 
 // =========================
-// ✅ いいねDOMが無い環境でも自動生成
+// ✅ いいねUI：既存HTMLを活かしつつ、足りない要素は自動生成
 // =========================
 function ensureLikeDom(slot){
-  const btnId = `like_${slot}`;
-  if (document.getElementById(btnId)) return;
+  // 既存のHTMLがある前提（like_m / likeCount_m / badge_m）
+  const btn = document.getElementById(`like_${slot}`);
+  const count = document.getElementById(`likeCount_${slot}`);
+  const badge = document.getElementById(`badge_${slot}`);
 
-  const metaEl = document.getElementById(`meta_${slot}`);
-  if (!metaEl) return;
+  // ✅ 既存ボタンに演出クラスを付与
+  if (btn) btn.classList.add("like-btn-pop");
 
-  const wrap = document.createElement("div");
-  wrap.style.display = "flex";
-  wrap.style.alignItems = "center";
-  wrap.style.gap = "10px";
-  wrap.style.marginTop = "8px";
+  // ✅ 累計が無ければ作る（古いHTML対策）
+  const totalId = `likeTotal_${slot}`;
+  let total = document.getElementById(totalId);
+  if (!total) {
+    if (btn && btn.parentElement) {
+      total = document.createElement("span");
+      total.id = totalId;
+      total.className = "muted";
+      total.textContent = "累計👍0";
+      btn.insertAdjacentElement("afterend", total);
+    }
+  }
 
-  const btn = document.createElement("button");
-  btn.id = btnId;
-  btn.type = "button";
-  btn.textContent = "👍 いいね";
-  btn.className = "like-btn-pop";
-  btn.style.padding = "8px 10px";
-  btn.style.borderRadius = "12px";
-  btn.style.border = "1px solid rgba(15,23,42,.18)";
-  btn.style.background = "rgba(255,255,255,.8)";
-  btn.style.cursor = "pointer";
+  // ✅ badge が無ければ作る（古いHTML対策）
+  if (!badge) {
+    const wrap = btn?.parentElement;
+    if (wrap) {
+      const b = document.createElement("span");
+      b.id = `badge_${slot}`;
+      b.style.marginLeft = "6px";
+      wrap.appendChild(b);
+    }
+  }
 
-  // ✅ 今日カウント
-  const count = document.createElement("span");
-  count.id = `likeCount_${slot}`;
-  count.className = "muted";
-  count.textContent = "0";
-
-  // ✅ 累計カウント
-  const total = document.createElement("span");
-  total.id = `likeTotal_${slot}`;
-  total.className = "muted";
-  total.textContent = "累計👍0";
-
-  // ✅ バッジ（候補/殿堂入り）
-  const badge = document.createElement("span");
-  badge.id = `badge_${slot}`;
-  badge.className = "muted";
-  badge.style.fontWeight = "800";
-  badge.textContent = "";
-  badge.style.display = "none";
-
-  wrap.appendChild(btn);
-  wrap.appendChild(count);
-  wrap.appendChild(total);
-  wrap.appendChild(badge);
-
-  metaEl.insertAdjacentElement("afterend", wrap);
+  // count が無い場合はボタン内カウント更新を諦めるが、通常はあるのでOK
+  if (!count && btn) {
+    // 何もしない（最低限動作はする）
+  }
 }
 
 // =========================
@@ -455,7 +460,10 @@ function getBaseTexts(mode, bucket) {
   const base = (mode === "trivia"
     ? (window.NETA_TRIVIA?.[bucket] ?? [])
     : (window.NETA?.[bucket] ?? []));
-  return base.map(x => String(x || "").trim()).filter(Boolean);
+  return base
+    .map(x => String(x || "").trim())
+    .filter(Boolean)
+    .filter(t => !isNgText(t)); // ✅ NG排除
 }
 
 function buildCandidatePool(mode, bucket) {
@@ -489,6 +497,7 @@ function buildCandidatePool(mode, bucket) {
   for (const item of merged) {
     const t = String(item?.text || "").trim();
     if (!t) continue;
+    if (isNgText(t)) continue; // ✅ NG排除（念押し）
     if (seen.has(t)) continue;
     seen.add(t);
 
@@ -497,8 +506,6 @@ function buildCandidatePool(mode, bucket) {
       source: item.source || "base",
       id: item.id || makeGlobalId({ mode: m, bucket: b, text: t, source: item.source || "base" }),
       penName: item.penName || null,
-
-      // ✅ public は totalLikes/hof を引き継ぐ（base/json は0）
       totalLikes: Number(item.totalLikes || 0),
       hof: !!item.hof
     });
@@ -524,6 +531,7 @@ function pickMetaphor(mode, bucket) {
   lastPickKey[key] = picked.text;
   return picked;
 }
+
 // =========================
 // ✅ ランキングが参照する “代表バケット”
 // =========================
@@ -548,8 +556,10 @@ function updateLikeUI(slot) {
 
   if (!btnEl) return;
 
-  const ok = !!phraseObj?.id && !!phraseObj?.text;
+  const ok = !!phraseObj?.id && !!phraseObj?.text && !isNgText(phraseObj.text);
   btnEl.style.display = ok ? "" : "none";
+  if (totalEl) totalEl.style.display = ok ? "" : "none";
+  if (badgeEl) badgeEl.style.display = ok ? "" : "none";
 
   if (!ok) {
     if (countEl) countEl.textContent = "0";
@@ -567,7 +577,6 @@ function updateLikeUI(slot) {
   if (totalEl) totalEl.textContent = `累計👍${totalLikes}`;
 
   if (badgeEl) {
-    // ✅ 優先：殿堂入り → 候補
     if (hof) {
       badgeEl.innerHTML = `👑<span class="hof-badge">殿堂入り</span>`;
       badgeEl.style.display = "";
@@ -653,7 +662,6 @@ function escapeHtml(s) {
 // =========================
 function applyTheme(_rounded){
   // 既存のHTML/CSS側にapplyThemeがあったり、色テーマ拡張してる場合に備えてダミー
-  // 必要ならここでCSS変数を変える等も可能
 }
 
 // =========================
@@ -690,7 +698,15 @@ function render() {
     setIcon(slotKey, rounded);
 
     const mode = getSelectedMode();
-    const picked = pickMetaphor(mode, rounded);
+    let picked = pickMetaphor(mode, rounded);
+
+    // ✅ 万一 NG を引いたら再抽選（最大5回）
+    for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
+      picked = pickMetaphor(mode, rounded);
+    }
+    if (picked?.text && isNgText(picked.text)) {
+      picked = { text: "（非表示ワードが含まれるため表示できません）", source: null, id: null, penName: null, totalLikes: 0, hof: false };
+    }
 
     // ✅ ペンネーム未入力は常に「匿名」で統一（薄く表示）
     const displayPen = (picked.penName && String(picked.penName).trim())
@@ -713,7 +729,6 @@ function render() {
     const prevId = state.currentPhrases[slotKey]?.id || null;
     const nextId = picked.id || null;
 
-    // 同じネタを引いた時は今日カウントを維持（累計は picked 側の値を優先）
     const nextLikesToday = (prevId && nextId && prevId === nextId)
       ? Number(state.currentPhrases[slotKey]?.likesToday || 0)
       : 0;
@@ -844,8 +859,7 @@ async function fetchPopsBySlots(lat, lon) {
 }
 
 // =========================
-// ✅ ランキングDOM（無い環境でも自動生成）
-// 「例えを変える」ボタンの下に出す
+// ✅ ランキングDOM（既にindexにあるなら何もしない）
 // =========================
 function ensureRankingDom(){
   if (document.getElementById("todayRankingWrap")) return;
@@ -857,7 +871,6 @@ function ensureRankingDom(){
   wrap.id = "todayRankingWrap";
   wrap.style.marginTop = "14px";
 
-  // refresh の直下に出したいので afterend
   refreshBtn.insertAdjacentElement("afterend", wrap);
 }
 
@@ -908,7 +921,8 @@ async function renderRanking(){
 
   // ---- 今日TOP3 ----
   try{
-    const items = await fetchRankingToday(mode, bucket, 3);
+    const items = (await fetchRankingToday(mode, bucket, 3))
+      .filter(it => !isNgText(it?.text)); // ✅ NG排除
 
     if (!items.length) {
       if (bodyToday) bodyToday.textContent = "まだランキングがありません（今日の👍が0件）";
@@ -934,7 +948,8 @@ async function renderRanking(){
 
   // ---- 累計TOP3 ----
   try{
-    const items = await fetchRankingTotal(mode, bucket, 3);
+    const items = (await fetchRankingTotal(mode, bucket, 3))
+      .filter(it => !isNgText(it?.text)); // ✅ NG排除
 
     if (!items.length) {
       if (bodyTotal) bodyTotal.textContent = "まだ累計ランキングがありません（累計👍が0件）";
@@ -963,7 +978,9 @@ async function renderRanking(){
 
   // ---- 殿堂入り ----
   try{
-    const items = await fetchHallOfFame(mode, bucket, 50);
+    const items = (await fetchHallOfFame(mode, bucket, 50))
+      .filter(it => !isNgText(it?.text)); // ✅ NG排除
+
     const hofTh2 = Number(state.hofThreshold || 20);
 
     if (!items.length) {
@@ -1103,45 +1120,33 @@ document.getElementById("refresh").onclick = () => scheduleRender();
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信）
+// - ✅ index.html のIDに完全一致（mode/bucketが効く）
 // - ✅ ペンネーム指定時はPIN必須（救済なし）
 // - ✅ ペンネーム空欄ならPIN不要（= 匿名投稿）
 // ==============================
 function wireSubmit(){
-  // 1) まずは従来IDで探す
-  let btn = document.getElementById("submit");
-  let ta  = document.getElementById("newPhrase");
-
-  // 2) 無ければUIから推測して拾う（id違い対策）
-  if (!btn) {
-    btn = Array.from(document.querySelectorAll("button"))
-      .find(b => (b.textContent || "").includes("承認待ちへ送信"));
-  }
-  if (!ta) {
-    // 一番大きい textarea をネタ欄とみなす（雑に見えて実用的）
-    const tas = Array.from(document.querySelectorAll("textarea"));
-    ta = tas.sort((a,b)=> (b.value?.length||0) - (a.value?.length||0))[0] || tas[0] || null;
-  }
+  const btn = document.getElementById("submitPendingBtn");
+  const ta  = document.getElementById("newPhrase");
+  const modeSel = document.getElementById("newPhraseMode");
+  const bucketSel = document.getElementById("newPhraseBucket");
 
   if (!btn || !ta) {
-    console.warn("wireSubmit: submit button or textarea not found", { btn, ta });
+    console.warn("wireSubmit: submitPendingBtn/newPhrase not found");
     return;
   }
 
-  // 二重バインド防止
   if (btn.dataset.wired === "1") return;
   btn.dataset.wired = "1";
 
   btn.addEventListener("click", async (ev) => {
     ev.preventDefault();
 
-    const mode = getSelectedMode();
-
-    // bucket は select が無ければ「今の代表バケット」→それも無ければ0
-    const bucketSel = document.getElementById("bucket") || document.querySelector('select[name="bucket"]');
+    const mode = modeSel ? String(modeSel.value || "trivia") : getSelectedMode();
     const bucket = bucketSel ? Number(bucketSel.value) : (getCurrentMainBucket() ?? 0);
 
     const text = String(ta.value || "").trim();
     if (!text) { alert("ネタが空です"); return; }
+    if (isNgText(text)) { alert("この文言は登録できません（非表示ワードを含みます）"); return; }
 
     const penEl = document.getElementById("penName");
     const pinEl = document.getElementById("penPin");
@@ -1163,7 +1168,6 @@ function wireSubmit(){
       ta.value = "";
       alert("承認待ちに送信しました（管理画面で承認すると公開されます）");
 
-      // 送信後：public cache を温め直し（同バケット）
       const b = window.bucket10(bucket);
       const k = keyMB(mode, b);
       publicCache.delete(k);
@@ -1182,9 +1186,7 @@ function wireSubmit(){
 }
 
 // ==============================
-// ✅ 初期化（※ここがあなたの貼り付けで崩れてたので修正）
-// - DOMContentLoaded を二重登録しない（機能維持）
-// - 初期表示で確実に render する
+// ✅ 初期化
 // ==============================
 async function init(){
   try { ensureRankingDom(); } catch {}
@@ -1196,7 +1198,6 @@ async function init(){
 if (document.readyState === "loading") {
   window.addEventListener("DOMContentLoaded", init, { once: true });
 } else {
-  // 既にDOMがある場合
   init();
 }
 
