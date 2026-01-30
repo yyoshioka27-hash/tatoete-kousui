@@ -705,18 +705,7 @@
   <input id="adminKey" placeholder="ADMIN KEY">
 <button onclick="testAdmin()">テスト</button>
 
-<script>
-const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
-async function testAdmin(){
-  const key = document.getElementById("adminKey").value.trim();
-  const res = await fetch(API_BASE + "/api/admin/all?scope=both&limit=10", {
-    headers: { "x-admin-key": key }
-  });
-  const text = await res.text();
-  alert(text);
-}
-</script>
 </body>
 </html>
 
