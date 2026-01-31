@@ -137,8 +137,8 @@
   </div>
 </div>
 
-</script>
-
+<!-- ✅ FIX：ここがポイント（余計な </script> を <script> に修正） -->
+<script>
 (() => {
   const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
   const LS_API = "tatoete_admin_api_base";
@@ -619,8 +619,6 @@
         signal
       });
 
-      // ✅ ここで refreshAllTabs() を呼ぶと controller が再初期化されるので
-      // ✅ ひとつの controller の中で再読込する（null事故根絶）
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
       selectedIds = new Set();
       render();
@@ -632,95 +630,92 @@
       __ctrl = null;
     }
   }
-// ✅ pending削除：Workers側の期待payloadの揺れを吸収（1件ずつ確実に消す）
-async function deletePendingRobust(ids, signal){
-  const uniq = Array.from(new Set(ids)).filter(Boolean);
 
-  for (const id of uniq){
-    // 試すpayload候補（Workers実装の揺れ対策）
-    const payloads = [
-      { ids: [id], scope: "pending" },
-      { ids: [id], scope: "both" },
-      { id, scope: "pending" },
-      { key: id, scope: "pending" },
-      { ids: [id] },      // scope無し
-      { id },             // 最小
-      { key: id },        // 最小(key)
-      { keys: [id], scope: "pending" },
-      { keys: [id] },
-    ];
+  // ✅ pending削除：Workers側の期待payloadの揺れを吸収（1件ずつ確実に消す）
+  async function deletePendingRobust(ids, signal){
+    const uniq = Array.from(new Set(ids)).filter(Boolean);
 
-    let deleted = false;
-    let lastErr = null;
+    for (const id of uniq){
+      const payloads = [
+        { ids: [id], scope: "pending" },
+        { ids: [id], scope: "both" },
+        { id, scope: "pending" },
+        { key: id, scope: "pending" },
+        { ids: [id] },
+        { id },
+        { key: id },
+        { keys: [id], scope: "pending" },
+        { keys: [id] },
+      ];
 
-    for (const body of payloads){
-      try{
-        await callAdminWithFallback(API.del, {
-          method: "POST",
-          admin: true,
-          body,
-          signal
-        });
-        deleted = true;
-        break;
-      } catch(e){
-        lastErr = e;
-        // 404は次候補へ、他も一旦次候補へ（最後にまとめて落とす）
-        continue;
+      let deleted = false;
+      let lastErr = null;
+
+      for (const body of payloads){
+        try{
+          await callAdminWithFallback(API.del, {
+            method: "POST",
+            admin: true,
+            body,
+            signal
+          });
+          deleted = true;
+          break;
+        } catch(e){
+          lastErr = e;
+          continue;
+        }
+      }
+
+      if (!deleted){
+        throw (lastErr || new Error("delete failed"));
       }
     }
-
-    if (!deleted){
-      throw (lastErr || new Error("delete failed"));
-    }
   }
-}
 
   async function rejectAndDeletePending(ids){
-  if (!ids.length) return;
-  abortInFlight();
-  __ctrl = new AbortController();
-  setBusy(true);
-  const signal = __ctrl.signal;
+    if (!ids.length) return;
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
 
-  try{
-    // 1) reject を試す（あってもなくてもOK）
     try{
-      await callAdminWithFallback(API.reject, {
-        method:"POST",
-        admin:true,
-        body:{ ids },
-        signal
-      });
+      // 1) reject を試す（あってもなくてもOK）
+      try{
+        await callAdminWithFallback(API.reject, {
+          method:"POST",
+          admin:true,
+          body:{ ids },
+          signal
+        });
+      } catch(e){
+        // 握りつぶして delete を優先
+      }
+
+      // 2) pendingから確実に削除
+      await deletePendingRobust(ids, signal);
+
+      // 3) 再読込
+      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
+
+      // 4) まだ残ってたら通知
+      const remain = new Set(itemsPending.map(x => x.id));
+      const still = ids.filter(id => remain.has(id));
+      if (still.length){
+        alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
+      }
+
+      selectedIds = new Set();
+      render();
     } catch(e){
-      // rejectが無い(404)は想定内。それ以外も「最終的に削除できればOK」にする
-      // → ここでは握りつぶして delete を優先
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`却下(削除)に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
     }
-
-    // 2) ✅ ここが本命：pendingから確実に削除（1件ずつ / payload総当たり）
-    await deletePendingRobust(ids, signal);
-
-    // 3) 再読込（同一signal内で。null事故防止）
-    await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
-
-    // 4) まだ残ってたら、残存IDを表示（Workers側で消えてない確定）
-    const remain = new Set(itemsPending.map(x => x.id));
-    const still = ids.filter(id => remain.has(id));
-    if (still.length){
-      alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
-    }
-
-    selectedIds = new Set();
-    render();
-  } catch(e){
-    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-    alert(`却下(削除)に失敗: ${e.message}`);
-  } finally {
-    setBusy(false);
-    __ctrl = null;
   }
-}
-
 
   // =========================
   // 初期ネタ取り込み：NETA_TRIVIA / NETA をKVへ
