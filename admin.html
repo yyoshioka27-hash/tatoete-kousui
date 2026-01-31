@@ -565,8 +565,8 @@
     }
   }
 
-    async function importSeed(){
-    // ✅ worker.js は /api/admin/import_seed（あなたの実装）
+  // ✅ 初期ネタ取り込み：./data/metaphors.json を読み込み → /api/admin/import_seed にPOST
+  async function importSeed(){
     const candidates = [
       "/api/admin/import_seed",
       "/api/admin/import-seed",
@@ -583,14 +583,11 @@
     let lastErr = null;
 
     try{
-      // =========================
-      // ✅ 1) 初期ネタ（seed）を読み込む
-      //   - まずは GitHub Pages 側の data/metaphors.json を読む想定
-      //   - もし JSON の形が {items:[...]} でも [...] でも吸収
-      // =========================
+      // 1) seed JSON 読み込み（GitHub Pages 側）
       const seedUrl = "./data/metaphors.json";
-      const seedRes = await fetch(seedUrl, { cache: "no-store" });
+      const seedRes = await fetch(seedUrl, { cache:"no-store" });
       if (!seedRes.ok) throw new Error(`seed json 読込失敗: ${seedRes.status} ${seedRes.statusText}`);
+
       const seedJson = await seedRes.json().catch(()=>null);
       if (!seedJson) throw new Error("seed json が壊れています");
 
@@ -598,38 +595,27 @@
                        : Array.isArray(seedJson) ? seedJson
                        : [];
 
-      if (!normalized.length){
-        throw new Error("seed json の items が空です");
-      }
+      if (!normalized.length) throw new Error("seed json の items が空です");
 
-      // （念のため）mode/bucket/text だけに整形
+      // mode/bucket/text に整形
       const items = normalized.map(x => ({
         mode: x?.mode ?? x?.m ?? "trivia",
         bucket: x?.bucket ?? x?.b ?? 0,
         text: x?.text ?? x?.metaphor ?? x?.value ?? ""
       })).filter(x => String(x.text || "").trim());
 
-      if (!items.length){
-        throw new Error("seed items が0件（textが空）");
-      }
+      if (!items.length) throw new Error("seed items が0件（textが空）");
 
-      // =========================
-      // ✅ 2) Workers に取り込みPOST
-      // =========================
+      // 2) Workers にPOST
       for (const p of candidates){
         try{
-          await fetchJSON(p, {
-            method:"POST",
-            admin:true,
-            body:{ items },
-            signal: __ctrl.signal
-          });
+          await fetchJSON(p, { method:"POST", admin:true, body:{ items }, signal: __ctrl.signal });
           ok = true;
           break;
         } catch(e){
           lastErr = e;
-          if (e?.status === 404) continue; // 次候補へ
-          if (e?.status === 403) throw e;  // 鍵違いは即終了
+          if (e?.status === 404) continue;
+          if (e?.status === 403) throw e;
           continue;
         }
       }
@@ -637,24 +623,6 @@
       if (!ok){
         const msg = lastErr ? lastErr.message : "不明";
         alert(`初期ネタ取り込みに失敗: ${msg}`);
-        return;
-      }
-
-      await refreshAllTabs();
-      alert("初期ネタを取り込みました。");
-
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`初期ネタ取り込みに失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-      if (!ok){
-        const msg = lastErr ? lastErr.message : "不明";
-        alert(`初期ネタ取り込みに失敗（エンドポイント未実装の可能性）: ${msg}`);
       } else {
         await refreshAllTabs();
         alert("初期ネタを取り込みました。");
