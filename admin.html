@@ -1,10 +1,9 @@
 <!-- admin.html -->
 <!doctype html>
-<html lang="ja">
-<script src="./metaphors.js"></script>
-  
+<html lang="ja">  
 <head>
   <meta charset="utf-8" />
+  <script src="./metaphors.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
   <title>管理（承認待ち／一般公開）</title>
@@ -568,75 +567,60 @@
   }
 
   // ✅ 初期ネタ取り込み：./data/metaphors.json を読み込み → /api/admin/import_seed にPOST
-  async function importSeed(){
-    const candidates = [
-      "/api/admin/import_seed",
-      "/api/admin/import-seed",
-      "/api/admin/seed",
-      "/api/admin/seed/import",
-      "/api/admin/importSeed"
-    ];
+  // ✅ 初期ネタ取り込み：metaphors.js から取り込み → /api/admin/import_seed にPOST
+async function importSeed(){
+  const ENDPOINT = "/api/admin/import_seed";
 
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
+  abortInFlight();
+  __ctrl = new AbortController();
+  setBusy(true);
 
-    let ok = false;
-    let lastErr = null;
+  try{
+    // =========================
+    // ✅ 元ネタは metaphors.js
+    //  - window.METAPHORS または window.metaphors を想定
+    // =========================
+    const src =
+      Array.isArray(window.METAPHORS) ? window.METAPHORS :
+      Array.isArray(window.metaphors) ? window.metaphors :
+      [];
 
-    try{
-      // 1) seed JSON 読み込み（GitHub Pages 側）
-      const seedUrl = "./data/metaphors.json";
-      const seedRes = await fetch(seedUrl, { cache:"no-store" });
-      if (!seedRes.ok) throw new Error(`seed json 読込失敗: ${seedRes.status} ${seedRes.statusText}`);
-
-      const seedJson = await seedRes.json().catch(()=>null);
-      if (!seedJson) throw new Error("seed json が壊れています");
-
-      const normalized = Array.isArray(seedJson?.items) ? seedJson.items
-                       : Array.isArray(seedJson) ? seedJson
-                       : [];
-
-      if (!normalized.length) throw new Error("seed json の items が空です");
-
-      // mode/bucket/text に整形
-      const items = normalized.map(x => ({
-        mode: x?.mode ?? x?.m ?? "trivia",
-        bucket: x?.bucket ?? x?.b ?? 0,
-        text: x?.text ?? x?.metaphor ?? x?.value ?? ""
-      })).filter(x => String(x.text || "").trim());
-
-      if (!items.length) throw new Error("seed items が0件（textが空）");
-
-      // 2) Workers にPOST
-      for (const p of candidates){
-        try{
-          await fetchJSON(p, { method:"POST", admin:true, body:{ items }, signal: __ctrl.signal });
-          ok = true;
-          break;
-        } catch(e){
-          lastErr = e;
-          if (e?.status === 404) continue;
-          if (e?.status === 403) throw e;
-          continue;
-        }
-      }
-
-      if (!ok){
-        const msg = lastErr ? lastErr.message : "不明";
-        alert(`初期ネタ取り込みに失敗: ${msg}`);
-      } else {
-        await refreshAllTabs();
-        alert("初期ネタを取り込みました。");
-      }
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`初期ネタ取り込みに失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
+    if (!src.length){
+      throw new Error("metaphors.js に元ネタ配列が見つかりません（METAPHORS / metaphors）");
     }
+
+    // worker が期待する形に正規化
+    const items = src.map(x => ({
+      mode: x?.mode ?? x?.m ?? "trivia",
+      bucket: x?.bucket ?? x?.b ?? 0,
+      text: x?.text ?? x?.metaphor ?? x?.value ?? ""
+    })).filter(x => String(x.text || "").trim());
+
+    if (!items.length){
+      throw new Error("有効な seed items が 0 件です（textが空）");
+    }
+
+    // =========================
+    // ✅ Workers にPOST（404探しは不要）
+    // =========================
+    await fetchJSON(ENDPOINT, {
+      method:"POST",
+      admin:true,
+      body:{ items },
+      signal: __ctrl.signal
+    });
+
+    await refreshAllTabs();
+    alert(`初期ネタを取り込みました（${items.length}件）`);
+
+  } catch(e){
+    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    alert(`初期ネタ取り込みに失敗: ${e.message}`);
+  } finally {
+    setBusy(false);
+    __ctrl = null;
   }
+}
 
   // ====== イベント ======
   btnSave.addEventListener("click", () => {
