@@ -730,12 +730,24 @@
       }
 
       // 3) Workers に送信
-      await fetchJSON(ENDPOINT, {
-        method:"POST",
-        admin:true,
-        body:{ items },
-        signal: __ctrl.signal
-      });
+            // 3) Workers に送信（サーバ側の上限に合わせて分割して一気に入れる）
+      const BATCH = 12; // ←サーバ側が12件上限っぽいので固定
+      let imported = 0;
+
+      for (let i = 0; i < items.length; i += BATCH){
+        const chunk = items.slice(i, i + BATCH);
+        await fetchJSON(ENDPOINT, {
+          method: "POST",
+          admin: true,
+          body: { items: chunk },
+          signal: __ctrl.signal
+        });
+        imported += chunk.length;
+      }
+
+      await refreshAllTabs();
+      alert(`初期ネタを取り込みました（${imported}件）`);
+
 
       await refreshAllTabs();
       alert(`初期ネタを取り込みました（${items.length}件）`);
