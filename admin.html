@@ -30,8 +30,8 @@
     .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; margin:12px 0; }
     .muted{ color:var(--sub); font-size:12px; }
     label{ font-size:12px; color:var(--sub); display:block; margin-bottom:6px; }
-    input{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); min-width:280px; font-size:14px; background:#fff; outline:none; }
-    input:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+    input, select{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); min-width:280px; font-size:14px; background:#fff; outline:none; }
+    input:focus, select:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
     button{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:14px; user-select:none; }
     button:disabled{ opacity:.55; cursor:not-allowed; }
     .btnPrimary{ background:var(--blue); color:#fff; border-color:rgba(37,99,235,0.55); font-weight:800; }
@@ -55,9 +55,10 @@
     .right{ margin-left:auto; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .smallBtn{ padding:8px 10px; border-radius:10px; font-size:13px; }
+    details > summary{ cursor:pointer; user-select:none; color:var(--sub); font-size:12px; }
   </style>
 
-  <!-- ✅ 元ネタ（metaphors.js） -->
+  <!-- ✅ 元ネタ（metaphors.js）を先に読み込む -->
   <script src="./metaphors.js"></script>
 </head>
 
@@ -81,6 +82,7 @@
         <button id="btnHealth">health</button>
         <button id="btnRefresh">更新（表示中タブ）</button>
         <button id="btnRefreshAllTabs">更新（全タブ）</button>
+        <button id="btnImportSeed">初期ネタを取り込み</button>
       </div>
 
       <div class="right row" style="gap:8px;">
@@ -90,7 +92,8 @@
     </div>
 
     <div class="muted" style="margin-top:10px;">
-      ※ 管理操作は <span class="mono">x-admin-key</span> ヘッダで送ります。<span class="mono">ADMIN_KEY</span> が間違うと 403 になります。
+      ※ 管理操作は <span class="mono">x-admin-key</span> ヘッダで送ります。<span class="mono">ADMIN_KEY</span> が間違うと 403 になります。<br/>
+      ※ 却下は「却下→削除（pendingから消す）」まで自動で行います。
     </div>
   </div>
 
@@ -99,7 +102,7 @@
       <div class="tabs">
         <button id="tabPending" class="tab active">承認待ち</button>
         <button id="tabPublic" class="tab">一般公開</button>
-        <button id="tabAll" class="tab">全ネタ（public+pending）</button>
+        <button id="tabAll" class="tab">全ネタ（public+pending+元ネタ）</button>
       </div>
       <div class="muted" id="counts">承認待ち: 0件 / 公開: 0件 / 全: 0件</div>
     </div>
@@ -115,21 +118,21 @@
       </div>
       <div class="actions">
         <button id="btnBulkApprove" class="btnOk">一括承認</button>
-        <button id="btnBulkReject" class="btnDanger">一括却下（＝削除）</button>
+        <button id="btnBulkReject" class="btnDanger">一括却下（→削除）</button>
       </div>
     </div>
 
     <div class="muted" style="margin-top:10px;">
-      ※ 承認待ち: <span class="mono">/api/admin/pending</span><br/>
-      ※ 承認APIは環境差があるため、複数候補を自動で試します（404対策）<br/>
-      ※ 却下は「reject → 効かなければ delete(pending)」で確実に消します
+      ※ 承認待ち: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span> / 削除: <span class="mono">/api/admin/delete</span><br/>
+      ※ 公開: <span class="mono">/api/admin/list</span><br/>
+      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span> ＋（metaphors.js元ネタは表示のみ）
     </div>
 
     <div class="list" id="list"></div>
   </div>
 
   <div class="muted" style="text-align:center; margin:14px 0 8px;">
-    admin.html（承認/却下のみ） / # END
+    admin.html（統合・堅牢版） / # END
   </div>
 </div>
 
@@ -160,6 +163,7 @@
   const btnHealth  = $("btnHealth");
   const btnRefresh = $("btnRefresh");
   const btnRefreshAllTabs = $("btnRefreshAllTabs");
+  const btnImportSeed = $("btnImportSeed");
 
   const btnBulkApprove = $("btnBulkApprove");
   const btnBulkReject  = $("btnBulkReject");
@@ -169,52 +173,15 @@
   let itemsPublic  = [];
   let itemsAll     = [];
   let selectedIds = new Set();
-
-  // metaphors.js 表示（任意：allタブに混ぜる）
   let itemsSeedLocal = [];
-  function hash32(str){
-    let h = 2166136261;
-    for (let i = 0; i < str.length; i++){
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return (h >>> 0).toString(16);
-  }
-  function loadSeedLocalFromMetaphorsJS(){
-    const trivia = window.NETA_TRIVIA;
-    const fun    = window.NETA;
-    const out = [];
-    function pushFromDict(dict, modeLabel){
-      if (!dict || typeof dict !== "object") return;
-      for (const k of Object.keys(dict)){
-        const bucket = Number(k);
-        if (!Number.isFinite(bucket)) continue;
-        const arr = dict[k];
-        if (!Array.isArray(arr)) continue;
-        for (const t of arr){
-          const text = String(t ?? "").trim();
-          if (!text) continue;
-          out.push({ mode: modeLabel, bucket, text });
-        }
-      }
-    }
-    pushFromDict(trivia, "trivia");
-    pushFromDict(fun, "fun");
-    itemsSeedLocal = out.map(x => ({
-      id: "seedjs_" + hash32(`${x.mode}|${x.bucket}|${x.text}`),
-      text: x.text,
-      bucket: x.bucket,
-      mode: x.mode,
-      likes: 0,
-      penName: "元ネタ(metaphors.js)",
-      createdAt: 0,
-      scope: "seed-local"
-    }));
-  }
 
   // in-flight制御
   let __busy = false;
   let __ctrl = null;
+
+  function getSignal(){
+    return __ctrl ? __ctrl.signal : undefined;
+  }
 
   function apiBase(){
     return String(elApiBase.value || "").trim().replace(/\/+$/,"");
@@ -234,7 +201,7 @@
     __busy = !!on;
     pillBusy.style.display = __busy ? "inline-flex" : "none";
     const dis = __busy;
-    [btnSave, btnHealth, btnRefresh, btnRefreshAllTabs,
+    [btnSave, btnHealth, btnRefresh, btnRefreshAllTabs, btnImportSeed,
      tabPending, tabPublic, tabAll,
      btnBulkApprove, btnBulkReject].forEach(b => { try{ b.disabled = dis; }catch{} });
   }
@@ -242,11 +209,10 @@
   function abortInFlight(){
     try{ if (__ctrl) __ctrl.abort(); }catch{}
     __ctrl = null;
-    __busy = false;
     setBusy(false);
   }
 
-  async function fetchJSON(path, { method="GET", body=null, admin=false, signal=null } = {}){
+  async function fetchJSON(path, { method="GET", body=null, admin=false, signal=undefined } = {}){
     const base = apiBase();
     if (!base) throw new Error("API_BASE が空です");
 
@@ -267,37 +233,44 @@
 
     const data = await res.json().catch(()=>null);
 
-    // 404など「ok構造が無い」ケースも拾えるように
     if (!res.ok || !data?.ok){
       const msg = data?.error || `HTTP ${res.status}`;
       const e = new Error(msg);
       e.status = res.status;
       e.data = data;
-      e.url = url;
       throw e;
     }
     return data;
   }
 
-  // ✅ 404対策：複数エンドポイント／複数body形式を順に試す
-  async function tryAdminPost(paths, bodyVariants, signal){
-  let lastErr = null;
-  for (const p of paths){
-    for (const b of bodyVariants){
+  // ✅ 404のとき別名APIを順番に試す（あなたの環境でapproveが404になっていたため）
+  async function postWithFallback(paths, body, {admin=true} = {}){
+    let lastErr = null;
+    for (const p of paths){
       try{
-        const data = await fetchJSON(p, { method:"POST", admin:true, body:b, signal });
-        return { ok:true, path:p, body:b, data };
-      } catch(e){
+        const data = await fetchJSON(p, { method:"POST", admin, body, signal:getSignal() });
+        return { ok:true, path:p, data };
+      }catch(e){
         lastErr = e;
-        if (e?.status === 403) throw e; // 鍵違いは即終了
-        continue;
+        // 404は次を試す。それ以外は即終了
+        if (e?.status !== 404) throw e;
       }
     }
+    // 全滅
+    if (lastErr) throw lastErr;
+    throw new Error("API呼び出しに失敗しました");
   }
-  throw lastErr || new Error("操作に失敗しました");
-}
 
-    throw lastErr || new Error("操作に失敗しました");
+  function formatTs(ts){
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    const d = new Date(n);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mi = String(d.getMinutes()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
   }
 
   function safeText(v){ return (v == null) ? "" : String(v); }
@@ -324,13 +297,86 @@
     }).filter(x => x.id);
   }
 
+  // -------------------------
+  // 元ネタ（metaphors.js）表示用
+  // -------------------------
+  function hash32(str){
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  function loadSeedLocalFromMetaphorsJS(){
+    const trivia = window.NETA_TRIVIA; // {0:[...],10:[...],...}
+    const fun    = window.NETA;        // {0:[...],10:[...],...}
+    const out = [];
+
+    function pushFromDict(dict, modeLabel){
+      if (!dict || typeof dict !== "object") return;
+      for (const k of Object.keys(dict)){
+        const bucket = Number(k);
+        if (!Number.isFinite(bucket)) continue;
+        const arr = dict[k];
+        if (!Array.isArray(arr)) continue;
+        for (const t of arr){
+          const text = String(t ?? "").trim();
+          if (!text) continue;
+          out.push({ mode: modeLabel, bucket, text });
+        }
+      }
+    }
+
+    pushFromDict(trivia, "trivia");
+    pushFromDict(fun, "fun");
+
+    // 保険：metaphorDB形式
+    if (!out.length && window.metaphorDB){
+      try{
+        const dbT = window.metaphorDB.trivia;
+        const dbF = window.metaphorDB.fun;
+        function pushFromDB(db, modeLabel){
+          if (!Array.isArray(db)) return;
+          for (const row of db){
+            const bucket = Number(row?.min);
+            const texts = row?.texts;
+            if (!Number.isFinite(bucket) || !Array.isArray(texts)) continue;
+            for (const t of texts){
+              const text = String(t ?? "").trim();
+              if (!text) continue;
+              out.push({ mode: modeLabel, bucket, text });
+            }
+          }
+        }
+        pushFromDB(dbT, "trivia");
+        pushFromDB(dbF, "fun");
+      } catch {}
+    }
+
+    itemsSeedLocal = out.map(x => ({
+      id: "seedjs_" + hash32(`${x.mode}|${x.bucket}|${x.text}`),
+      text: x.text,
+      bucket: x.bucket,
+      mode: x.mode,
+      likes: 0,
+      penName: "元ネタ(metaphors.js)",
+      createdAt: 0,
+      scope: "seed-local"
+    }));
+  }
+
+  // -------------------------
+  // 表示
+  // -------------------------
   function updateCounts(){
     countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
   }
 
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
-    const current = getActiveItems().filter(x => x.scope !== "seed-local");
+    const current = getActiveItems();
     const allIds = current.map(x => x.id);
     const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
     chkAll.checked = allSelected;
@@ -360,7 +406,9 @@
       .replaceAll('"',"&quot;")
       .replaceAll("'","&#039;");
   }
-  function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#096;"); }
+  function escapeAttr(s){
+    return escapeHtml(s).replaceAll("`","&#096;");
+  }
 
   function render(){
     updateCounts();
@@ -373,35 +421,35 @@
     }
 
     const html = items.map(item => {
-      const isSeedLocal = (item.scope === "seed-local");
       const checked = selectedIds.has(item.id) ? "checked" : "";
-      const chkDisabled = isSeedLocal ? "disabled" : "";
-
-      const isPending = (activeTab === "pending") || (item.scope === "pending");
+      const isPending = (item.scope === "pending") || (activeTab === "pending");
       const badgeScope = (activeTab === "all")
-        ? (isSeedLocal
-            ? `<span class="badge">seed(local)</span>`
-            : (isPending
-                ? `<span class="badge badgePending">pending</span>`
-                : `<span class="badge badgePublic">public</span>`))
-        : (activeTab === "pending"
-            ? `<span class="badge badgePending">pending</span>`
-            : `<span class="badge badgePublic">public</span>`);
+        ? (isPending ? `<span class="badge badgePending">pending</span>` : `<span class="badge badgePublic">public</span>`)
+        : (activeTab === "pending" ? `<span class="badge badgePending">pending</span>` : `<span class="badge badgePublic">public</span>`);
 
       const metaParts = [];
       if (item.mode) metaParts.push(`<span class="badge">mode: ${escapeHtml(item.mode)}</span>`);
       if (item.bucket != null && item.bucket !== "") metaParts.push(`<span class="badge">bucket: ${escapeHtml(item.bucket)}</span>`);
       metaParts.push(`<span class="badge">likes: ${escapeHtml(item.likes)}</span>`);
       if (item.penName) metaParts.push(`<span class="badge">pen: ${escapeHtml(item.penName)}</span>`);
+      const ts = formatTs(item.createdAt);
+      if (ts) metaParts.push(`<span class="badge">${escapeHtml(ts)}</span>`);
 
       const text = item.text || "";
-      const textHtml = `<div class="itemText">${escapeHtml(text)}</div>`;
+      const tooLong = text.length > 240;
+      const textHtml = tooLong
+        ? `<details><summary>本文を展開（${text.length}文字）</summary><div class="itemText">${escapeHtml(text)}</div></details>`
+        : `<div class="itemText">${escapeHtml(text)}</div>`;
 
+      // ✅ 要望：ボタンは承認/却下（却下は削除まで）
       const perActions = [];
-      // ✅ 要望：承認・却下だけ（pendingのときだけ表示）
-      if (!isSeedLocal && activeTab === "pending"){
+      if (item.scope === "seed-local"){
+        // 元ネタは表示のみ
+      } else if (isPending){
         perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
-        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（＝削除）</button>`);
+        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（→削除）</button>`);
+      } else {
+        // 公開側はここでは操作しない（要望に合わせてボタンを出さない）
       }
 
       return `
@@ -409,15 +457,13 @@
           <div class="itemTop">
             <div class="itemMeta">
               <label style="margin:0; display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" class="chk itemChk" data-id="${escapeAttr(item.id)}" ${checked} ${chkDisabled} />
+                <input type="checkbox" class="chk itemChk" data-id="${escapeAttr(item.id)}" ${checked} />
                 <span class="muted mono">${escapeHtml(item.id)}</span>
               </label>
               ${badgeScope}
               ${metaParts.join("")}
             </div>
-            <div class="actions">
-              ${perActions.join("")}
-            </div>
+            <div class="actions">${perActions.join("")}</div>
           </div>
           ${textHtml}
         </div>
@@ -427,6 +473,9 @@
     listEl.innerHTML = html;
   }
 
+  // -------------------------
+  // 設定
+  // -------------------------
   function saveSettings(){
     localStorage.setItem(LS_API, apiBase() || DEFAULT_API_BASE);
     localStorage.setItem(LS_KEY, adminKey() || "");
@@ -439,17 +488,20 @@
     elAdminKey.value = k;
   }
 
+  // -------------------------
+  // APIロード
+  // -------------------------
   async function doHealth(){
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
     try{
-      const data = await fetchJSON("/api/health", { signal: __ctrl.signal });
+      const data = await fetchJSON("/api/health", { signal:getSignal() });
       const kv = (data.kv === true) ? "kv:OK" : "kv:?" ;
       setPill(pillHealth, `health: OK (${kv})`, true);
 
       try{
-        await fetchJSON("/api/admin/pending", { admin:true, signal: __ctrl.signal });
+        await fetchJSON("/api/admin/pending", { admin:true, signal:getSignal() });
         setPill(pillAdmin, "admin: OK", true);
       } catch(e){
         if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -464,23 +516,20 @@
   }
 
   async function loadPending(){
-    const data = await fetchJSON("/api/admin/pending", { admin:true, signal: __ctrl.signal });
+    const data = await fetchJSON("/api/admin/pending", { admin:true, signal:getSignal() });
     itemsPending = normalizeItems(data.items || data.pending || [], "pending");
   }
   async function loadPublic(){
-    const data = await fetchJSON("/api/admin/list", { admin:true, signal: __ctrl.signal });
+    const data = await fetchJSON("/api/admin/list", { admin:true, signal:getSignal() });
     itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
   }
   async function loadAll(){
-    const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal: __ctrl.signal });
+    const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal:getSignal() });
     const raw = data.items || data.all || [];
     const kvAll = normalizeItems(raw, "");
-
-    // 元ネタは all に混ぜる（表示だけ）
     loadSeedLocalFromMetaphorsJS();
     const kvIds = new Set(kvAll.map(x => x.id));
     const seed = itemsSeedLocal.filter(x => !kvIds.has(x.id));
-
     itemsAll = kvAll.concat(seed);
   }
 
@@ -518,47 +567,25 @@
     }
   }
 
-  // ✅ action後の再読込（同じ __ctrl で読み直す：自分でabortしない）
-  async function reloadAllAfterAction(){
-    await Promise.all([loadPending(), loadPublic(), loadAll()]);
-    selectedIds = new Set();
-    render();
-  }
-
   function getSelectedIds(){ return Array.from(selectedIds); }
 
-  // ✅ 承認（404対策で複数の候補を順に試す）
+  // -------------------------
+  // 承認・却下（却下は削除まで）
+  // -------------------------
   async function approveIds(ids){
     if (!ids.length) return;
-
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
-
     try{
-      // エンドポイント候補（Worker側の実装差を吸収）
-      const paths = [
-        "/api/admin/approve",
-        "/api/admin/approve_pending",
-        "/api/admin/approvePending",
-        "/api/admin/publish",
-        "/api/admin/approveOne",
-      ];
-
-      // body候補（ids / id / keys など差を吸収）
-      const bodies = [
-        { ids },
-        { id: ids[0] },         // 1件用の可能性
-        { keys: ids },
-        { key: ids[0] },
-        { items: ids },
-      ];
-
-      const r = await tryAdminPost(paths, bodies, __ctrl?.signal);
-
-      console.log("approve used:", r.path, r.body, r.data);
-
-      await reloadAllAfterAction();
+      // approve系の候補（404でも順番に試す）
+      await postWithFallback(
+        ["/api/admin/approve", "/api/admin/approvePending", "/api/admin/approve_pending", "/api/admin/publish"],
+        { ids }
+      );
+      await refreshAllTabs();
+      selectedIds = new Set();
+      render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
       alert(`承認に失敗: ${e.message}`);
@@ -568,65 +595,86 @@
     }
   }
 
-  // ✅ 却下（＝削除）：reject を試して、効かない/無効なら delete(pending) を必ず実行
-  async function rejectIds(ids){
+  async function rejectThenDeleteIds(ids){
     if (!ids.length) return;
-
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
-
     try{
-      // 1) reject（候補を試す）
-      const rejectPaths = [
-        "/api/admin/reject",
-        "/api/admin/reject_pending",
-        "/api/admin/rejectPending",
-      ];
-      const rejectBodies = [
-        { ids },
-        { id: ids[0] },
-        { keys: ids },
-        { key: ids[0] },
-      ];
-
-      let rejected = false;
+      // reject系（404でも順番に試す）
       try{
-        const r = await tryAdminPost(rejectPaths, rejectBodies);
-        console.log("reject used:", r.path, r.body, r.data);
-        rejected = true;
+        await postWithFallback(
+          ["/api/admin/reject", "/api/admin/rejectPending", "/api/admin/reject_pending"],
+          { ids }
+        );
       } catch(e){
-        // rejectが無い/効かないなら次へ
-        console.warn("reject failed, fallback to delete:", e);
+        // rejectが無い環境もあるので、ここでは「削除だけでも実行」する
+        if (e?.status !== 404) throw e;
       }
 
-      // 2) 最終的に消したい：delete(pending) を必ず実行（rejectが成功しても“残る”場合があるため）
-      const delPaths = [
-        "/api/admin/delete",
-        "/api/admin/delete_pending",
-        "/api/admin/deletePending",
-      ];
-      const delBodies = [
-        { ids, scope:"pending" },
-        { id: ids[0], scope:"pending" },
-        { keys: ids, scope:"pending" },
-        { key: ids[0], scope:"pending" },
-      ];
+      // ✅ 要望：却下されたら削除（pendingから消す）
+      await postWithFallback(
+        ["/api/admin/delete", "/api/admin/deletePending", "/api/admin/delete_pending"],
+        { ids, scope:"pending" }
+      );
 
-      const d = await tryAdminPost(delPaths, delBodies);
-      console.log("delete used:", d.path, d.body, d.data);
-
-      await reloadAllAfterAction();
+      await refreshAllTabs();
+      selectedIds = new Set();
+      render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`却下（削除）に失敗: ${e.message}`);
+      alert(`却下/削除に失敗: ${e.message}`);
     } finally {
       setBusy(false);
       __ctrl = null;
     }
   }
 
-  // ====== イベント ======
+  // -------------------------
+  // 初期ネタ取り込み（1クリックで全部、内部で12件ずつ分割）
+  // -------------------------
+  async function importSeed(){
+    const ENDPOINTS = ["/api/admin/import_seed", "/api/admin/importSeed", "/api/admin/import_seed_items"];
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+
+    try{
+      // metaphors.js のあなた形式からフラット化
+      loadSeedLocalFromMetaphorsJS();
+      const src = itemsSeedLocal
+        .filter(x => x.scope === "seed-local")
+        .map(x => ({ mode:x.mode, bucket:Number(x.bucket)||0, text:String(x.text||"").trim() }))
+        .filter(x => x.text);
+
+      if (!src.length) throw new Error("metaphors.js から初期ネタを抽出できませんでした（NETA_TRIVIA/NETA が空）");
+
+      const BATCH = 12;
+      let imported = 0;
+
+      for (let i = 0; i < src.length; i += BATCH){
+        const chunk = src.slice(i, i + BATCH);
+
+        // import_seedも環境差があるのでfallback
+        await postWithFallback(ENDPOINTS, { items: chunk });
+
+        imported += chunk.length;
+      }
+
+      await refreshAllTabs();
+      alert(`初期ネタを取り込みました（${imported}件）`);
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`初期ネタ取り込みに失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
+
+  // -------------------------
+  // イベント
+  // -------------------------
   btnSave.addEventListener("click", () => {
     saveSettings();
     alert("保存しました（このブラウザに記憶）");
@@ -635,15 +683,19 @@
   btnHealth.addEventListener("click", doHealth);
   btnRefresh.addEventListener("click", refreshCurrentTab);
   btnRefreshAllTabs.addEventListener("click", refreshAllTabs);
+  btnImportSeed.addEventListener("click", importSeed);
 
   tabPending.addEventListener("click", () => setActiveTab("pending"));
   tabPublic.addEventListener("click",  () => setActiveTab("public"));
   tabAll.addEventListener("click",     () => setActiveTab("all"));
 
   chkAll.addEventListener("change", () => {
-    const items = getActiveItems().filter(x => x.scope !== "seed-local");
-    if (chkAll.checked) items.forEach(x => selectedIds.add(x.id));
-    else items.forEach(x => selectedIds.delete(x.id));
+    const items = getActiveItems();
+    if (chkAll.checked){
+      items.forEach(x => selectedIds.add(x.id));
+    } else {
+      items.forEach(x => selectedIds.delete(x.id));
+    }
     updateSelectionUI();
     listEl.querySelectorAll(".itemChk").forEach(chk => {
       const id = chk.getAttribute("data-id");
@@ -661,8 +713,8 @@
   btnBulkReject.addEventListener("click", async () => {
     const ids = getSelectedIds();
     if (!ids.length) return alert("選択がありません");
-    if (!confirm(`選択 ${ids.length}件 を却下（削除）しますか？（元に戻せません）`)) return;
-    await rejectIds(ids);
+    if (!confirm(`選択 ${ids.length}件 を却下して削除しますか？（pendingから消えます）`)) return;
+    await rejectThenDeleteIds(ids);
   });
 
   // リスト内クリック（委譲）
@@ -673,9 +725,7 @@
     const el = (raw instanceof Element) ? raw.closest("button[data-act], input.itemChk") : null;
     if (!el) return;
 
-    // checkbox
     if (el instanceof HTMLInputElement && el.classList.contains("itemChk")) {
-      if (el.disabled) return;
       const id = el.getAttribute("data-id");
       if (!id) return;
       if (el.checked) selectedIds.add(id);
@@ -684,7 +734,6 @@
       return;
     }
 
-    // button
     if (el instanceof HTMLButtonElement) {
       const act = el.getAttribute("data-act");
       const id  = el.getAttribute("data-id");
@@ -694,21 +743,19 @@
         if (!confirm("この1件を承認しますか？")) return;
         await approveIds([id]);
       } else if (act === "reject") {
-        if (!confirm("この1件を却下（削除）しますか？（元に戻せません）")) return;
-        await rejectIds([id]);
+        if (!confirm("この1件を却下して削除しますか？")) return;
+        await rejectThenDeleteIds([id]);
       }
     }
   });
 
-  // ====== 初期化 ======
+  // 初期化
   loadSettings();
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
   render();
-
 })();
 </script>
-
 </body>
 </html>
 <!-- # END -->
