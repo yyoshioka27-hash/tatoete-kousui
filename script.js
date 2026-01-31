@@ -420,15 +420,12 @@ function ensureLikeDom(slot){
   // ✅ likeCount が無ければ作る（"??"対策の本丸）
   // 期待する見た目：ボタン内に「👍 <span id=likeCount_x>0</span>」の形に寄せる
   if (!count) {
-    // ボタン内のテキストが "??" などでも確実に置き換えられるように、span を作る
     const span = document.createElement("span");
     span.id = `likeCount_${slot}`;
     span.textContent = "0";
     span.style.fontWeight = "900";
     span.style.marginLeft = "6px";
 
-    // ボタン内を整理（既存HTMLがどうであれ壊れにくいように）
-    // 例：btn.textContent が "👍??" でも、一旦 "👍" にして count を差す
     const baseLabel = "👍";
     btn.textContent = baseLabel;
     btn.appendChild(span);
@@ -440,7 +437,6 @@ function ensureLikeDom(slot){
   const totalId = `likeTotal_${slot}`;
   let total = document.getElementById(totalId);
   if (!total) {
-    // like ボタンの直後に累計を置く
     total = document.createElement("span");
     total.id = totalId;
     total.className = "muted";
@@ -457,26 +453,7 @@ function ensureLikeDom(slot){
       b.id = `badge_${slot}`;
       b.style.marginLeft = "6px";
       wrap.appendChild(b);
-      badge = b;
     }
-  }
-}
-
-
-  // ✅ badge が無ければ作る（古いHTML対策）
-  if (!badge) {
-    const wrap = btn?.parentElement;
-    if (wrap) {
-      const b = document.createElement("span");
-      b.id = `badge_${slot}`;
-      b.style.marginLeft = "6px";
-      wrap.appendChild(b);
-    }
-  }
-
-  // count が無い場合はボタン内カウント更新を諦めるが、通常はあるのでOK
-  if (!count && btn) {
-    // 何もしない（最低限動作はする）
   }
 }
 
