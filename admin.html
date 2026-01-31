@@ -566,6 +566,7 @@
 
   // ✅ 初期ネタ取り込み：metaphors.js から取り込み → /api/admin/import_seed にPOST
     // ✅ 初期ネタ取り込み：metaphors.js を確実に取り込む（window変数が無くてもOK）
+    // ✅ 初期ネタ取り込み：metaphors.js を確実に取り込む（window変数が無くてもOK / 文字列配列もOK）
   async function importSeed(){
     const ENDPOINT = "/api/admin/import_seed";
 
@@ -574,28 +575,26 @@
     setBusy(true);
 
     try{
-      // 0) まずは従来どおり window / グローバル識別子を探す
+      // 0) まずは従来どおり window / グローバル識別子を探す（配列でもオブジェクトでも拾う）
       let src =
-        (typeof METAPHORS !== "undefined" && Array.isArray(METAPHORS)) ? METAPHORS :
-        (typeof metaphors !== "undefined" && Array.isArray(metaphors)) ? metaphors :
-        (Array.isArray(window.METAPHORS) ? window.METAPHORS :
-         Array.isArray(window.metaphors) ? window.metaphors : null);
+        (typeof METAPHORS !== "undefined" ? METAPHORS : undefined) ??
+        (typeof metaphors !== "undefined" ? metaphors : undefined) ??
+        (window.METAPHORS ?? window.metaphors ?? null);
 
-      // 1) 無ければ metaphors.js を “テキスト”で読み込んで配列を抽出する
-      if (!src || !src.length){
+      // 1) 無ければ metaphors.js を “テキスト”で読み込んで配列リテラルを抽出する
+      if (!src){
         const jsUrl = "./metaphors.js";
         const jsRes = await fetch(jsUrl, { cache:"no-store", signal: __ctrl.signal });
         if (!jsRes.ok) throw new Error(`metaphors.js 読込失敗: ${jsRes.status} ${jsRes.statusText}`);
         const code = await jsRes.text();
 
-        // --- 配列リテラル候補を全部抜く（簡易パーサ：ブラケットの対応を取る）---
+        // --- 配列リテラル候補を全部抜く（簡易パーサ：ブラケット対応を取る）---
         const arrays = [];
         for (let i = 0; i < code.length; i++){
           if (code[i] !== "[") continue;
 
-          // 直前に '=' がそれなりに近い場所にあるものを優先（const X = [ ... ] の想定）
-          const left = code.slice(Math.max(0, i-120), i);
-          if (!/[=]/.test(left)) continue;
+          const left = code.slice(Math.max(0, i-160), i);
+          if (!/[=:{]/.test(left)) continue; // 代入/オブジェクト内の可能性を優先
 
           let depth = 0;
           let inStr = null;
@@ -614,36 +613,32 @@
               if (ch === "[") depth++;
               if (ch === "]") depth--;
               if (depth === 0){
-                const literal = code.slice(i, j+1);
-                arrays.push(literal);
-                i = j; // 次の探索へ
+                arrays.push(code.slice(i, j+1));
+                i = j;
                 break;
               }
             }
           }
         }
 
-        // --- 候補配列を評価して、{text/...}っぽい要素が多いものを採用 ---
+        // --- 候補配列を評価して、(文字列|オブジェクト)が多い “大きい配列” を採用 ---
         let best = null;
         let bestScore = -1;
 
         for (const lit of arrays){
           let v = null;
           try{
-            // 配列リテラルだけを評価（metaphors.js 全体は eval しない）
             v = Function('"use strict"; return (' + lit + ');')();
           } catch {
             continue;
           }
           if (!Array.isArray(v) || v.length === 0) continue;
 
-          // “それっぽさ”でスコアリング
           let score = 0;
           for (const it of v){
-            const t = (it && (it.text ?? it.metaphor ?? it.value));
-            if (typeof t === "string" && t.trim()) score++;
+            if (typeof it === "string" && it.trim()) score += 3; // 文字列は強く加点
+            else if (it && typeof it === "object") score += 2;
           }
-          // 長い方・それっぽい要素が多い方を優先
           score = score * 10 + Math.min(v.length, 999);
           if (score > bestScore){
             bestScore = score;
@@ -654,16 +649,81 @@
         if (!best || !best.length){
           throw new Error("metaphors.js から配列を抽出できません（配列が見つからない/評価できない）");
         }
-
         src = best;
       }
 
-      // 2) mode/bucket/text に整形
-      const items = src.map(x => ({
-        mode: x?.mode ?? x?.m ?? "trivia",
-        bucket: x?.bucket ?? x?.b ?? 0,
-        text: x?.text ?? x?.metaphor ?? x?.value ?? ""
-      })).filter(x => String(x.text || "").trim());
+      // 2) src が「オブジェクト」型（例：{trivia:{20:[...]}...}）の場合にも対応して平坦化
+      const out = [];
+      const pickText = (x) => {
+        if (x == null) return "";
+        if (typeof x === "string") return x;
+        if (typeof x !== "object") return "";
+        // よくあるキーを広めに拾う
+        return String(
+          x.text ?? x.metaphor ?? x.value ?? x.txt ?? x.body ?? x.label ?? x.title ?? x.t ?? ""
+        );
+      };
+
+      function pushItem(mode, bucket, val){
+        const text = pickText(val).trim();
+        if (!text) return;
+        out.push({ mode: mode || "trivia", bucket: Number(bucket)||0, text });
+      }
+
+      function walk(val, mode, bucket){
+        if (val == null) return;
+
+        // 文字列
+        if (typeof val === "string"){
+          pushItem(mode, bucket, val);
+          return;
+        }
+
+        // 配列（中に文字列/オブジェクト/配列）
+        if (Array.isArray(val)){
+          for (const v of val) walk(v, mode, bucket);
+          return;
+        }
+
+        // オブジェクト
+        if (typeof val === "object"){
+          // 直接 {text, mode, bucket} 型
+          const directText = pickText(val).trim();
+          const hasDirect = directText && ("text" in val || "metaphor" in val || "value" in val || "txt" in val || "body" in val || "t" in val);
+          if (hasDirect){
+            pushItem(val.mode ?? mode, val.bucket ?? bucket, val);
+            return;
+          }
+
+          // {items:[...]} みたいな型
+          if (Array.isArray(val.items)){
+            for (const v of val.items) walk(v, val.mode ?? mode, val.bucket ?? bucket);
+            return;
+          }
+
+          // mode/bucketの入れ子っぽい場合（キーを辿る）
+          // 例: { trivia: { "20": [...], "30":[...] }, fun: {...} }
+          for (const k of Object.keys(val)){
+            const v = val[k];
+            // mode名っぽい
+            if (k === "trivia" || k === "fun"){
+              walk(v, k, bucket);
+              continue;
+            }
+            // bucket番号っぽい
+            if (/^\d+$/.test(k)){
+              walk(v, mode, Number(k));
+              continue;
+            }
+            // それ以外はそのまま辿る（保険）
+            walk(v, mode, bucket);
+          }
+        }
+      }
+
+      walk(src, "trivia", 0);
+
+      const items = out.filter(x => x.text);
 
       if (!items.length){
         throw new Error("seed items が 0 件です（textが空）");
@@ -688,7 +748,6 @@
       __ctrl = null;
     }
   }
-
 
   // ====== イベント ======
   btnSave.addEventListener("click", () => {
