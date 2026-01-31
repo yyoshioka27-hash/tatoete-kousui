@@ -913,33 +913,44 @@
     await deleteIds(ids, scope);
   });
 
+    // リスト内のクリック（委譲）★FIX: targetがText等でも動くようにclosestで拾う
   listEl.addEventListener("click", async (ev) => {
-    const t = ev.target;
-    if (!(t instanceof HTMLElement)) return;
+    // クリックされた要素から「操作対象」を拾う
+    const raw = ev.target;
+    if (!raw) return;
 
-    if (t.classList.contains("itemChk")){
-      const id = t.getAttribute("data-id");
+    // checkbox or button の“本体”まで遡る
+    const el = (raw instanceof Element) ? raw.closest("button[data-act], input.itemChk") : null;
+    if (!el) return;
+
+    // ✅ チェックボックス
+    if (el instanceof HTMLInputElement && el.classList.contains("itemChk")) {
+      const id = el.getAttribute("data-id");
       if (!id) return;
-      if (t.checked) selectedIds.add(id);
+      if (el.checked) selectedIds.add(id);
       else selectedIds.delete(id);
       updateSelectionUI();
       return;
     }
 
-    const act = t.getAttribute("data-act");
-    const id = t.getAttribute("data-id");
-    if (!act || !id) return;
+    // ✅ ボタン（承認/却下/削除）
+    if (el instanceof HTMLButtonElement) {
+      const act = el.getAttribute("data-act");
+      const id  = el.getAttribute("data-id");
+      if (!act || !id) return;
 
-    if (act === "approve"){
-      if (!confirm("この1件を承認しますか？")) return;
-      await approveIds([id]);
-    } else if (act === "reject"){
-      if (!confirm("この1件を却下しますか？")) return;
-      await rejectIds([id]);
-    } else if (act === "delete"){
-      const scope = t.getAttribute("data-scope") || (activeTab === "public" ? "public" : (activeTab === "pending" ? "pending" : "both"));
-      if (!confirm("この1件を削除しますか？（元に戻せません）")) return;
-      await deleteIds([id], scope);
+      if (act === "approve") {
+        if (!confirm("この1件を承認しますか？")) return;
+        await approveIds([id]);
+      } else if (act === "reject") {
+        if (!confirm("この1件を却下しますか？")) return;
+        await rejectIds([id]);
+      } else if (act === "delete") {
+        const scope = el.getAttribute("data-scope")
+          || (activeTab === "public" ? "public" : (activeTab === "pending" ? "pending" : "both"));
+        if (!confirm("この1件を削除しますか？（元に戻せません）")) return;
+        await deleteIds([id], scope);
+      }
     }
   });
 
