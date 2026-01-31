@@ -554,7 +554,8 @@
         { items: ids },
       ];
 
-      const r = await tryAdminPost(paths, bodies);
+      const r = await tryAdminPost(paths, bodies, __ctrl?.signal);
+
       console.log("approve used:", r.path, r.body, r.data);
 
       await reloadAllAfterAction();
