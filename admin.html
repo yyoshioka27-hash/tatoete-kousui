@@ -192,57 +192,71 @@
   }
 
   // metaphors.js から元ネタ配列を探して取り込む（いろんな変数名に対応）
+    // metaphors.js から元ネタ（NETA_TRIVIA / NETA）を取り込む（あなたの形式に完全対応）
   function loadSeedLocalFromMetaphorsJS(){
-    // 候補（あなたのmetaphors.jsの実態が何であっても拾えるように）
-    const candidates = [
-      window.METAPHORS,
-      window.metaphors,
-      window.SEED,
-      window.seed,
-      window.METAPHORS_TRIVIA,
-      window.METAPHORS_FUN,
-      window.TRIVIA,
-      window.FUN,
-    ].filter(Boolean);
+    const trivia = window.NETA_TRIVIA; // {0:[...],10:[...],...}
+    const fun    = window.NETA;        // {0:[...],10:[...],...}
 
-    // さらに “window上の配列っぽいもの” を広めに拾う（保険）
-    if (candidates.length === 0){
-      for (const k of Object.keys(window)){
-        try{
-          const v = window[k];
-          if (Array.isArray(v) && v.length && typeof v[0] === "object"){
-            // mode/bucket/textっぽいキーがあるなら候補に
-            const o = v[0] || {};
-            if (("text" in o) || ("metaphor" in o) || ("bucket" in o) || ("mode" in o)){
-              candidates.push(v);
-            }
-          }
-        } catch {}
+    const out = [];
+
+    function pushFromDict(dict, modeLabel){
+      if (!dict || typeof dict !== "object") return;
+
+      for (const k of Object.keys(dict)){
+        const bucket = Number(k);
+        if (!Number.isFinite(bucket)) continue;
+
+        const arr = dict[k];
+        if (!Array.isArray(arr)) continue;
+
+        for (const t of arr){
+          const text = String(t ?? "").trim();
+          if (!text) continue;
+
+          out.push({
+            mode: modeLabel,
+            bucket,
+            text
+          });
+        }
       }
     }
 
-    // candidates は「配列 or {items:配列}」混在があり得るので正規化
-    const merged = [];
-    for (const c of candidates){
-      if (Array.isArray(c)) merged.push(...c);
-      else if (c && Array.isArray(c.items)) merged.push(...c.items);
+    // ✅ あなたの metaphors.js の正体はこれ
+    pushFromDict(trivia, "trivia");
+    pushFromDict(fun, "fun");
+
+    // 互換で metaphorDB しか無い場合も拾う（保険）
+    // metaphorDB.trivia = [{min,max,texts:[...]}] 形式
+    if (!out.length && window.metaphorDB){
+      try{
+        const dbT = window.metaphorDB.trivia;
+        const dbF = window.metaphorDB.fun;
+        function pushFromDB(db, modeLabel){
+          if (!Array.isArray(db)) return;
+          for (const row of db){
+            const bucket = Number(row?.min);
+            const texts = row?.texts;
+            if (!Number.isFinite(bucket) || !Array.isArray(texts)) continue;
+            for (const t of texts){
+              const text = String(t ?? "").trim();
+              if (!text) continue;
+              out.push({ mode: modeLabel, bucket, text });
+            }
+          }
+        }
+        pushFromDB(dbT, "trivia");
+        pushFromDB(dbF, "fun");
+      } catch {}
     }
 
-    // 1件も拾えない場合は空
-    if (!merged.length){
+    if (!out.length){
       itemsSeedLocal = [];
       return;
     }
 
-    // 正規化（text, bucket, mode を揃える）
-    const normalized = merged.map(x => ({
-      mode: x?.mode ?? x?.m ?? "trivia",
-      bucket: x?.bucket ?? x?.b ?? 0,
-      text: x?.text ?? x?.metaphor ?? x?.value ?? ""
-    })).filter(x => String(x.text || "").trim());
-
-    // IDを付与し、scope を "seed-local" として区別（削除ボタンを出さない）
-    itemsSeedLocal = normalized.map(x => ({
+    // ✅ IDを付与し、scope を "seed-local" として区別（削除ボタンを出さない）
+    itemsSeedLocal = out.map(x => ({
       id: "seedjs_" + hash32(`${x.mode}|${x.bucket}|${x.text}`),
       text: x.text,
       bucket: x.bucket,
@@ -250,7 +264,7 @@
       likes: 0,
       penName: "元ネタ(metaphors.js)",
       createdAt: 0,
-      scope: "seed-local" // ←重要：KVとは別扱い
+      scope: "seed-local"
     }));
   }
 
