@@ -462,12 +462,16 @@
         ? `<details><summary>本文を展開（${text.length}文字）</summary><div class="itemText">${escapeHtml(text)}</div></details>`
         : `<div class="itemText">${escapeHtml(text)}</div>`;
 
-      // ✅ ボタンは「承認/却下」だけ（pendingだけ出す）
+            // ✅ pending：承認/却下（削除）
+      // ✅ public：削除
       const perActions = [];
       if (activeTab === "pending"){
         perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
         perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（削除）</button>`);
+      } else if (activeTab === "public"){
+        perActions.push(`<button class="smallBtn btnDanger" data-act="deletePublic" data-id="${escapeAttr(item.id)}">削除</button>`);
       }
+
 
       // seed-localは操作不可（allで見えるだけ）
       const isSeed = (item.scope === "seed-local");
@@ -632,6 +636,71 @@
   }
 
   // ✅ pending削除：Workers側の期待payloadの揺れを吸収（1件ずつ確実に消す）
+    // ✅ public削除：Workers側payloadの揺れを吸収（1件ずつ確実に消す）
+  async function deletePublicRobust(ids, signal){
+    const uniq = Array.from(new Set(ids)).filter(Boolean);
+
+    for (const id of uniq){
+      const payloads = [
+        { ids: [id], scope: "public" },
+        { ids: [id], scope: "both" },
+        { id, scope: "public" },
+        { key: id, scope: "public" },
+        { ids: [id] },
+        { id },
+        { key: id },
+        { keys: [id], scope: "public" },
+        { keys: [id] },
+      ];
+
+      let deleted = false;
+      let lastErr = null;
+
+      for (const body of payloads){
+        try{
+          await callAdminWithFallback(API.del, {
+            method: "POST",
+            admin: true,
+            body,
+            signal
+          });
+          deleted = true;
+          break;
+        } catch(e){
+          lastErr = e;
+          continue;
+        }
+      }
+
+      if (!deleted){
+        throw (lastErr || new Error("delete(public) failed"));
+      }
+    }
+  }
+
+  async function deletePublicItems(ids){
+    if (!ids.length) return;
+
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
+
+    try{
+      await deletePublicRobust(ids, signal);
+
+      // public/ all を更新（pendingは触らない）
+      await Promise.all([loadPublic(signal), loadAll(signal)]);
+      render();
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`公開ネタの削除に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
+
   async function deletePendingRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
 
