@@ -5,8 +5,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
-
   <title>管理（承認待ち／一般公開）</title>
+
   <style>
     :root{
       --bg:#ffffff;
@@ -30,12 +30,13 @@
     .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; margin:12px 0; }
     .muted{ color:var(--sub); font-size:12px; }
     label{ font-size:12px; color:var(--sub); display:block; margin-bottom:6px; }
-    input, select{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); min-width:280px; font-size:14px; background:#fff; outline:none; }
-    input:focus, select:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+    input{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); min-width:280px; font-size:14px; background:#fff; outline:none; }
+    input:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
     button{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:14px; user-select:none; }
     button:disabled{ opacity:.55; cursor:not-allowed; }
     .btnPrimary{ background:var(--blue); color:#fff; border-color:rgba(37,99,235,0.55); font-weight:800; }
     .btnDanger{ background:var(--red); color:#fff; border-color:rgba(239,68,68,.6); font-weight:800; }
+    .btnOk{ background:var(--green); color:#fff; border-color: rgba(22,163,74,.6); font-weight:800; }
     .pill{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:var(--mutedBg); font-size:12px; }
     .tabs{ display:flex; gap:10px; flex-wrap:wrap; }
     .tab{ padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:#fff; font-weight:800; }
@@ -54,15 +55,9 @@
     .right{ margin-left:auto; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .smallBtn{ padding:8px 10px; border-radius:10px; font-size:13px; }
-    .btnGhost{ background:#fff; }
-    .btnOk{ background:var(--green); color:#fff; border-color: rgba(22,163,74,.6); font-weight:800; }
-    .divider{ height:1px; background:rgba(15,23,42,.08); margin:10px 0; }
-    .warn{ color:#b45309; font-weight:800; }
-    details > summary{ cursor:pointer; user-select:none; color:var(--sub); font-size:12px; }
-    pre{ margin:8px 0 0; padding:10px; border-radius:12px; background:rgba(15,23,42,.04); overflow:auto; }
   </style>
 
-  <!-- ✅ 元ネタ（metaphors.js）を先に読み込む：必ず head 内 -->
+  <!-- ✅ 元ネタ（metaphors.js） -->
   <script src="./metaphors.js"></script>
 </head>
 
@@ -86,7 +81,6 @@
         <button id="btnHealth">health</button>
         <button id="btnRefresh">更新（表示中タブ）</button>
         <button id="btnRefreshAllTabs">更新（全タブ）</button>
-        <button id="btnImportSeed">初期ネタを取り込み</button>
       </div>
 
       <div class="right row" style="gap:8px;">
@@ -121,22 +115,21 @@
       </div>
       <div class="actions">
         <button id="btnBulkApprove" class="btnOk">一括承認</button>
-        <button id="btnBulkReject" class="btnDanger">一括却下</button>
-        <button id="btnBulkDelete" class="btnDanger" style="display:none;">選択を削除</button>
+        <button id="btnBulkReject" class="btnDanger">一括却下（＝削除）</button>
       </div>
     </div>
 
     <div class="muted" style="margin-top:10px;">
-      ※ 承認待ち: <span class="mono">/api/admin/pending</span> / 承認: <span class="mono">/api/admin/approve</span> / 却下: <span class="mono">/api/admin/reject</span><br/>
-      ※ 公開: <span class="mono">/api/admin/list</span> / 削除: <span class="mono">/api/admin/delete</span><br/>
-      ※ 全ネタ: <span class="mono">/api/admin/all?scope=both</span>（表示/削除OK）
+      ※ 承認待ち: <span class="mono">/api/admin/pending</span><br/>
+      ※ 承認APIは環境差があるため、複数候補を自動で試します（404対策）<br/>
+      ※ 却下は「reject → 効かなければ delete(pending)」で確実に消します
     </div>
 
     <div class="list" id="list"></div>
   </div>
 
   <div class="muted" style="text-align:center; margin:14px 0 8px;">
-    admin.html（堅牢版） / # END
+    admin.html（承認/却下のみ） / # END
   </div>
 </div>
 
@@ -167,21 +160,18 @@
   const btnHealth  = $("btnHealth");
   const btnRefresh = $("btnRefresh");
   const btnRefreshAllTabs = $("btnRefreshAllTabs");
-  const btnImportSeed = $("btnImportSeed");
 
   const btnBulkApprove = $("btnBulkApprove");
   const btnBulkReject  = $("btnBulkReject");
-  const btnBulkDelete  = $("btnBulkDelete");
 
   let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
   let itemsPublic  = [];
   let itemsAll     = [];
   let selectedIds = new Set();
-  // ✅ metaphors.js 側の「元ネタ」表示用（KVとは別）
-  let itemsSeedLocal = [];
 
-  // 簡易ハッシュ（ID生成用）
+  // metaphors.js 表示（任意：allタブに混ぜる）
+  let itemsSeedLocal = [];
   function hash32(str){
     let h = 2166136261;
     for (let i = 0; i < str.length; i++){
@@ -190,71 +180,26 @@
     }
     return (h >>> 0).toString(16);
   }
-
-  // metaphors.js から元ネタ（NETA_TRIVIA / NETA）を取り込む（あなたの形式に完全対応）
   function loadSeedLocalFromMetaphorsJS(){
-    const trivia = window.NETA_TRIVIA; // {0:[...],10:[...],...}
-    const fun    = window.NETA;        // {0:[...],10:[...],...}
-
+    const trivia = window.NETA_TRIVIA;
+    const fun    = window.NETA;
     const out = [];
-
     function pushFromDict(dict, modeLabel){
       if (!dict || typeof dict !== "object") return;
-
       for (const k of Object.keys(dict)){
         const bucket = Number(k);
         if (!Number.isFinite(bucket)) continue;
-
         const arr = dict[k];
         if (!Array.isArray(arr)) continue;
-
         for (const t of arr){
           const text = String(t ?? "").trim();
           if (!text) continue;
-
-          out.push({
-            mode: modeLabel,
-            bucket,
-            text
-          });
+          out.push({ mode: modeLabel, bucket, text });
         }
       }
     }
-
-    // ✅ あなたの metaphors.js の正体はこれ
     pushFromDict(trivia, "trivia");
     pushFromDict(fun, "fun");
-
-    // 互換で metaphorDB しか無い場合も拾う（保険）
-    // metaphorDB.trivia = [{min,max,texts:[...]}] 形式
-    if (!out.length && window.metaphorDB){
-      try{
-        const dbT = window.metaphorDB.trivia;
-        const dbF = window.metaphorDB.fun;
-        function pushFromDB(db, modeLabel){
-          if (!Array.isArray(db)) return;
-          for (const row of db){
-            const bucket = Number(row?.min);
-            const texts = row?.texts;
-            if (!Number.isFinite(bucket) || !Array.isArray(texts)) continue;
-            for (const t of texts){
-              const text = String(t ?? "").trim();
-              if (!text) continue;
-              out.push({ mode: modeLabel, bucket, text });
-            }
-          }
-        }
-        pushFromDB(dbT, "trivia");
-        pushFromDB(dbF, "fun");
-      } catch {}
-    }
-
-    if (!out.length){
-      itemsSeedLocal = [];
-      return;
-    }
-
-    // ✅ IDを付与し、scope を "seed-local" として区別（削除/選択はさせない）
     itemsSeedLocal = out.map(x => ({
       id: "seedjs_" + hash32(`${x.mode}|${x.bucket}|${x.text}`),
       text: x.text,
@@ -267,7 +212,7 @@
     }));
   }
 
-  // in-flight制御（多重更新防止）
+  // in-flight制御
   let __busy = false;
   let __ctrl = null;
 
@@ -289,9 +234,9 @@
     __busy = !!on;
     pillBusy.style.display = __busy ? "inline-flex" : "none";
     const dis = __busy;
-    [btnSave, btnHealth, btnRefresh, btnRefreshAllTabs, btnImportSeed,
+    [btnSave, btnHealth, btnRefresh, btnRefreshAllTabs,
      tabPending, tabPublic, tabAll,
-     btnBulkApprove, btnBulkReject, btnBulkDelete].forEach(b => { try{ b.disabled = dis; }catch{} });
+     btnBulkApprove, btnBulkReject].forEach(b => { try{ b.disabled = dis; }catch{} });
   }
 
   function abortInFlight(){
@@ -322,31 +267,39 @@
 
     const data = await res.json().catch(()=>null);
 
+    // 404など「ok構造が無い」ケースも拾えるように
     if (!res.ok || !data?.ok){
       const msg = data?.error || `HTTP ${res.status}`;
       const e = new Error(msg);
       e.status = res.status;
       e.data = data;
+      e.url = url;
       throw e;
     }
     return data;
   }
 
-  function formatTs(ts){
-    const n = Number(ts);
-    if (!Number.isFinite(n) || n <= 0) return "";
-    const d = new Date(n);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,"0");
-    const dd = String(d.getDate()).padStart(2,"0");
-    const hh = String(d.getHours()).padStart(2,"0");
-    const mi = String(d.getMinutes()).padStart(2,"0");
-    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  // ✅ 404対策：複数エンドポイント／複数body形式を順に試す
+  async function tryAdminPost(paths, bodyVariants){
+    let lastErr = null;
+    for (const p of paths){
+      for (const b of bodyVariants){
+        try{
+          const data = await fetchJSON(p, { method:"POST", admin:true, body:b, signal: __ctrl.signal });
+          return { ok:true, path:p, body:b, data };
+        } catch(e){
+          lastErr = e;
+          // 403は即終了（鍵違い）
+          if (e?.status === 403) throw e;
+          // 404/400/500 は次を試す
+          continue;
+        }
+      }
+    }
+    throw lastErr || new Error("操作に失敗しました");
   }
 
-  function safeText(v){
-    return (v == null) ? "" : String(v);
-  }
+  function safeText(v){ return (v == null) ? "" : String(v); }
 
   function normalizeScope(x, fallback){
     const s = (x?.scope ?? x?._scope ?? x?.status ?? fallback ?? "").toString().toLowerCase().trim();
@@ -376,23 +329,11 @@
 
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
-
-    const current = getActiveItems();
-    const selectable = current.filter(x => x.scope !== "seed-local");
-    const allIds = selectable.map(x => x.id);
+    const current = getActiveItems().filter(x => x.scope !== "seed-local");
+    const allIds = current.map(x => x.id);
     const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
     chkAll.checked = allSelected;
     chkAll.indeterminate = (!allSelected && selectedIds.size > 0);
-
-    if (activeTab === "pending"){
-      btnBulkApprove.style.display = "";
-      btnBulkReject.style.display  = "";
-      btnBulkDelete.style.display  = "none";
-    } else {
-      btnBulkApprove.style.display = "none";
-      btnBulkReject.style.display  = "none";
-      btnBulkDelete.style.display  = "";
-    }
   }
 
   function setActiveTab(tab){
@@ -410,9 +351,18 @@
     return itemsAll;
   }
 
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function escapeAttr(s){ return escapeHtml(s).replaceAll("`","&#096;"); }
+
   function render(){
     updateCounts();
-
     const items = getActiveItems();
     updateSelectionUI();
 
@@ -442,36 +392,15 @@
       if (item.bucket != null && item.bucket !== "") metaParts.push(`<span class="badge">bucket: ${escapeHtml(item.bucket)}</span>`);
       metaParts.push(`<span class="badge">likes: ${escapeHtml(item.likes)}</span>`);
       if (item.penName) metaParts.push(`<span class="badge">pen: ${escapeHtml(item.penName)}</span>`);
-      const ts = formatTs(item.createdAt);
-      if (ts) metaParts.push(`<span class="badge">${escapeHtml(ts)}</span>`);
 
       const text = item.text || "";
-      const tooLong = text.length > 240;
-      const textHtml = tooLong
-        ? `
-          <details>
-            <summary>本文を展開（${text.length}文字）</summary>
-            <div class="itemText">${escapeHtml(text)}</div>
-          </details>
-        `
-        : `<div class="itemText">${escapeHtml(text)}</div>`;
+      const textHtml = `<div class="itemText">${escapeHtml(text)}</div>`;
 
       const perActions = [];
-
-      // ✅ seed-local は表示だけ（削除/承認/却下させない）
-      if (!isSeedLocal){
-        if (activeTab === "pending"){
-          perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
-          perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下</button>`);
-          perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="pending" data-id="${escapeAttr(item.id)}">削除</button>`);
-        }
-        else if (activeTab === "public"){
-          perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="public" data-id="${escapeAttr(item.id)}">削除</button>`);
-        }
-        else {
-          const scope = (item.scope === "pending") ? "pending" : "public";
-          perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="${escapeAttr(scope)}" data-id="${escapeAttr(item.id)}">削除</button>`);
-        }
+      // ✅ 要望：承認・却下だけ（pendingのときだけ表示）
+      if (!isSeedLocal && activeTab === "pending"){
+        perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
+        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（＝削除）</button>`);
       }
 
       return `
@@ -495,18 +424,6 @@
     }).join("");
 
     listEl.innerHTML = html;
-  }
-
-  function escapeHtml(s){
-    return String(s ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
-  function escapeAttr(s){
-    return escapeHtml(s).replaceAll("`","&#096;");
   }
 
   function saveSettings(){
@@ -553,17 +470,13 @@
     const data = await fetchJSON("/api/admin/list", { admin:true, signal: __ctrl.signal });
     itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
   }
-
   async function loadAll(){
     const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal: __ctrl.signal });
     const raw = data.items || data.all || [];
-    const kvAll = normalizeItems(raw, ""); // KV側（public/pending）
+    const kvAll = normalizeItems(raw, "");
 
-    // ✅ metaphors.js 側の元ネタ（表示だけ）
+    // 元ネタは all に混ぜる（表示だけ）
     loadSeedLocalFromMetaphorsJS();
-
-    // ✅ 合算して「全ネタ」に表示
-    // 事故防止：KV側と同IDが被ったらseed側を落とす（基本被らない）
     const kvIds = new Set(kvAll.map(x => x.id));
     const seed = itemsSeedLocal.filter(x => !kvIds.has(x.id));
 
@@ -574,7 +487,6 @@
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
-
     try{
       if (activeTab === "pending") await loadPending();
       else if (activeTab === "public") await loadPublic();
@@ -605,27 +517,46 @@
     }
   }
 
-  // ✅ action後の再読込（refreshAllTabs を呼ばずに、同じ __ctrl で読み直す）
+  // ✅ action後の再読込（同じ __ctrl で読み直す：自分でabortしない）
   async function reloadAllAfterAction(){
     await Promise.all([loadPending(), loadPublic(), loadAll()]);
+    selectedIds = new Set();
     render();
   }
 
-  function getSelectedIds(){
-    return Array.from(selectedIds);
-  }
+  function getSelectedIds(){ return Array.from(selectedIds); }
 
-  // ====== ここが重要：action 内で refreshAllTabs() を呼ばない ======
+  // ✅ 承認（404対策で複数の候補を順に試す）
   async function approveIds(ids){
     if (!ids.length) return;
+
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
+
     try{
-      await fetchJSON("/api/admin/approve", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
+      // エンドポイント候補（Worker側の実装差を吸収）
+      const paths = [
+        "/api/admin/approve",
+        "/api/admin/approve_pending",
+        "/api/admin/approvePending",
+        "/api/admin/publish",
+        "/api/admin/approveOne",
+      ];
+
+      // body候補（ids / id / keys など差を吸収）
+      const bodies = [
+        { ids },
+        { id: ids[0] },         // 1件用の可能性
+        { keys: ids },
+        { key: ids[0] },
+        { items: ids },
+      ];
+
+      const r = await tryAdminPost(paths, bodies);
+      console.log("approve used:", r.path, r.body, r.data);
+
       await reloadAllAfterAction();
-      selectedIds = new Set();
-      render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
       alert(`承認に失敗: ${e.message}`);
@@ -635,235 +566,58 @@
     }
   }
 
+  // ✅ 却下（＝削除）：reject を試して、効かない/無効なら delete(pending) を必ず実行
   async function rejectIds(ids){
     if (!ids.length) return;
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    try{
-      await fetchJSON("/api/admin/reject", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
-      await reloadAllAfterAction();
-      selectedIds = new Set();
-      render();
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`却下に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-  async function deleteIds(ids, scope){
-    if (!ids.length) return;
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    try{
-      const res = await fetchJSON("/api/admin/delete", {
-        method:"POST",
-        admin:true,
-        body:{ ids, scope: scope || "both" },
-        signal: __ctrl.signal
-      });
-      console.log("delete result:", res);
-
-      await reloadAllAfterAction();
-      selectedIds = new Set();
-      render();
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`削除に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-  // ✅ 初期ネタ取り込み：metaphors.js を確実に取り込む（window変数が無くてもOK / 文字列配列もOK）
-  async function importSeed(){
-    const ENDPOINT = "/api/admin/import_seed";
 
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
 
     try{
-      // 0) まずは従来どおり window / グローバル識別子を探す（配列でもオブジェクトでも拾う）
-      let src =
-        (typeof METAPHORS !== "undefined" ? METAPHORS : undefined) ??
-        (typeof metaphors !== "undefined" ? metaphors : undefined) ??
-        (window.METAPHORS ?? window.metaphors ?? null);
+      // 1) reject（候補を試す）
+      const rejectPaths = [
+        "/api/admin/reject",
+        "/api/admin/reject_pending",
+        "/api/admin/rejectPending",
+      ];
+      const rejectBodies = [
+        { ids },
+        { id: ids[0] },
+        { keys: ids },
+        { key: ids[0] },
+      ];
 
-      // 1) 無ければ metaphors.js を “テキスト”で読み込んで配列リテラルを抽出する
-      if (!src){
-        const jsUrl = "./metaphors.js";
-        const jsRes = await fetch(jsUrl, { cache:"no-store", signal: __ctrl.signal });
-        if (!jsRes.ok) throw new Error(`metaphors.js 読込失敗: ${jsRes.status} ${jsRes.statusText}`);
-        const code = await jsRes.text();
-
-        // --- 配列リテラル候補を全部抜く（簡易パーサ：ブラケット対応を取る）---
-        const arrays = [];
-        for (let i = 0; i < code.length; i++){
-          if (code[i] !== "[") continue;
-
-          const left = code.slice(Math.max(0, i-160), i);
-          if (!/[=:{]/.test(left)) continue; // 代入/オブジェクト内の可能性を優先
-
-          let depth = 0;
-          let inStr = null;
-          let esc = false;
-
-          for (let j = i; j < code.length; j++){
-            const ch = code[j];
-
-            if (inStr){
-              if (esc){ esc = false; continue; }
-              if (ch === "\\"){ esc = true; continue; }
-              if (ch === inStr){ inStr = null; continue; }
-              continue;
-            } else {
-              if (ch === '"' || ch === "'" || ch === "`"){ inStr = ch; continue; }
-              if (ch === "[") depth++;
-              if (ch === "]") depth--;
-              if (depth === 0){
-                arrays.push(code.slice(i, j+1));
-                i = j;
-                break;
-              }
-            }
-          }
-        }
-
-        // --- 候補配列を評価して、(文字列|オブジェクト)が多い “大きい配列” を採用 ---
-        let best = null;
-        let bestScore = -1;
-
-        for (const lit of arrays){
-          let v = null;
-          try{
-            v = Function('"use strict"; return (' + lit + ');')();
-          } catch {
-            continue;
-          }
-          if (!Array.isArray(v) || v.length === 0) continue;
-
-          let score = 0;
-          for (const it of v){
-            if (typeof it === "string" && it.trim()) score += 3; // 文字列は強く加点
-            else if (it && typeof it === "object") score += 2;
-          }
-          score = score * 10 + Math.min(v.length, 999);
-          if (score > bestScore){
-            bestScore = score;
-            best = v;
-          }
-        }
-
-        if (!best || !best.length){
-          throw new Error("metaphors.js から配列を抽出できません（配列が見つからない/評価できない）");
-        }
-        src = best;
+      let rejected = false;
+      try{
+        const r = await tryAdminPost(rejectPaths, rejectBodies);
+        console.log("reject used:", r.path, r.body, r.data);
+        rejected = true;
+      } catch(e){
+        // rejectが無い/効かないなら次へ
+        console.warn("reject failed, fallback to delete:", e);
       }
 
-      // 2) src が「オブジェクト」型（例：{trivia:{20:[...]}...}）の場合にも対応して平坦化
-      const out = [];
-      const pickText = (x) => {
-        if (x == null) return "";
-        if (typeof x === "string") return x;
-        if (typeof x !== "object") return "";
-        // よくあるキーを広めに拾う
-        return String(
-          x.text ?? x.metaphor ?? x.value ?? x.txt ?? x.body ?? x.label ?? x.title ?? x.t ?? ""
-        );
-      };
+      // 2) 最終的に消したい：delete(pending) を必ず実行（rejectが成功しても“残る”場合があるため）
+      const delPaths = [
+        "/api/admin/delete",
+        "/api/admin/delete_pending",
+        "/api/admin/deletePending",
+      ];
+      const delBodies = [
+        { ids, scope:"pending" },
+        { id: ids[0], scope:"pending" },
+        { keys: ids, scope:"pending" },
+        { key: ids[0], scope:"pending" },
+      ];
 
-      function pushItem(mode, bucket, val){
-        const text = pickText(val).trim();
-        if (!text) return;
-        out.push({ mode: mode || "trivia", bucket: Number(bucket)||0, text });
-      }
-
-      function walk(val, mode, bucket){
-        if (val == null) return;
-
-        // 文字列
-        if (typeof val === "string"){
-          pushItem(mode, bucket, val);
-          return;
-        }
-
-        // 配列（中に文字列/オブジェクト/配列）
-        if (Array.isArray(val)){
-          for (const v of val) walk(v, mode, bucket);
-          return;
-        }
-
-        // オブジェクト
-        if (typeof val === "object"){
-          // 直接 {text, mode, bucket} 型
-          const directText = pickText(val).trim();
-          const hasDirect = directText && ("text" in val || "metaphor" in val || "value" in val || "txt" in val || "body" in val || "t" in val);
-          if (hasDirect){
-            pushItem(val.mode ?? mode, val.bucket ?? bucket, val);
-            return;
-          }
-
-          // {items:[...]} みたいな型
-          if (Array.isArray(val.items)){
-            for (const v of val.items) walk(v, val.mode ?? mode, val.bucket ?? bucket);
-            return;
-          }
-
-          // mode/bucketの入れ子っぽい場合（キーを辿る）
-          // 例: { trivia: { "20": [...], "30":[...] }, fun: {...} }
-          for (const k of Object.keys(val)){
-            const v = val[k];
-            // mode名っぽい
-            if (k === "trivia" || k === "fun"){
-              walk(v, k, bucket);
-              continue;
-            }
-            // bucket番号っぽい
-            if (/^\d+$/.test(k)){
-              walk(v, mode, Number(k));
-              continue;
-            }
-            // それ以外はそのまま辿る（保険）
-            walk(v, mode, bucket);
-          }
-        }
-      }
-
-      walk(src, "trivia", 0);
-
-      const items = out.filter(x => x.text);
-
-      if (!items.length){
-        throw new Error("seed items が 0 件です（textが空）");
-      }
-
-      // 3) Workers に送信（サーバ側の上限に合わせて分割して一気に入れる）
-      const BATCH = 12; // ←サーバ側が12件上限っぽいので固定
-      let imported = 0;
-
-      for (let i = 0; i < items.length; i += BATCH){
-        const chunk = items.slice(i, i + BATCH);
-        await fetchJSON(ENDPOINT, {
-          method: "POST",
-          admin: true,
-          body: { items: chunk },
-          signal: __ctrl.signal
-        });
-        imported += chunk.length;
-      }
+      const d = await tryAdminPost(delPaths, delBodies);
+      console.log("delete used:", d.path, d.body, d.data);
 
       await reloadAllAfterAction();
-      alert(`初期ネタを取り込みました（${imported}件）`);
-
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`初期ネタ取り込みに失敗: ${e.message}`);
+      alert(`却下（削除）に失敗: ${e.message}`);
     } finally {
       setBusy(false);
       __ctrl = null;
@@ -879,7 +633,6 @@
   btnHealth.addEventListener("click", doHealth);
   btnRefresh.addEventListener("click", refreshCurrentTab);
   btnRefreshAllTabs.addEventListener("click", refreshAllTabs);
-  btnImportSeed.addEventListener("click", importSeed);
 
   tabPending.addEventListener("click", () => setActiveTab("pending"));
   tabPublic.addEventListener("click",  () => setActiveTab("public"));
@@ -887,11 +640,8 @@
 
   chkAll.addEventListener("change", () => {
     const items = getActiveItems().filter(x => x.scope !== "seed-local");
-    if (chkAll.checked){
-      items.forEach(x => selectedIds.add(x.id));
-    } else {
-      items.forEach(x => selectedIds.delete(x.id));
-    }
+    if (chkAll.checked) items.forEach(x => selectedIds.add(x.id));
+    else items.forEach(x => selectedIds.delete(x.id));
     updateSelectionUI();
     listEl.querySelectorAll(".itemChk").forEach(chk => {
       const id = chk.getAttribute("data-id");
@@ -909,19 +659,11 @@
   btnBulkReject.addEventListener("click", async () => {
     const ids = getSelectedIds();
     if (!ids.length) return alert("選択がありません");
-    if (!confirm(`選択 ${ids.length}件 を却下しますか？`)) return;
+    if (!confirm(`選択 ${ids.length}件 を却下（削除）しますか？（元に戻せません）`)) return;
     await rejectIds(ids);
   });
 
-  btnBulkDelete.addEventListener("click", async () => {
-    const ids = getSelectedIds();
-    if (!ids.length) return alert("選択がありません");
-    const scope = (activeTab === "public") ? "public" : (activeTab === "all" ? "both" : "pending");
-    if (!confirm(`選択 ${ids.length}件 を削除しますか？（元に戻せません）`)) return;
-    await deleteIds(ids, scope);
-  });
-
-  // リスト内のクリック（委譲）★FIX: targetがText等でも動くようにclosestで拾う
+  // リスト内クリック（委譲）
   listEl.addEventListener("click", async (ev) => {
     const raw = ev.target;
     if (!raw) return;
@@ -929,9 +671,9 @@
     const el = (raw instanceof Element) ? raw.closest("button[data-act], input.itemChk") : null;
     if (!el) return;
 
-    // ✅ チェックボックス
+    // checkbox
     if (el instanceof HTMLInputElement && el.classList.contains("itemChk")) {
-      if (el.disabled) return; // seed-local は選択不可
+      if (el.disabled) return;
       const id = el.getAttribute("data-id");
       if (!id) return;
       if (el.checked) selectedIds.add(id);
@@ -940,7 +682,7 @@
       return;
     }
 
-    // ✅ ボタン（承認/却下/削除）
+    // button
     if (el instanceof HTMLButtonElement) {
       const act = el.getAttribute("data-act");
       const id  = el.getAttribute("data-id");
@@ -950,22 +692,8 @@
         if (!confirm("この1件を承認しますか？")) return;
         await approveIds([id]);
       } else if (act === "reject") {
-        if (!confirm("この1件を却下しますか？")) return;
+        if (!confirm("この1件を却下（削除）しますか？（元に戻せません）")) return;
         await rejectIds([id]);
-      } else if (act === "delete") {
-        const scope = el.getAttribute("data-scope")
-          || (activeTab === "public" ? "public" : (activeTab === "pending" ? "pending" : "both"));
-        if (!confirm("この1件を削除しますか？（元に戻せません）")) return;
-        await deleteIds([id], scope);
-      }
-    }
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Enter"){
-      const el = document.activeElement;
-      if (el === elApiBase || el === elAdminKey){
-        e.preventDefault();
       }
     }
   });
