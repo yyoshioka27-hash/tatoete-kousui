@@ -6,8 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
 
- 
-
   <title>管理（承認待ち／一般公開）</title>
   <style>
     :root{
@@ -63,7 +61,8 @@
     details > summary{ cursor:pointer; user-select:none; color:var(--sub); font-size:12px; }
     pre{ margin:8px 0 0; padding:10px; border-radius:12px; background:rgba(15,23,42,.04); overflow:auto; }
   </style>
-   <!-- ✅ 元ネタ（metaphors.js）を先に読み込む：必ず head 内 -->
+
+  <!-- ✅ 元ネタ（metaphors.js）を先に読み込む：必ず head 内 -->
   <script src="./metaphors.js"></script>
 </head>
 
@@ -192,8 +191,7 @@
     return (h >>> 0).toString(16);
   }
 
-  // metaphors.js から元ネタ配列を探して取り込む（いろんな変数名に対応）
-    // metaphors.js から元ネタ（NETA_TRIVIA / NETA）を取り込む（あなたの形式に完全対応）
+  // metaphors.js から元ネタ（NETA_TRIVIA / NETA）を取り込む（あなたの形式に完全対応）
   function loadSeedLocalFromMetaphorsJS(){
     const trivia = window.NETA_TRIVIA; // {0:[...],10:[...],...}
     const fun    = window.NETA;        // {0:[...],10:[...],...}
@@ -256,7 +254,7 @@
       return;
     }
 
-    // ✅ IDを付与し、scope を "seed-local" として区別（削除ボタンを出さない）
+    // ✅ IDを付与し、scope を "seed-local" として区別（削除/選択はさせない）
     itemsSeedLocal = out.map(x => ({
       id: "seedjs_" + hash32(`${x.mode}|${x.bucket}|${x.text}`),
       text: x.text,
@@ -380,7 +378,8 @@
     selCount.textContent = `選択: ${selectedIds.size}件`;
 
     const current = getActiveItems();
-    const allIds = current.map(x => x.id);
+    const selectable = current.filter(x => x.scope !== "seed-local");
+    const allIds = selectable.map(x => x.id);
     const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
     chkAll.checked = allSelected;
     chkAll.indeterminate = (!allSelected && selectedIds.size > 0);
@@ -423,13 +422,17 @@
     }
 
     const html = items.map(item => {
+      const isSeedLocal = (item.scope === "seed-local");
       const checked = selectedIds.has(item.id) ? "checked" : "";
+      const chkDisabled = isSeedLocal ? "disabled" : "";
 
       const isPending = (activeTab === "pending") || (item.scope === "pending");
       const badgeScope = (activeTab === "all")
-        ? (isPending
-            ? `<span class="badge badgePending">pending</span>`
-            : `<span class="badge badgePublic">public</span>`)
+        ? (isSeedLocal
+            ? `<span class="badge">seed(local)</span>`
+            : (isPending
+                ? `<span class="badge badgePending">pending</span>`
+                : `<span class="badge badgePublic">public</span>`))
         : (activeTab === "pending"
             ? `<span class="badge badgePending">pending</span>`
             : `<span class="badge badgePublic">public</span>`);
@@ -455,17 +458,20 @@
 
       const perActions = [];
 
-      if (activeTab === "pending"){
-        perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
-        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下</button>`);
-        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="pending" data-id="${escapeAttr(item.id)}">削除</button>`);
-      }
-      else if (activeTab === "public"){
-        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="public" data-id="${escapeAttr(item.id)}">削除</button>`);
-      }
-      else {
-        const scope = (item.scope === "pending") ? "pending" : "public";
-        perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="${escapeAttr(scope)}" data-id="${escapeAttr(item.id)}">削除</button>`);
+      // ✅ seed-local は表示だけ（削除/承認/却下させない）
+      if (!isSeedLocal){
+        if (activeTab === "pending"){
+          perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
+          perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下</button>`);
+          perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="pending" data-id="${escapeAttr(item.id)}">削除</button>`);
+        }
+        else if (activeTab === "public"){
+          perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="public" data-id="${escapeAttr(item.id)}">削除</button>`);
+        }
+        else {
+          const scope = (item.scope === "pending") ? "pending" : "public";
+          perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="${escapeAttr(scope)}" data-id="${escapeAttr(item.id)}">削除</button>`);
+        }
       }
 
       return `
@@ -473,7 +479,7 @@
           <div class="itemTop">
             <div class="itemMeta">
               <label style="margin:0; display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" class="chk itemChk" data-id="${escapeAttr(item.id)}" ${checked} />
+                <input type="checkbox" class="chk itemChk" data-id="${escapeAttr(item.id)}" ${checked} ${chkDisabled} />
                 <span class="muted mono">${escapeHtml(item.id)}</span>
               </label>
               ${badgeScope}
@@ -547,7 +553,8 @@
     const data = await fetchJSON("/api/admin/list", { admin:true, signal: __ctrl.signal });
     itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
   }
-    async function loadAll(){
+
+  async function loadAll(){
     const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal: __ctrl.signal });
     const raw = data.items || data.all || [];
     const kvAll = normalizeItems(raw, ""); // KV側（public/pending）
@@ -562,7 +569,6 @@
 
     itemsAll = kvAll.concat(seed);
   }
-
 
   async function refreshCurrentTab(){
     abortInFlight();
@@ -599,10 +605,17 @@
     }
   }
 
+  // ✅ action後の再読込（refreshAllTabs を呼ばずに、同じ __ctrl で読み直す）
+  async function reloadAllAfterAction(){
+    await Promise.all([loadPending(), loadPublic(), loadAll()]);
+    render();
+  }
+
   function getSelectedIds(){
     return Array.from(selectedIds);
   }
 
+  // ====== ここが重要：action 内で refreshAllTabs() を呼ばない ======
   async function approveIds(ids){
     if (!ids.length) return;
     abortInFlight();
@@ -610,7 +623,7 @@
     setBusy(true);
     try{
       await fetchJSON("/api/admin/approve", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
-      await refreshAllTabs();
+      await reloadAllAfterAction();
       selectedIds = new Set();
       render();
     } catch(e){
@@ -629,7 +642,7 @@
     setBusy(true);
     try{
       await fetchJSON("/api/admin/reject", { method:"POST", admin:true, body:{ ids }, signal: __ctrl.signal });
-      await refreshAllTabs();
+      await reloadAllAfterAction();
       selectedIds = new Set();
       render();
     } catch(e){
@@ -647,13 +660,15 @@
     __ctrl = new AbortController();
     setBusy(true);
     try{
-      await fetchJSON("/api/admin/delete", {
+      const res = await fetchJSON("/api/admin/delete", {
         method:"POST",
         admin:true,
         body:{ ids, scope: scope || "both" },
         signal: __ctrl.signal
       });
-      await refreshAllTabs();
+      console.log("delete result:", res);
+
+      await reloadAllAfterAction();
       selectedIds = new Set();
       render();
     } catch(e){
@@ -665,9 +680,7 @@
     }
   }
 
-  // ✅ 初期ネタ取り込み：metaphors.js から取り込み → /api/admin/import_seed にPOST
-    // ✅ 初期ネタ取り込み：metaphors.js を確実に取り込む（window変数が無くてもOK）
-    // ✅ 初期ネタ取り込み：metaphors.js を確実に取り込む（window変数が無くてもOK / 文字列配列もOK）
+  // ✅ 初期ネタ取り込み：metaphors.js を確実に取り込む（window変数が無くてもOK / 文字列配列もOK）
   async function importSeed(){
     const ENDPOINT = "/api/admin/import_seed";
 
@@ -830,8 +843,7 @@
         throw new Error("seed items が 0 件です（textが空）");
       }
 
-      // 3) Workers に送信
-            // 3) Workers に送信（サーバ側の上限に合わせて分割して一気に入れる）
+      // 3) Workers に送信（サーバ側の上限に合わせて分割して一気に入れる）
       const BATCH = 12; // ←サーバ側が12件上限っぽいので固定
       let imported = 0;
 
@@ -846,12 +858,8 @@
         imported += chunk.length;
       }
 
-      await refreshAllTabs();
+      await reloadAllAfterAction();
       alert(`初期ネタを取り込みました（${imported}件）`);
-
-
-      await refreshAllTabs();
-      alert(`初期ネタを取り込みました（${items.length}件）`);
 
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -878,7 +886,7 @@
   tabAll.addEventListener("click",     () => setActiveTab("all"));
 
   chkAll.addEventListener("change", () => {
-    const items = getActiveItems();
+    const items = getActiveItems().filter(x => x.scope !== "seed-local");
     if (chkAll.checked){
       items.forEach(x => selectedIds.add(x.id));
     } else {
@@ -913,18 +921,17 @@
     await deleteIds(ids, scope);
   });
 
-    // リスト内のクリック（委譲）★FIX: targetがText等でも動くようにclosestで拾う
+  // リスト内のクリック（委譲）★FIX: targetがText等でも動くようにclosestで拾う
   listEl.addEventListener("click", async (ev) => {
-    // クリックされた要素から「操作対象」を拾う
     const raw = ev.target;
     if (!raw) return;
 
-    // checkbox or button の“本体”まで遡る
     const el = (raw instanceof Element) ? raw.closest("button[data-act], input.itemChk") : null;
     if (!el) return;
 
     // ✅ チェックボックス
     if (el instanceof HTMLInputElement && el.classList.contains("itemChk")) {
+      if (el.disabled) return; // seed-local は選択不可
       const id = el.getAttribute("data-id");
       if (!id) return;
       if (el.checked) selectedIds.add(id);
