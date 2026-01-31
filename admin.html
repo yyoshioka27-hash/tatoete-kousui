@@ -1,11 +1,14 @@
 <!-- admin.html -->
 <!doctype html>
-<html lang="ja">  
+<html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <script src="./metaphors.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
+
+  <!-- ✅ 元ネタ（metaphors.js）を先に読み込む：必ず head 内 -->
+  <script src="./metaphors.js"></script>
+
   <title>管理（承認待ち／一般公開）</title>
   <style>
     :root{
@@ -258,7 +261,6 @@
   }
 
   function normalizeScope(x, fallback){
-    // worker /api/admin/all は status を付けて返す（public/pending）
     const s = (x?.scope ?? x?._scope ?? x?.status ?? fallback ?? "").toString().toLowerCase().trim();
     if (s === "public" || s === "pending") return s;
     return fallback || "";
@@ -272,7 +274,7 @@
         text: safeText(x.text ?? x.metaphor ?? x.value ?? ""),
         bucket: (x.bucket ?? x.b ?? null),
         mode: safeText(x.mode ?? x.m ?? ""),
-        likes: (x.likes ?? x.like ?? x.totalLikes ?? 0), // totalLikes が来ても出せる
+        likes: (x.likes ?? x.like ?? x.totalLikes ?? 0),
         penName: safeText(x.penName ?? x.pen ?? x.author ?? ""),
         createdAt: (x.createdAt ?? x.ts ?? x.time ?? x.approvedAt ?? 0),
         scope
@@ -363,17 +365,14 @@
 
       const perActions = [];
 
-      // ✅ pending は承認/却下/削除
       if (activeTab === "pending"){
         perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
         perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下</button>`);
         perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="pending" data-id="${escapeAttr(item.id)}">削除</button>`);
       }
-      // ✅ public は削除のみ（scope=public）
       else if (activeTab === "public"){
         perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="public" data-id="${escapeAttr(item.id)}">削除</button>`);
       }
-      // ✅ all は scope を見て削除（事故防止）
       else {
         const scope = (item.scope === "pending") ? "pending" : "public";
         perActions.push(`<button class="smallBtn btnDanger" data-act="delete" data-scope="${escapeAttr(scope)}" data-id="${escapeAttr(item.id)}">削除</button>`);
@@ -461,7 +460,7 @@
   async function loadAll(){
     const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal: __ctrl.signal });
     const raw = data.items || data.all || [];
-    itemsAll = normalizeItems(raw, ""); // status/scope を取り込む
+    itemsAll = normalizeItems(raw, "");
   }
 
   async function refreshCurrentTab(){
@@ -541,7 +540,6 @@
     }
   }
 
-  // ✅ 事故防止：scope を必ず渡す
   async function deleteIds(ids, scope){
     if (!ids.length) return;
     abortInFlight();
@@ -566,61 +564,55 @@
     }
   }
 
-  // ✅ 初期ネタ取り込み：./data/metaphors.json を読み込み → /api/admin/import_seed にPOST
   // ✅ 初期ネタ取り込み：metaphors.js から取り込み → /api/admin/import_seed にPOST
-async function importSeed(){
-  const ENDPOINT = "/api/admin/import_seed";
+  async function importSeed(){
+    const ENDPOINT = "/api/admin/import_seed";
 
-  abortInFlight();
-  __ctrl = new AbortController();
-  setBusy(true);
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
 
-  try{
-    // =========================
-    // ✅ 元ネタは metaphors.js
-    //  - window.METAPHORS または window.metaphors を想定
-    // =========================
-    const src =
-      Array.isArray(window.METAPHORS) ? window.METAPHORS :
-      Array.isArray(window.metaphors) ? window.metaphors :
-      [];
+    try{
+      // ✅ ここが今回のキモ：
+      // windowプロパティだけじゃなく、グローバル識別子（const）も拾う
+      const src =
+        (typeof METAPHORS !== "undefined" && Array.isArray(METAPHORS)) ? METAPHORS :
+        (typeof metaphors !== "undefined" && Array.isArray(metaphors)) ? metaphors :
+        (Array.isArray(window.METAPHORS) ? window.METAPHORS :
+         Array.isArray(window.metaphors) ? window.metaphors : []);
 
-    if (!src.length){
-      throw new Error("metaphors.js に元ネタ配列が見つかりません（METAPHORS / metaphors）");
+      if (!src.length){
+        throw new Error("metaphors.js に元ネタ配列が見つかりません（METAPHORS / metaphors）");
+      }
+
+      const items = src.map(x => ({
+        mode: x?.mode ?? x?.m ?? "trivia",
+        bucket: x?.bucket ?? x?.b ?? 0,
+        text: x?.text ?? x?.metaphor ?? x?.value ?? ""
+      })).filter(x => String(x.text || "").trim());
+
+      if (!items.length){
+        throw new Error("有効な seed items が 0 件です（textが空）");
+      }
+
+      await fetchJSON(ENDPOINT, {
+        method:"POST",
+        admin:true,
+        body:{ items },
+        signal: __ctrl.signal
+      });
+
+      await refreshAllTabs();
+      alert(`初期ネタを取り込みました（${items.length}件）`);
+
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`初期ネタ取り込みに失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
     }
-
-    // worker が期待する形に正規化
-    const items = src.map(x => ({
-      mode: x?.mode ?? x?.m ?? "trivia",
-      bucket: x?.bucket ?? x?.b ?? 0,
-      text: x?.text ?? x?.metaphor ?? x?.value ?? ""
-    })).filter(x => String(x.text || "").trim());
-
-    if (!items.length){
-      throw new Error("有効な seed items が 0 件です（textが空）");
-    }
-
-    // =========================
-    // ✅ Workers にPOST（404探しは不要）
-    // =========================
-    await fetchJSON(ENDPOINT, {
-      method:"POST",
-      admin:true,
-      body:{ items },
-      signal: __ctrl.signal
-    });
-
-    await refreshAllTabs();
-    alert(`初期ネタを取り込みました（${items.length}件）`);
-
-  } catch(e){
-    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-    alert(`初期ネタ取り込みに失敗: ${e.message}`);
-  } finally {
-    setBusy(false);
-    __ctrl = null;
   }
-}
 
   // ====== イベント ======
   btnSave.addEventListener("click", () => {
@@ -673,7 +665,6 @@ async function importSeed(){
     await deleteIds(ids, scope);
   });
 
-  // リスト内のクリック（委譲）
   listEl.addEventListener("click", async (ev) => {
     const t = ev.target;
     if (!(t instanceof HTMLElement)) return;
