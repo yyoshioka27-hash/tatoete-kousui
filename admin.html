@@ -178,6 +178,81 @@
   let itemsPublic  = [];
   let itemsAll     = [];
   let selectedIds = new Set();
+  // ✅ metaphors.js 側の「元ネタ」表示用（KVとは別）
+  let itemsSeedLocal = [];
+
+  // 簡易ハッシュ（ID生成用）
+  function hash32(str){
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  // metaphors.js から元ネタ配列を探して取り込む（いろんな変数名に対応）
+  function loadSeedLocalFromMetaphorsJS(){
+    // 候補（あなたのmetaphors.jsの実態が何であっても拾えるように）
+    const candidates = [
+      window.METAPHORS,
+      window.metaphors,
+      window.SEED,
+      window.seed,
+      window.METAPHORS_TRIVIA,
+      window.METAPHORS_FUN,
+      window.TRIVIA,
+      window.FUN,
+    ].filter(Boolean);
+
+    // さらに “window上の配列っぽいもの” を広めに拾う（保険）
+    if (candidates.length === 0){
+      for (const k of Object.keys(window)){
+        try{
+          const v = window[k];
+          if (Array.isArray(v) && v.length && typeof v[0] === "object"){
+            // mode/bucket/textっぽいキーがあるなら候補に
+            const o = v[0] || {};
+            if (("text" in o) || ("metaphor" in o) || ("bucket" in o) || ("mode" in o)){
+              candidates.push(v);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // candidates は「配列 or {items:配列}」混在があり得るので正規化
+    const merged = [];
+    for (const c of candidates){
+      if (Array.isArray(c)) merged.push(...c);
+      else if (c && Array.isArray(c.items)) merged.push(...c.items);
+    }
+
+    // 1件も拾えない場合は空
+    if (!merged.length){
+      itemsSeedLocal = [];
+      return;
+    }
+
+    // 正規化（text, bucket, mode を揃える）
+    const normalized = merged.map(x => ({
+      mode: x?.mode ?? x?.m ?? "trivia",
+      bucket: x?.bucket ?? x?.b ?? 0,
+      text: x?.text ?? x?.metaphor ?? x?.value ?? ""
+    })).filter(x => String(x.text || "").trim());
+
+    // IDを付与し、scope を "seed-local" として区別（削除ボタンを出さない）
+    itemsSeedLocal = normalized.map(x => ({
+      id: "seedjs_" + hash32(`${x.mode}|${x.bucket}|${x.text}`),
+      text: x.text,
+      bucket: x.bucket,
+      mode: x.mode,
+      likes: 0,
+      penName: "元ネタ(metaphors.js)",
+      createdAt: 0,
+      scope: "seed-local" // ←重要：KVとは別扱い
+    }));
+  }
 
   // in-flight制御（多重更新防止）
   let __busy = false;
@@ -457,11 +532,22 @@
     const data = await fetchJSON("/api/admin/list", { admin:true, signal: __ctrl.signal });
     itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
   }
-  async function loadAll(){
+    async function loadAll(){
     const data = await fetchJSON("/api/admin/all?scope=both", { admin:true, signal: __ctrl.signal });
     const raw = data.items || data.all || [];
-    itemsAll = normalizeItems(raw, "");
+    const kvAll = normalizeItems(raw, ""); // KV側（public/pending）
+
+    // ✅ metaphors.js 側の元ネタ（表示だけ）
+    loadSeedLocalFromMetaphorsJS();
+
+    // ✅ 合算して「全ネタ」に表示
+    // 事故防止：KV側と同IDが被ったらseed側を落とす（基本被らない）
+    const kvIds = new Set(kvAll.map(x => x.id));
+    const seed = itemsSeedLocal.filter(x => !kvIds.has(x.id));
+
+    itemsAll = kvAll.concat(seed);
   }
+
 
   async function refreshCurrentTab(){
     abortInFlight();
