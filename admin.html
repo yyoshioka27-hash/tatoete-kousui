@@ -280,22 +280,23 @@
   }
 
   // ✅ 404対策：複数エンドポイント／複数body形式を順に試す
-  async function tryAdminPost(paths, bodyVariants){
-    let lastErr = null;
-    for (const p of paths){
-      for (const b of bodyVariants){
-        try{
-          const data = await fetchJSON(p, { method:"POST", admin:true, body:b, signal: __ctrl.signal });
-          return { ok:true, path:p, body:b, data };
-        } catch(e){
-          lastErr = e;
-          // 403は即終了（鍵違い）
-          if (e?.status === 403) throw e;
-          // 404/400/500 は次を試す
-          continue;
-        }
+  async function tryAdminPost(paths, bodyVariants, signal){
+  let lastErr = null;
+  for (const p of paths){
+    for (const b of bodyVariants){
+      try{
+        const data = await fetchJSON(p, { method:"POST", admin:true, body:b, signal });
+        return { ok:true, path:p, body:b, data };
+      } catch(e){
+        lastErr = e;
+        if (e?.status === 403) throw e; // 鍵違いは即終了
+        continue;
       }
     }
+  }
+  throw lastErr || new Error("操作に失敗しました");
+}
+
     throw lastErr || new Error("操作に失敗しました");
   }
 
