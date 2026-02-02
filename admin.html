@@ -472,15 +472,92 @@
 
   // ✅ API候補
   const API = {
-    health: ["/api/health"],
-    pending: ["/api/admin/pending", "/api/admin/pending/list", "/api/pending"],
-    list: ["/api/admin/list", "/api/admin/public", "/api/list"],
-    all: ["/api/admin/all?scope=both", "/api/admin/all", "/api/all?scope=both", "/api/all"],
-    approve: ["/api/admin/approve", "/api/admin/approve_pending", "/api/admin/approvePending", "/api/admin/publish", "/api/publish"],
-    reject: ["/api/admin/reject", "/api/admin/reject_pending", "/api/admin/rejectPending"],
-    del: ["/api/admin/delete", "/api/admin/delete_pending", "/api/admin/deletePending", "/api/admin/remove", "/api/remove"],
-    importSeed: ["/api/admin/import_seed", "/api/admin/importSeed", "/api/admin/seed/import", "/api/admin/seed"]
-  };
+  health: ["/api/health"],
+
+  // pending一覧（admin配下 / 直下 どちらでも拾う）
+  pending: [
+    "/api/admin/pending",
+    "/api/admin/pending/list",
+    "/api/pending",
+    "/api/admin/list_pending",
+    "/api/list_pending",
+  ],
+
+  // public一覧（admin配下 / 直下）
+  list: [
+    "/api/admin/list",
+    "/api/admin/public",
+    "/api/list",
+    "/api/public",
+    "/api/admin/list_public",
+    "/api/list_public",
+  ],
+
+  // all一覧（admin配下 / 直下）
+  all: [
+    "/api/admin/all?scope=both",
+    "/api/admin/all",
+    "/api/all?scope=both",
+    "/api/all",
+  ],
+
+  // ✅ 承認：ここが肝（admin配下 / 直下 / 名前揺れ）
+  approve: [
+    // 直下 approve 系（これが無いのが一番痛かった）
+    "/api/approve",
+    "/api/approve_pending",
+    "/api/approvePending",
+    "/api/publish_pending",
+    "/api/publishPending",
+
+    // admin配下 approve/publish 系
+    "/api/admin/approve",
+    "/api/admin/approve_pending",
+    "/api/admin/approvePending",
+    "/api/admin/publish",
+    "/api/admin/publish_pending",
+    "/api/admin/publishPending",
+
+    // 念のための既存
+    "/api/publish",
+  ],
+
+  // 却下（reject）も揺れ吸収
+  reject: [
+    "/api/reject",
+    "/api/reject_pending",
+    "/api/rejectPending",
+    "/api/admin/reject",
+    "/api/admin/reject_pending",
+    "/api/admin/rejectPending",
+  ],
+
+  // delete/remove も直下を追加（あなたのrobust payloadが活きる）
+  del: [
+    "/api/delete",
+    "/api/delete_pending",
+    "/api/deletePending",
+    "/api/remove",
+
+    "/api/admin/delete",
+    "/api/admin/delete_pending",
+    "/api/admin/deletePending",
+    "/api/admin/remove",
+  ],
+
+  importSeed: [
+    "/api/import_seed",
+    "/api/importSeed",
+    "/api/seed/import",
+    "/api/seed",
+
+    "/api/admin/import_seed",
+    "/api/admin/importSeed",
+    "/api/admin/seed/import",
+    "/api/admin/seed",
+  ],
+};
+
 
   // =========================
   // 表示整形
