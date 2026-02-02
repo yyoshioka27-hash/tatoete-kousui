@@ -202,6 +202,46 @@
       #meta_m, #meta_d, #meta_e{ font-size: 15px; }
       .pill{ font-size: 11px; padding: 5px 8px; }
     }
+    /* =========================
+   ✅ FIX: 例えモード（雑学/お笑い）をPC/スマホ両方で「左揃え」＆「行ズレなし」にする
+   - labelをgrid化して「丸(固定幅) + 文字(残り)」に固定
+   - text-align/justifyを左寄せに固定
+   ========================= */
+
+.example-mode .modeWrap{
+  align-items: stretch;      /* 幅いっぱい使って左揃えを安定させる */
+}
+
+.example-mode .modeWrap label{
+  width: 100%;
+  box-sizing: border-box;
+
+  /* 丸＋文字を「2列固定」にしてズレを根絶 */
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: 10px;
+  align-items: center;
+
+  /* 左寄せ固定（スマホで中央寄りになるのを防ぐ） */
+  justify-items: start;
+  text-align: left;
+
+  /* クリックしやすく＆見た目を整える */
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15,23,42,0.10);
+  background: rgba(255,255,255,0.80);
+  line-height: 1.15;
+}
+
+.example-mode .modeWrap input[type="radio"]{
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  transform: none !important; /* 端末差のある微妙な上下ズレを無効化 */
+  justify-self: start;
+}
+
   </style>
 </head>
 
@@ -367,3 +407,4 @@
   <!-- # END -->
 </body>
 </html>
+
