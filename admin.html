@@ -457,18 +457,26 @@
   }
 
   async function callAdminWithFallback(paths, opts){
-    let lastErr = null;
-    for (const p of paths){
-      try{
-        return await fetchOK(p, opts);
-      } catch(e){
-        lastErr = e;
-        if (e?.status === 404) continue;
-        throw e;
+  let lastErr = null;
+  for (const p of paths){
+    try{
+      const data = await fetchOK(p, opts);
+      console.log("[API OK]", p);
+      return data;
+    } catch(e){
+      lastErr = e;
+      if (e?.status === 404){
+        console.warn("[API 404]", p);
+        continue;
       }
+      console.error("[API NG]", p, e);
+      throw e;
     }
-    throw lastErr || new Error("API not found");
   }
+  console.error("[API NOT FOUND] tried:", paths);
+  throw lastErr || new Error("API not found");
+}
+
 
   // ✅ API候補
   const API = {
