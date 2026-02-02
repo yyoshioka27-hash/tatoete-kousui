@@ -1203,7 +1203,7 @@
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
 
       // 4) まだ残ってたら通知
-      const remainù remain = new Set(itemsPending.map(x => x.id));
+      const remain = new Set(itemsPending.map(x => x.id));
       const still = ids.filter(id => remain.has(id));
       if (still.length){
         alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
