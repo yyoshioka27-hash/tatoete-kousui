@@ -380,8 +380,13 @@
   let __ctrl = null;
 
   function apiBase(){
-    return String(elApiBase.value || "").trim().replace(/\/+$/,"");
-  }
+  let b = String(elApiBase.value || "").trim().replace(/\/+$/,"");
+  // ✅ 入力ミス救済：末尾に /api が付いていたら外す
+  b = b.replace(/\/api$/i, "");
+  b = b.replace(/\/api\/$/i, ""); // 念のため
+  return b;
+}
+
   function adminKey(){
     return String(elAdminKey.value || "").trim();
   }
