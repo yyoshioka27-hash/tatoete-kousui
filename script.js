@@ -469,11 +469,12 @@ function fnv1a32(str){
 
 function makeGlobalId({mode, bucket, text, source}){
   const m = (mode === "fun" ? "fun" : "trivia");
-  const b = window.bucket10(bucket);
-  const s = String(source || "base");
   const t = String(text || "").trim();
-  return `m_${m}_b_${b}_${s}_${fnv1a32(`${m}|${b}|${s}|${t}`)}`;
+  // ✅A案：bucket/sourceをIDに含めない（累計は文章ベースで統一）
+  // ※ worker.js側も同じfnv1a32で作るので必ず一致する
+  return `t_${m}_${fnv1a32(`${m}|${t}`)}`;
 }
+
 
 // =========================
 // お天気アイコン（%の前）
