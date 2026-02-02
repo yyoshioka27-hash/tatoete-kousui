@@ -516,24 +516,17 @@
 
   // ✅ 承認：ここが肝（admin配下 / 直下 / 名前揺れ）
   approve: [
-    // 直下 approve 系（これが無いのが一番痛かった）
-    "/api/approve",
-    "/api/approve_pending",
-    "/api/approvePending",
-    "/api/publish_pending",
-    "/api/publishPending",
+  // ✅まず admin 配下を先に叩く（ここが本命）
+  "/api/admin/approve",
+  "/api/admin/approvePending",
+  "/api/admin/approve_pending",
+  "/api/admin/publish",
 
-    // admin配下 approve/publish 系
-    "/api/admin/approve",
-    "/api/admin/approve_pending",
-    "/api/admin/approvePending",
-    "/api/admin/publish",
-    "/api/admin/publish_pending",
-    "/api/admin/publishPending",
+  // ✅旧互換（直下）※最後に回す
+  "/api/approve",
+  "/api/publish",
+],
 
-    // 念のための既存
-    "/api/publish",
-  ],
 
   // 却下（reject）も揺れ吸収
   reject: [
