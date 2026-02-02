@@ -56,6 +56,12 @@
     .smallBtn{ padding:8px 10px; border-radius:10px; font-size:13px; }
     .btnOk{ background:var(--green); color:#fff; border-color: rgba(22,163,74,.6); font-weight:800; }
     details > summary{ cursor:pointer; user-select:none; color:var(--sub); font-size:12px; }
+
+    /* ✅ 追加：本文先頭の「雑学70%：」表示 */
+    .pctLabel{
+      font-weight: 900;
+      margin-right: 6px;
+    }
   </style>
 
   <!-- ✅ 元ネタ（metaphors.js）を先に読み込む -->
@@ -348,6 +354,25 @@
   }
 
   // =========================
+  // ✅ 追加：mode/bucket を「雑学70%」「お笑い30%」に整形
+  // =========================
+  function normModeLabel(mode){
+    const m = String(mode ?? "").trim().toLowerCase();
+    // fun=お笑い、それ以外は雑学（trivia等）
+    return (m === "fun") ? "お笑い" : "雑学";
+  }
+  function normBucketLabel(bucket){
+    const n = Number(bucket);
+    return Number.isFinite(n) ? `${n}%` : "";
+  }
+  function modeBucketLabel(item){
+    const a = normModeLabel(item?.mode);
+    const b = normBucketLabel(item?.bucket);
+    // bucketが無い場合も「雑学：」みたいにならないように
+    return b ? `${a}${b}` : `${a}`;
+  }
+
+  // =========================
   // seed (metaphors.js) 表示用
   // =========================
   function hash32(str){
@@ -460,8 +485,12 @@
       }
 
       const metaParts = [];
-      if (item.mode) metaParts.push(`<span class="badge">mode: ${escapeHtml(item.mode)}</span>`);
-      if (item.bucket != null && item.bucket !== "") metaParts.push(`<span class="badge">bucket: ${escapeHtml(item.bucket)}</span>`);
+
+      /* ✅ 修正：mode/bucket を「雑学70%」「お笑い30%」として1つのバッジに */
+      const mb = modeBucketLabel(item);
+      if (mb) metaParts.push(`<span class="badge">${escapeHtml(mb)}</span>`);
+
+      /* ✅ likes/pen/日時は従来通り */
       metaParts.push(`<span class="badge">likes: ${escapeHtml(item.likes)}</span>`);
       if (item.penName) metaParts.push(`<span class="badge">pen: ${escapeHtml(item.penName)}</span>`);
       const ts = formatTs(item.createdAt);
@@ -469,9 +498,14 @@
 
       const text = item.text || "";
       const tooLong = text.length > 240;
+
+      /* ✅ 修正：本文先頭に「雑学70%：」を付ける（ネタ欄に表示したい要望対応） */
+      const prefix = `<span class="pctLabel">${escapeHtml(modeBucketLabel(item))}：</span>`;
+      const bodyHtml = `${prefix}${escapeHtml(text)}`;
+
       const textHtml = tooLong
-        ? `<details><summary>本文を展開（${text.length}文字）</summary><div class="itemText">${escapeHtml(text)}</div></details>`
-        : `<div class="itemText">${escapeHtml(text)}</div>`;
+        ? `<details><summary>本文を展開（${text.length}文字）</summary><div class="itemText">${bodyHtml}</div></details>`
+        : `<div class="itemText">${bodyHtml}</div>`;
 
       // ✅ 行の操作ボタン
       const perActions = [];
