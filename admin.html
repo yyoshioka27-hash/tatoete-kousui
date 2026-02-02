@@ -117,27 +117,32 @@
         <span class="pill" id="selCount">選択: 0件</span>
       </div>
 
-      <!-- ✅ 要望どおり：承認/却下だけ -->
-      <div class="actions" id="bulkActions">
+      <!-- ✅ pending用：承認/却下 -->
+      <div class="actions" id="bulkActionsPending">
         <button id="btnBulkApprove" class="btnOk">一括承認</button>
         <button id="btnBulkReject" class="btnDanger">一括却下（削除）</button>
+      </div>
+
+      <!-- ✅ public用：一括削除 -->
+      <div class="actions" id="bulkActionsPublic" style="display:none;">
+        <button id="btnBulkDeletePublic" class="btnDanger">一括削除（公開）</button>
       </div>
     </div>
 
     <div class="muted" style="margin-top:10px;">
       ※ ここは Workers 側のAPIが揺れても動くように、複数パスを自動で試します（404フォールバック）<br/>
-      ※ 「却下」は最終的に <span class="mono">pending</span> から確実に消える（rejectが無ければdelete(pending)へ）。
+      ※ 「却下」は最終的に <span class="mono">pending</span> から確実に消える（rejectが無ければdelete(pending)へ）。<br/>
+      ※ 「公開の削除」は <span class="mono">public</span> から確実に消える（delete(public) を複数payloadで試行）。
     </div>
 
     <div class="list" id="list"></div>
   </div>
 
   <div class="muted" style="text-align:center; margin:14px 0 8px;">
-    admin.html（承認/却下：堅牢版） / # END
+    admin.html（承認/却下/削除：堅牢版） / # END
   </div>
 </div>
 
-<!-- ✅ FIX：ここがポイント（余計な </script> を <script> に修正） -->
 <script>
 (() => {
   const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -169,9 +174,11 @@
   const btnRefreshAll = $("btnRefreshAll");
   const btnImportSeed = $("btnImportSeed");
 
-  const bulkActions = $("bulkActions");
+  const bulkActionsPending = $("bulkActionsPending");
+  const bulkActionsPublic  = $("bulkActionsPublic");
   const btnBulkApprove = $("btnBulkApprove");
   const btnBulkReject  = $("btnBulkReject");
+  const btnBulkDeletePublic = $("btnBulkDeletePublic");
 
   let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
@@ -202,7 +209,7 @@
     [
       btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed,
       tabPending, tabPublic, tabAll,
-      btnBulkApprove, btnBulkReject
+      btnBulkApprove, btnBulkReject, btnBulkDeletePublic
     ].forEach(b => { try{ b.disabled = dis; }catch{} });
   }
 
@@ -242,7 +249,6 @@
       signal
     });
 
-    // 404は上位で分岐したいのでthrowせず返す
     const data = await res.json().catch(()=>null);
     return { res, data };
   }
@@ -272,15 +278,14 @@
         return await fetchOK(p, opts);
       } catch(e){
         lastErr = e;
-        if (e?.status === 404) continue; // 次の候補へ
-        throw e; // 404以外は即エラー
+        if (e?.status === 404) continue;
+        throw e;
       }
     }
-    // 全部404だった
     throw lastErr || new Error("API not found");
   }
 
-  // ✅ あなたのWorkers側が揺れても吸収する候補
+  // ✅ API候補
   const API = {
     health: ["/api/health"],
     pending: ["/api/admin/pending", "/api/admin/pending/list", "/api/pending"],
@@ -343,7 +348,7 @@
   }
 
   // =========================
-  // seed (metaphors.js) 取り込み：表示用
+  // seed (metaphors.js) 表示用
   // =========================
   function hash32(str){
     let h = 2166136261;
@@ -405,13 +410,19 @@
     selCount.textContent = `選択: ${selectedIds.size}件`;
 
     const current = getActiveItems();
-    const allIds = current.map(x => x.id);
-    const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
+
+    // allタブはseed-local除外
+    const selectableIds = (activeTab === "all")
+      ? current.filter(x => x.scope !== "seed-local").map(x => x.id)
+      : current.map(x => x.id);
+
+    const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
     chkAll.checked = allSelected;
     chkAll.indeterminate = (!allSelected && selectedIds.size > 0);
 
-    // pending以外は一括ボタン非表示（誤操作防止）
-    bulkActions.style.display = (activeTab === "pending") ? "" : "none";
+    // ✅ 一括ボタンの表示制御
+    bulkActionsPending.style.display = (activeTab === "pending") ? "" : "none";
+    bulkActionsPublic.style.display  = (activeTab === "public")  ? "" : "none";
   }
 
   function setActiveTab(tab){
@@ -436,7 +447,7 @@
     const html = items.map(item => {
       const checked = selectedIds.has(item.id) ? "checked" : "";
 
-      // allタブではscope表示（pending/public/seed-local）
+      // バッジ（tabごと）
       let badgeScope = "";
       if (activeTab === "all"){
         if (item.scope === "pending") badgeScope = `<span class="badge badgePending">pending</span>`;
@@ -462,18 +473,25 @@
         ? `<details><summary>本文を展開（${text.length}文字）</summary><div class="itemText">${escapeHtml(text)}</div></details>`
         : `<div class="itemText">${escapeHtml(text)}</div>`;
 
-            // ✅ pending：承認/却下（削除）
-      // ✅ public：削除
+      // ✅ 行の操作ボタン
       const perActions = [];
+
       if (activeTab === "pending"){
         perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
         perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（削除）</button>`);
       } else if (activeTab === "public"){
         perActions.push(`<button class="smallBtn btnDanger" data-act="deletePublic" data-id="${escapeAttr(item.id)}">削除</button>`);
+      } else if (activeTab === "all"){
+        // allタブ：seed-localは操作不可
+        if (item.scope === "pending"){
+          perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
+          perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（削除）</button>`);
+        } else if (item.scope === "public"){
+          perActions.push(`<button class="smallBtn btnDanger" data-act="deletePublic" data-id="${escapeAttr(item.id)}">削除</button>`);
+        }
       }
 
-
-      // seed-localは操作不可（allで見えるだけ）
+      // seed-localは操作不可（checkboxもdisabled）
       const isSeed = (item.scope === "seed-local");
       const disableRow = (activeTab === "all" && isSeed);
 
@@ -515,7 +533,7 @@
   }
 
   // =========================
-  // Loaders（★signalは引数で渡す：null事故を根絶）
+  // Loaders
   // =========================
   async function loadPending(signal){
     const data = await callAdminWithFallback(API.pending, { admin:true, signal });
@@ -604,7 +622,7 @@
   }
 
   // =========================
-  // Actions：承認 / 却下(=削除)
+  // Actions：承認 / 却下(=削除) / 公開削除
   // =========================
   function getSelectedIds(){ return Array.from(selectedIds); }
 
@@ -635,8 +653,7 @@
     }
   }
 
-  // ✅ pending削除：Workers側の期待payloadの揺れを吸収（1件ずつ確実に消す）
-    // ✅ public削除：Workers側payloadの揺れを吸収（1件ずつ確実に消す）
+  // ✅ public削除：Workers側payloadの揺れを吸収（1件ずつ確実に消す）
   async function deletePublicRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
 
@@ -689,8 +706,11 @@
     try{
       await deletePublicRobust(ids, signal);
 
-      // public/ all を更新（pendingは触らない）
+      // 公開を更新（allも更新）
       await Promise.all([loadPublic(signal), loadAll(signal)]);
+
+      // 選択解除
+      selectedIds = new Set();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -701,6 +721,7 @@
     }
   }
 
+  // ✅ pending削除：Workers側の期待payloadの揺れを吸収（1件ずつ確実に消す）
   async function deletePendingRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
 
@@ -737,7 +758,7 @@
       }
 
       if (!deleted){
-        throw (lastErr || new Error("delete failed"));
+        throw (lastErr || new Error("delete(pending) failed"));
       }
     }
   }
@@ -873,7 +894,6 @@
   chkAll.addEventListener("change", () => {
     const items = getActiveItems();
 
-    // allタブのseed-localは選択対象外（誤操作防止）
     const selectable = (activeTab === "all")
       ? items.filter(x => x.scope !== "seed-local")
       : items;
@@ -891,6 +911,7 @@
     });
   });
 
+  // pending一括
   btnBulkApprove.addEventListener("click", async () => {
     const ids = getSelectedIds();
     if (!ids.length) return alert("選択がありません");
@@ -903,6 +924,14 @@
     if (!ids.length) return alert("選択がありません");
     if (!confirm(`選択 ${ids.length}件 を却下して削除しますか？（元に戻せません）`)) return;
     await rejectAndDeletePending(ids);
+  });
+
+  // public一括削除
+  btnBulkDeletePublic.addEventListener("click", async () => {
+    const ids = getSelectedIds();
+    if (!ids.length) return alert("選択がありません");
+    if (!confirm(`公開の選択 ${ids.length}件 を削除しますか？（元に戻せません）`)) return;
+    await deletePublicItems(ids);
   });
 
   // リスト内クリック（委譲）
@@ -935,6 +964,9 @@
       } else if (act === "reject") {
         if (!confirm("この1件を却下して削除しますか？（元に戻せません）")) return;
         await rejectAndDeletePending([id]);
+      } else if (act === "deletePublic") {
+        if (!confirm("この公開ネタを削除しますか？（元に戻せません）")) return;
+        await deletePublicItems([id]);
       }
     }
   });
