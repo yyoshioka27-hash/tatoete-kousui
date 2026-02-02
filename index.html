@@ -241,6 +241,39 @@
   transform: none !important; /* 端末差のある微妙な上下ズレを無効化 */
   justify-self: start;
 }
+/* =========================
+   ✅ 強制FIX：例えモード（雑学/お笑い）を必ず左揃えにする
+   ========================= */
+.example-mode .modeWrap{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;   /* 幅いっぱい使う */
+}
+
+.example-mode .modeWrap label{
+  width: 100% !important;
+  box-sizing: border-box !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important; /* ←中央寄せを潰す */
+  text-align: left !important;            /* ←文字を左寄せ固定 */
+
+  gap: 10px !important;
+
+  padding: 10px 12px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(15,23,42,0.10) !important;
+  background: rgba(255,255,255,0.80) !important;
+}
+
+.example-mode .modeWrap input[type="radio"]{
+  margin: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  transform: none !important; /* 上下ズレも抑える */
+  flex: 0 0 auto !important;
+}
 
   </style>
 </head>
@@ -407,4 +440,5 @@
   <!-- # END -->
 </body>
 </html>
+
 
