@@ -131,6 +131,62 @@ function likeFxPlusOne(btnEl){
 })();
 
 // ==============================
+// ✅ モバイルで「雑学/お笑い」の位置ズレを強制整列（HTML改修不要）
+// - input[name="mode"] の label を同じ幅・同じ高さにして揃える
+// ==============================
+function fixModeToggleAlignment(){
+  try{
+    const inputs = Array.from(document.querySelectorAll('input[name="mode"]'));
+    if (!inputs.length) return;
+
+    const labels = inputs.map(inp => {
+      // 1) labelで包んでる形式
+      const a = inp.closest("label");
+      if (a) return a;
+      // 2) for=id 形式
+      if (inp.id) {
+        const b = document.querySelector(`label[for="${CSS.escape(inp.id)}"]`);
+        if (b) return b;
+      }
+      return null;
+    }).filter(Boolean);
+
+    if (labels.length < 2) return;
+
+    // 親をflexに（既に整っていても害は少ない）
+    const parent = labels[0].parentElement;
+    if (parent){
+      parent.style.display = "flex";
+      parent.style.gap = "10px";
+      parent.style.justifyContent = "center";
+      parent.style.alignItems = "stretch";
+      parent.style.flexWrap = "wrap";
+    }
+
+    // ラベル側を同サイズ化（スマホでズレる本丸を潰す）
+    labels.forEach(lab => {
+      lab.style.display = "inline-flex";
+      lab.style.alignItems = "center";
+      lab.style.justifyContent = "center";
+      lab.style.minWidth = "120px";
+      lab.style.height = "44px";
+      lab.style.lineHeight = "1";
+      lab.style.boxSizing = "border-box";
+      lab.style.padding = "0 12px";
+      lab.style.whiteSpace = "nowrap";
+      lab.style.textAlign = "center";
+    });
+
+    // input（ラジオ）が邪魔する場合に備えて余白を統一
+    inputs.forEach(inp => {
+      inp.style.marginRight = "6px";
+    });
+  }catch(e){
+    console.warn("fixModeToggleAlignment error", e);
+  }
+}
+
+// ==============================
 // 承認待ち投稿（Workers）
 // ==============================
 async function submitToPending(mode, bucket, text, penName, penPin){
@@ -348,6 +404,38 @@ window.bucket10 = window.bucket10 || function (p) {
 
 const GEO = "https://geocoding-api.open-meteo.com/v1/search";
 const FC  = "https://api.open-meteo.com/v1/forecast";
+
+// =========================
+// ✅ 天気を「体感最速」にするためのキャッシュ（SWR）
+// - キャッシュがあれば即表示 → 裏で最新を取得して上書き
+// - 失敗してもキャッシュ表示は維持
+// =========================
+const WX_CACHE_KEY = "wx_pops_cache_v1";
+const WX_CACHE_TTL_MS = 10 * 60 * 1000; // 10分（好みでOK）
+
+function wxKey(lat, lon){
+  // 少し丸めて同一キー扱い（キャッシュが効きやすい）
+  const la = Math.round(Number(lat) * 100) / 100;
+  const lo = Math.round(Number(lon) * 100) / 100;
+  return `${la},${lo}`;
+}
+function loadWxCache(){
+  try { return JSON.parse(localStorage.getItem(WX_CACHE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function saveWxCache(obj){
+  try { localStorage.setItem(WX_CACHE_KEY, JSON.stringify(obj)); } catch {}
+}
+
+async function fetchWithTimeout(url, ms = 4500){
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try{
+    return await fetch(url, { cache: "no-store", signal: ac.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
 
 let state = {
   pops: null,
@@ -831,7 +919,10 @@ async function geocode(name) {
   return await res.json();
 }
 
-async function fetchPopsBySlots(lat, lon) {
+// =========================
+// ✅（内部）Open-Meteoへ“生”で取りに行く本体
+// =========================
+async function fetchPopsBySlotsNetwork(lat, lon, timeoutMs = 4500) {
   const url = new URL(FC);
   url.searchParams.set("latitude", String(lat));
   url.searchParams.set("longitude", String(lon));
@@ -839,7 +930,7 @@ async function fetchPopsBySlots(lat, lon) {
   url.searchParams.set("timezone", "auto");
   url.searchParams.set("forecast_days", "2");
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
+  const res = await fetchWithTimeout(url.toString(), timeoutMs);
   if (!res.ok) throw new Error("天気取得に失敗しました");
   const data = await res.json();
 
@@ -868,6 +959,34 @@ async function fetchPopsBySlots(lat, lon) {
     pops: { m: maxOrNull(bucket.m), d: maxOrNull(bucket.d), e: maxOrNull(bucket.e) },
     tz
   };
+}
+
+// =========================
+// ✅（表）天気を体感最速で返す：SWR（キャッシュ即表示→裏で更新）
+// - onCached にキャッシュ結果を渡す（存在する場合）
+// - return は基本「最新」（取れたら）
+// =========================
+async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}) {
+  const key = wxKey(lat, lon);
+  const cache = loadWxCache();
+  const hit = cache?.[key];
+
+  const now = Date.now();
+  const isFresh = hit && hit.ts && (now - hit.ts) < WX_CACHE_TTL_MS;
+
+  if (hit?.pops && typeof onCached === "function") {
+    // キャッシュが古くても「まず出す」＝体感を優先
+    onCached({ pops: hit.pops, tz: hit.tz || null, cached: true, fresh: !!isFresh });
+  }
+
+  // 裏で最新を取りに行く（ここは await で返すが、上でキャッシュは既に表示できる）
+  const out = await fetchPopsBySlotsNetwork(lat, lon, timeoutMs);
+
+  // 保存
+  cache[key] = { ts: Date.now(), pops: out.pops, tz: out.tz || null };
+  saveWxCache(cache);
+
+  return out;
 }
 
 // =========================
@@ -1078,16 +1197,42 @@ document.getElementById("search").onclick = async () => {
       scheduleRender();
       setStatus("天気取得中…", "muted");
 
+      // ✅ キャッシュを即表示して体感を速くする
+      let usedCache = false;
+
       try {
-        const out = await fetchPopsBySlots(lat, lon);
+        const out = await fetchPopsBySlotsSWR(lat, lon, {
+          onCached: (cached) => {
+            if (!cached?.pops) return;
+            usedCache = true;
+            state.pops = cached.pops;
+            state.tz = cached.tz || null;
+            scheduleRender();
+            setStatus("キャッシュ表示中…（裏で最新取得）", "muted");
+
+            // ✅ publicの温めも“裏”で開始（UIは止めない）
+            try{
+              Promise.all([
+                warmPublicCache(getSelectedMode(), cached.pops?.m ?? 0),
+                warmPublicCache(getSelectedMode(), cached.pops?.d ?? 0),
+                warmPublicCache(getSelectedMode(), cached.pops?.e ?? 0),
+              ]).then(() => scheduleRender()).catch(() => {});
+            }catch{}
+          }
+        });
+
+        // ✅ 最新で上書き（ここで確定）
         state.pops = out.pops;
         state.tz = out.tz;
 
-        await Promise.all([
-          warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
-          warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
-          warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
-        ]);
+        // ✅ ここが“遅さの犯人”だったので await せず裏で温める
+        try{
+          Promise.all([
+            warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
+            warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
+            warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
+          ]).then(() => scheduleRender()).catch(() => {});
+        }catch{}
 
         const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
         if (!any) {
@@ -1100,6 +1245,14 @@ document.getElementById("search").onclick = async () => {
 
         scheduleRender();
       } catch (e) {
+        if (usedCache) {
+          // ✅ キャッシュ表示は維持したまま「更新失敗」にする（体感は落とさない）
+          setStatus(`最新の取得に失敗（キャッシュ表示中）：${e?.message || e}`, "ng");
+          state.source = "API: 更新失敗";
+          scheduleRender();
+          return;
+        }
+
         setStatus(e.message || "天気取得エラー", "ng");
         state.source = "API: エラー";
         state.pops = null;
@@ -1117,12 +1270,15 @@ document.getElementById("search").onclick = async () => {
 
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
+    // ✅ ここも await で待つ必要はない（UIを止めない）
     if (state?.pops) {
-      await Promise.all([
-        warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
-        warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
-        warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
-      ]);
+      try{
+        Promise.all([
+          warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
+          warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
+          warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
+        ]).then(() => scheduleRender()).catch(() => {});
+      }catch{}
     }
     scheduleRender();
   })
@@ -1204,6 +1360,7 @@ async function init(){
   try { ensureRankingDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
   try { wireSubmit(); } catch (e) { console.warn(e); }
+  try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
 }
 
