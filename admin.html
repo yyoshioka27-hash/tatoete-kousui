@@ -42,6 +42,7 @@
     .tab.active{ background:var(--btn); color:var(--btnText); border-color:rgba(15,23,42,.35); }
     .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px 0 0; border-top:1px solid rgba(15,23,42,.08); margin-top:10px; }
     .list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+
     .item{ border:1px solid rgba(15,23,42,.10); border-radius:14px; padding:12px; background:rgba(255,255,255,.9); }
     .itemTop{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
     .itemText{ font-size:15px; line-height:1.55; font-weight:700; margin:8px 0; white-space:pre-wrap; }
@@ -57,10 +58,25 @@
     .btnOk{ background:var(--green); color:#fff; border-color: rgba(22,163,74,.6); font-weight:800; }
     details > summary{ cursor:pointer; user-select:none; color:var(--sub); font-size:12px; }
 
-    /* ✅ 追加：本文先頭の「雑学70%：」表示 */
+    /* ✅ 本文先頭の「雑学70%：」表示 */
     .pctLabel{
       font-weight: 900;
       margin-right: 6px;
+    }
+
+    /* ======================================================
+       ✅ 追加(1)：雑学/お笑いの薄色塗り（ひと目で判別）
+       data-mode="trivia" or "comedy"
+       ====================================================== */
+    .item[data-mode="trivia"]{
+      background: rgba(37,99,235,.06);
+      border-color: rgba(37,99,235,.18);
+      box-shadow: inset 6px 0 0 rgba(37,99,235,.18);
+    }
+    .item[data-mode="comedy"]{
+      background: rgba(34,197,94,.07);
+      border-color: rgba(34,197,94,.20);
+      box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
     }
   </style>
 
@@ -155,6 +171,74 @@
   const LS_API = "tatoete_admin_api_base";
   const LS_KEY = "tatoete_admin_key";
 
+  // ======================================================
+  // ✅ 追加(2)：キャッシュ（差分追加）設定
+  //  - 一度読んだデータをlocalStorageに保持
+  //  - 更新時：まずキャッシュを即表示 → その後ネット取得 → 差分だけ追加（上書き更新も可）
+  // ======================================================
+  const ADMIN_CACHE_VER = "adminCache_v1";
+  function _cacheKey(tabKey){
+    const base = (String(elApiBase?.value || "").trim() || DEFAULT_API_BASE).replace(/\/+$/,"");
+    return `${ADMIN_CACHE_VER}:${base}:${tabKey}`;
+  }
+  function loadCache(tabKey){
+    try{
+      const raw = localStorage.getItem(_cacheKey(tabKey));
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || !Array.isArray(obj.items)) return null;
+      return obj; // { items:[], savedAt:number }
+    }catch(e){
+      return null;
+    }
+  }
+  function saveCache(tabKey, items){
+    try{
+      localStorage.setItem(_cacheKey(tabKey), JSON.stringify({
+        items: Array.isArray(items) ? items : [],
+        savedAt: Date.now()
+      }));
+    }catch(e){}
+  }
+
+  // 差分マージ：freshの順を優先し、oldにしか無いものは残す（＝追加だけ）
+  function mergeById(oldItems, freshItems){
+    const map = new Map();
+    for(const it of (oldItems || [])){
+      if(!it) continue;
+      const id = it.id || it.key || it._id;
+      if(!id) continue;
+      map.set(id, it);
+    }
+    for(const it of (freshItems || [])){
+      if(!it) continue;
+      const id = it.id || it.key || it._id;
+      if(!id) continue;
+      map.set(id, it); // 同IDはfreshで上書き
+    }
+
+    const out = [];
+    const seen = new Set();
+
+    // freshの順
+    for(const it of (freshItems || [])){
+      const id = it && (it.id || it.key || it._id);
+      if(id && map.has(id) && !seen.has(id)){
+        out.push(map.get(id));
+        seen.add(id);
+      }
+    }
+    // oldの残り（＝ローカルに残す）
+    for(const it of (oldItems || [])){
+      const id = it && (it.id || it.key || it._id);
+      if(id && map.has(id) && !seen.has(id)){
+        out.push(map.get(id));
+        seen.add(id);
+      }
+    }
+    return out;
+  }
+
   const $ = (id) => document.getElementById(id);
 
   const elApiBase = $("apiBase");
@@ -190,6 +274,7 @@
   let itemsPending = [];
   let itemsPublic  = [];
   let itemsAll     = [];
+  let itemsAllKV   = []; // ✅ allタブ用：KV由来のみ（seed-local除外）
   let selectedIds = new Set();
 
   // ✅ metaphors.js 側の元ネタ（表示だけ）
@@ -368,7 +453,6 @@
   function modeBucketLabel(item){
     const a = normModeLabel(item?.mode);
     const b = normBucketLabel(item?.bucket);
-    // bucketが無い場合も「雑学：」みたいにならないように
     return b ? `${a}${b}` : `${a}`;
   }
 
@@ -416,6 +500,33 @@
       createdAt: 0,
       scope: "seed-local"
     }));
+  }
+
+  // ======================================================
+  // ✅ キャッシュ→状態へ反映（allはKV＋seedで復元）
+  // ======================================================
+  function rebuildAllFromKV(kvItems){
+    loadSeedLocalFromMetaphorsJS();
+    const kvIds = new Set((kvItems || []).map(x => x.id));
+    const seed = itemsSeedLocal.filter(x => !kvIds.has(x.id));
+    itemsAllKV = Array.isArray(kvItems) ? kvItems : [];
+    itemsAll = itemsAllKV.concat(seed);
+  }
+
+  function hydrateFromCache(){
+    const cP = loadCache("pending");
+    const cU = loadCache("public");
+    const cA = loadCache("allkv"); // ✅ allはKVのみ保存
+
+    if (cP?.items) itemsPending = cP.items;
+    if (cU?.items) itemsPublic  = cU.items;
+    if (cA?.items) rebuildAllFromKV(cA.items);
+  }
+
+  function syncCacheAll(){
+    saveCache("pending", itemsPending);
+    saveCache("public", itemsPublic);
+    saveCache("allkv", itemsAllKV);
   }
 
   // =========================
@@ -472,6 +583,10 @@
     const html = items.map(item => {
       const checked = selectedIds.has(item.id) ? "checked" : "";
 
+      // ✅ 追加(1)：色分け用mode（fun=お笑い）
+      const m = String(item.mode || "").trim().toLowerCase();
+      const uiMode = (m === "fun") ? "comedy" : "trivia";
+
       // バッジ（tabごと）
       let badgeScope = "";
       if (activeTab === "all"){
@@ -499,7 +614,7 @@
       const text = item.text || "";
       const tooLong = text.length > 240;
 
-      /* ✅ 修正：本文先頭に「雑学70%：」を付ける（ネタ欄に表示したい要望対応） */
+      /* ✅ 本文先頭に「雑学70%：」を付ける */
       const prefix = `<span class="pctLabel">${escapeHtml(modeBucketLabel(item))}：</span>`;
       const bodyHtml = `${prefix}${escapeHtml(text)}`;
 
@@ -530,7 +645,7 @@
       const disableRow = (activeTab === "all" && isSeed);
 
       return `
-        <div class="item" data-item="${escapeAttr(item.id)}">
+        <div class="item" data-mode="${uiMode}" data-item="${escapeAttr(item.id)}">
           <div class="itemTop">
             <div class="itemMeta">
               <label style="margin:0; display:flex; align-items:center; gap:8px;">
@@ -567,38 +682,83 @@
   }
 
   // =========================
-  // Loaders
+  // Loaders（戻り値を返す：差分マージ用）
   // =========================
   async function loadPending(signal){
     const data = await callAdminWithFallback(API.pending, { admin:true, signal });
     itemsPending = normalizeItems(data.items || data.pending || [], "pending");
+    return itemsPending;
   }
 
   async function loadPublic(signal){
     const data = await callAdminWithFallback(API.list, { admin:true, signal });
     itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
+    return itemsPublic;
   }
 
   async function loadAll(signal){
     const data = await callAdminWithFallback(API.all, { admin:true, signal });
     const raw = data.items || data.all || [];
-    const kvAll = normalizeItems(raw, "");
-    loadSeedLocalFromMetaphorsJS();
-    const kvIds = new Set(kvAll.map(x => x.id));
-    const seed = itemsSeedLocal.filter(x => !kvIds.has(x.id));
-    itemsAll = kvAll.concat(seed);
+    itemsAllKV = normalizeItems(raw, ""); // ✅ KV由来のみを保持
+    rebuildAllFromKV(itemsAllKV);
+    return itemsAll;
+  }
+
+  // ======================================================
+  // ✅ 更新（差分追加）：キャッシュ即表示 → ネット差分マージ
+  // ======================================================
+  function applyCacheToActiveTabInstant(){
+    // キャッシュを即表示する（待ち時間ゼロ）
+    if (activeTab === "pending"){
+      const c = loadCache("pending");
+      if (c?.items){
+        itemsPending = c.items;
+      }
+    } else if (activeTab === "public"){
+      const c = loadCache("public");
+      if (c?.items){
+        itemsPublic = c.items;
+      }
+    } else {
+      const c = loadCache("allkv");
+      if (c?.items){
+        rebuildAllFromKV(c.items);
+      }
+    }
+    render();
   }
 
   async function refreshCurrentTab(){
+    // 1) まずキャッシュを即表示（体感爆速）
+    applyCacheToActiveTabInstant();
+
+    // 2) その後ネット取得して差分を追加
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
     const signal = __ctrl.signal;
 
     try{
-      if (activeTab === "pending") await loadPending(signal);
-      else if (activeTab === "public") await loadPublic(signal);
-      else await loadAll(signal);
+      if (activeTab === "pending"){
+        const old = (loadCache("pending")?.items) || itemsPending || [];
+        const fresh = await loadPending(signal);
+        itemsPending = mergeById(old, fresh);
+        saveCache("pending", itemsPending);
+      } else if (activeTab === "public"){
+        const old = (loadCache("public")?.items) || itemsPublic || [];
+        const fresh = await loadPublic(signal);
+        itemsPublic = mergeById(old, fresh);
+        saveCache("public", itemsPublic);
+      } else {
+        const oldKV = (loadCache("allkv")?.items) || itemsAllKV || [];
+        await loadAll(signal); // itemsAllKV が更新される
+        const mergedKV = mergeById(oldKV, itemsAllKV);
+        rebuildAllFromKV(mergedKV);
+        saveCache("allkv", itemsAllKV);
+      }
+
+      // 全体キャッシュ同期（他タブへも反映しておくと切替が速い）
+      syncCacheAll();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -610,13 +770,32 @@
   }
 
   async function refreshAllTabs(){
+    // 1) まずキャッシュを即表示
+    hydrateFromCache();
+    render();
+
+    // 2) ネット取得→差分マージ
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
     const signal = __ctrl.signal;
 
     try{
+      const oldP = (loadCache("pending")?.items) || itemsPending || [];
+      const oldU = (loadCache("public")?.items)  || itemsPublic  || [];
+      const oldA = (loadCache("allkv")?.items)  || itemsAllKV   || [];
+
+      // 並列取得（既存通り）
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
+
+      itemsPending = mergeById(oldP, itemsPending);
+      itemsPublic  = mergeById(oldU, itemsPublic);
+
+      // allはKVのみマージしてseedを再付与
+      const mergedKV = mergeById(oldA, itemsAllKV);
+      rebuildAllFromKV(mergedKV);
+
+      syncCacheAll();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -677,6 +856,7 @@
 
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
       selectedIds = new Set();
+      syncCacheAll();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -745,6 +925,7 @@
 
       // 選択解除
       selectedIds = new Set();
+      syncCacheAll();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -831,6 +1012,7 @@
       }
 
       selectedIds = new Set();
+      syncCacheAll();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -897,6 +1079,7 @@
       }
 
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
+      syncCacheAll();
       render();
       alert(`初期ネタを取り込みました（${imported}件）`);
     } catch(e){
@@ -1010,7 +1193,8 @@
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
 
-  // 初期は表示だけ（データは更新ボタンで取る）
+  // ✅ 追加：ページを開いた時点でキャッシュを読み、即表示（更新ボタン待ちでも見える）
+  hydrateFromCache();
   render();
 
 })();
