@@ -32,6 +32,16 @@
     label{ font-size:12px; color:var(--sub); display:block; margin-bottom:6px; }
     input{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); min-width:280px; font-size:14px; background:#fff; outline:none; }
     input:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+    select{
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      font-size:14px;
+      background:#fff;
+      outline:none;
+    }
+    select:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
+
     button{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:14px; user-select:none; }
     button:disabled{ opacity:.55; cursor:not-allowed; }
     .btnPrimary{ background:var(--blue); color:#fff; border-color:rgba(37,99,235,0.55); font-weight:800; }
@@ -104,10 +114,36 @@
       box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
     }
 
+    /* ======================================================
+       ✅ 追加（検索＆ソート UI）
+       ====================================================== */
+    .filters{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .filterInput{
+      min-width: 220px; /* 全体inputのmin-width(280)を抑える */
+      width: 260px;
+    }
+    .filterSelect{
+      min-width: 160px;
+    }
+    .miniBtn{
+      padding:8px 10px;
+      border-radius:10px;
+      font-size:13px;
+    }
+
     /* ✅ スマホでは2段でも自然に（狭いときだけ右列を下へ） */
     @media (max-width: 520px){
       .itemTop{ grid-template-columns: 1fr; }
       .itemActions{ justify-content:flex-start; flex-wrap:wrap; white-space:normal; }
+      .filters{ justify-content:flex-start; }
+      .filterInput{ width: 100%; min-width: 0; }
+      .filterSelect{ width: 100%; min-width: 0; }
     }
   </style>
 
@@ -168,6 +204,18 @@
           全選択
         </label>
         <span class="pill" id="selCount">選択: 0件</span>
+        <span class="pill" id="viewCount">表示: 0件</span>
+      </div>
+
+      <!-- ✅ 追加：検索＆ソート -->
+      <div class="filters">
+        <input id="q" class="filterInput" placeholder="検索（本文 / pen / ID / 雑学70% など）" />
+        <select id="sortKey" class="filterSelect">
+          <option value="new">並び替え：新着順</option>
+          <option value="likes">並び替え：likes順</option>
+          <option value="bucket">並び替え：%順</option>
+        </select>
+        <button id="btnClearQ" class="miniBtn">× クリア</button>
       </div>
 
       <!-- ✅ pending用：承認/却下 -->
@@ -201,6 +249,10 @@
   const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
   const LS_API = "tatoete_admin_api_base";
   const LS_KEY = "tatoete_admin_key";
+
+  // ✅ 追加：検索＆ソート状態を保存
+  const LS_Q = "tatoete_admin_q";
+  const LS_SORT = "tatoete_admin_sort";
 
   // ======================================================
   // ✅ 追加(2)：キャッシュ（差分追加）設定
@@ -288,6 +340,7 @@
 
   const chkAll     = $("chkAll");
   const selCount   = $("selCount");
+  const viewCount  = $("viewCount");
 
   const btnSave    = $("btnSave");
   const btnHealth  = $("btnHealth");
@@ -301,6 +354,11 @@
   const btnBulkReject  = $("btnBulkReject");
   const btnBulkDeletePublic = $("btnBulkDeletePublic");
 
+  // ✅ 検索＆ソートUI
+  const elQ = $("q");
+  const elSort = $("sortKey");
+  const btnClearQ = $("btnClearQ");
+
   let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
   let itemsPublic  = [];
@@ -310,6 +368,10 @@
 
   // ✅ metaphors.js 側の元ネタ（表示だけ）
   let itemsSeedLocal = [];
+
+  // ✅ 検索＆ソート状態
+  let q = "";
+  let sortKey = "new";
 
   // =========================
   // in-flight制御
@@ -331,7 +393,8 @@
     [
       btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed,
       tabPending, tabPublic, tabAll,
-      btnBulkApprove, btnBulkReject, btnBulkDeletePublic
+      btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
+      elQ, elSort, btnClearQ
     ].forEach(b => { try{ b.disabled = dis; }catch{} });
   }
 
@@ -470,7 +533,7 @@
   }
 
   // =========================
-  // ✅ 追加：mode/bucket を「雑学70%」「お笑い30%」に整形
+  // ✅ mode/bucket を「雑学70%」「お笑い30%」に整形
   // =========================
   function normModeLabel(mode){
     const m = String(mode ?? "").trim().toLowerCase();
@@ -560,6 +623,94 @@
     saveCache("allkv", itemsAllKV);
   }
 
+  // ======================================================
+  // ✅ 検索＆ソート
+  // ======================================================
+  function normalizeQuery(str){
+    return String(str || "").trim().replace(/\s+/g, " ");
+  }
+  function queryTokens(str){
+    const s = normalizeQuery(str);
+    if (!s) return [];
+    return s.split(" ").map(t => t.trim()).filter(Boolean);
+  }
+  function itemHaystack(item){
+    const id = safeText(item?.id);
+    const text = safeText(item?.text);
+    const pen = safeText(item?.penName);
+    const label = modeBucketLabel(item);
+    const scope = safeText(item?.scope);
+    return `${id} ${pen} ${label} ${scope} ${text}`.toLowerCase();
+  }
+  function filterItems(items){
+    const tokens = queryTokens(q);
+    if (!tokens.length) return items;
+    const toks = tokens.map(t => t.toLowerCase());
+    return items.filter(it => {
+      const h = itemHaystack(it);
+      // スペース区切りはAND
+      return toks.every(t => h.includes(t));
+    });
+  }
+
+  function sortItemsCore(items){
+    const arr = items.slice();
+
+    const getLikes = (x) => {
+      const n = Number(x?.likes);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const getTs = (x) => {
+      const n = Number(x?.createdAt);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const getBucket = (x) => {
+      const n = Number(x?.bucket);
+      return Number.isFinite(n) ? n : 9999;
+    };
+
+    if (sortKey === "likes"){
+      arr.sort((a,b) => {
+        const dl = getLikes(b) - getLikes(a);
+        if (dl !== 0) return dl;
+        return getTs(b) - getTs(a);
+      });
+    } else if (sortKey === "bucket"){
+      arr.sort((a,b) => {
+        const db = getBucket(a) - getBucket(b);
+        if (db !== 0) return db;
+        return getTs(b) - getTs(a);
+      });
+    } else {
+      // new
+      arr.sort((a,b) => getTs(b) - getTs(a));
+    }
+    return arr;
+  }
+
+  function sortItems(items){
+    // allタブでは seed-local を“常に最後”に寄せる（見やすさ優先）
+    if (activeTab === "all"){
+      const seed = items.filter(x => x.scope === "seed-local");
+      const non  = items.filter(x => x.scope !== "seed-local");
+      return sortItemsCore(non).concat(sortItemsCore(seed));
+    }
+    return sortItemsCore(items);
+  }
+
+  function getActiveItemsRaw(){
+    if (activeTab === "pending") return itemsPending;
+    if (activeTab === "public")  return itemsPublic;
+    return itemsAll;
+  }
+
+  function getVisibleItems(){
+    const raw = getActiveItemsRaw();
+    const filtered = filterItems(raw);
+    const sorted = sortItems(filtered);
+    return sorted;
+  }
+
   // =========================
   // タブ/描画
   // =========================
@@ -567,25 +718,28 @@
     countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
   }
 
-  function getActiveItems(){
-    if (activeTab === "pending") return itemsPending;
-    if (activeTab === "public")  return itemsPublic;
-    return itemsAll;
-  }
-
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
 
-    const current = getActiveItems();
+    const visible = getVisibleItems();
+
+    // 表示件数
+    viewCount.textContent = `表示: ${visible.length}件`;
 
     // allタブはseed-local除外
     const selectableIds = (activeTab === "all")
-      ? current.filter(x => x.scope !== "seed-local").map(x => x.id)
-      : current.map(x => x.id);
+      ? visible.filter(x => x.scope !== "seed-local").map(x => x.id)
+      : visible.map(x => x.id);
 
-    const allSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
-    chkAll.checked = allSelected;
-    chkAll.indeterminate = (!allSelected && selectedIds.size > 0);
+    if (selectableIds.length === 0){
+      chkAll.checked = false;
+      chkAll.indeterminate = (selectedIds.size > 0);
+    } else {
+      const allSelected = selectableIds.every(id => selectedIds.has(id));
+      const anySelected = selectableIds.some(id => selectedIds.has(id));
+      chkAll.checked = allSelected;
+      chkAll.indeterminate = (!allSelected && anySelected);
+    }
 
     // ✅ 一括ボタンの表示制御
     bulkActionsPending.style.display = (activeTab === "pending") ? "" : "none";
@@ -605,7 +759,7 @@
     updateCounts();
     updateSelectionUI();
 
-    const items = getActiveItems();
+    const items = getVisibleItems();
     if (!items.length){
       listEl.innerHTML = `<div class="muted">（データがありません）</div>`;
       return;
@@ -614,7 +768,7 @@
     const html = items.map(item => {
       const checked = selectedIds.has(item.id) ? "checked" : "";
 
-      // ✅ 追加(1)：色分け用mode（fun=お笑い）
+      // ✅ 色分け用mode（fun=お笑い）
       const m = String(item.mode || "").trim().toLowerCase();
       const uiMode = (m === "fun") ? "comedy" : "trivia";
 
@@ -632,11 +786,11 @@
 
       const metaParts = [];
 
-      /* ✅ 修正：mode/bucket を「雑学70%」「お笑い30%」として1つのバッジに */
+      /* mode/bucket を「雑学70%」「お笑い30%」として1つのバッジに */
       const mb = modeBucketLabel(item);
       if (mb) metaParts.push(`<span class="badge">${escapeHtml(mb)}</span>`);
 
-      /* ✅ likes/pen/日時は従来通り */
+      /* likes/pen/日時 */
       metaParts.push(`<span class="badge">likes: ${escapeHtml(item.likes)}</span>`);
       if (item.penName) metaParts.push(`<span class="badge">pen: ${escapeHtml(item.penName)}</span>`);
       const ts = formatTs(item.createdAt);
@@ -645,7 +799,7 @@
       const text = item.text || "";
       const tooLong = text.length > 240;
 
-      /* ✅ 本文先頭に「雑学70%：」を付ける */
+      /* 本文先頭に「雑学70%：」を付ける */
       const prefix = `<span class="pctLabel">${escapeHtml(modeBucketLabel(item))}：</span>`;
       const bodyHtml = `${prefix}${escapeHtml(text)}`;
 
@@ -686,7 +840,6 @@
               ${badgeScope}
               ${metaParts.join("")}
             </div>
-            <!-- ✅ FIX：itemActions を追加（右列固定） -->
             <div class="actions itemActions">
               ${perActions.join("")}
             </div>
@@ -711,6 +864,19 @@
     const k = localStorage.getItem(LS_KEY) || "";
     elApiBase.value = a;
     elAdminKey.value = k;
+  }
+
+  // ✅ 検索/ソートの保存・復元
+  function loadViewSettings(){
+    q = normalizeQuery(localStorage.getItem(LS_Q) || "");
+    sortKey = (localStorage.getItem(LS_SORT) || "new");
+    if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
+    elQ.value = q;
+    elSort.value = sortKey;
+  }
+  function saveViewSettings(){
+    localStorage.setItem(LS_Q, normalizeQuery(q));
+    localStorage.setItem(LS_SORT, sortKey);
   }
 
   // =========================
@@ -1037,7 +1203,7 @@
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
 
       // 4) まだ残ってたら通知
-      const remain = new Set(itemsPending.map(x => x.id));
+      const remainù remain = new Set(itemsPending.map(x => x.id));
       const still = ids.filter(id => remain.has(id));
       if (still.length){
         alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
@@ -1140,12 +1306,37 @@
   tabPublic.addEventListener("click",  () => setActiveTab("public"));
   tabAll.addEventListener("click",     () => setActiveTab("all"));
 
-  chkAll.addEventListener("change", () => {
-    const items = getActiveItems();
+  // ✅ 検索入力
+  elQ.addEventListener("input", () => {
+    q = normalizeQuery(elQ.value);
+    saveViewSettings();
+    // 検索結果が変わるので選択は解除（事故防止）
+    selectedIds = new Set();
+    render();
+  });
 
+  // ✅ ソート切替
+  elSort.addEventListener("change", () => {
+    sortKey = elSort.value;
+    if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
+    saveViewSettings();
+    render();
+  });
+
+  // ✅ クリア
+  btnClearQ.addEventListener("click", () => {
+    q = "";
+    elQ.value = "";
+    saveViewSettings();
+    selectedIds = new Set();
+    render();
+  });
+
+  chkAll.addEventListener("change", () => {
+    const visible = getVisibleItems();
     const selectable = (activeTab === "all")
-      ? items.filter(x => x.scope !== "seed-local")
-      : items;
+      ? visible.filter(x => x.scope !== "seed-local")
+      : visible;
 
     if (chkAll.checked){
       selectable.forEach(x => selectedIds.add(x.id));
@@ -1222,10 +1413,11 @@
 
   // 初期化
   loadSettings();
+  loadViewSettings();
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
 
-  // ✅ 追加：ページを開いた時点でキャッシュを読み、即表示（更新ボタン待ちでも見える）
+  // ✅ ページを開いた時点でキャッシュを読み、即表示（更新ボタン待ちでも見える）
   hydrateFromCache();
   render();
 
