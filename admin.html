@@ -44,13 +44,38 @@
     .list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
 
     .item{ border:1px solid rgba(15,23,42,.10); border-radius:14px; padding:12px; background:rgba(255,255,255,.9); }
-    .itemTop{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+
+    /* ✅ FIX：上段をGridにして「左=可変 / 右=固定」へ
+       これでネタの長さに左右されずボタンが常に右端に揃う */
+    .itemTop{
+      display:grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap:10px;
+      align-items:start;
+    }
+
     .itemText{ font-size:15px; line-height:1.55; font-weight:700; margin:8px 0; white-space:pre-wrap; }
-    .itemMeta{ display:flex; gap:10px; flex-wrap:wrap; align-items:center;flex: 1 1 auto;min-width: 0; }
+    .itemMeta{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      min-width:0;
+    }
     .badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; border:1px solid rgba(15,23,42,.12); background:rgba(255,255,255,.75); font-size:12px; color:var(--sub); font-weight:800; }
     .badgePublic{ border-color: rgba(22,163,74,.25); background: rgba(22,163,74,.07); color: #166534; }
     .badgePending{ border-color: rgba(239,68,68,.25); background: rgba(239,68,68,.07); color: #991b1b; }
-    .actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center;margin-left:auto;justify-content:flex-end; }
+
+    .actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-left:auto; justify-content:flex-end; }
+    /* ✅ item行専用：右上に張り付け（Gridの右列に固定） */
+    .itemActions{
+      margin-left:0;         /* ← toolbar用の margin-left:auto を打ち消す */
+      justify-content:flex-end;
+      align-self:start;
+      flex-wrap:nowrap;      /* ボタンが勝手に折り返して位置がズレるのを防ぐ */
+      white-space:nowrap;
+    }
+
     .chk{ transform:translateY(1px); }
     .right{ margin-left:auto; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
@@ -77,6 +102,12 @@
       background: rgba(34,197,94,.07);
       border-color: rgba(34,197,94,.20);
       box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
+    }
+
+    /* ✅ スマホでは2段でも自然に（狭いときだけ右列を下へ） */
+    @media (max-width: 520px){
+      .itemTop{ grid-template-columns: 1fr; }
+      .itemActions{ justify-content:flex-start; flex-wrap:wrap; white-space:normal; }
     }
   </style>
 
@@ -655,7 +686,8 @@
               ${badgeScope}
               ${metaParts.join("")}
             </div>
-            <div class="actions">
+            <!-- ✅ FIX：itemActions を追加（右列固定） -->
+            <div class="actions itemActions">
               ${perActions.join("")}
             </div>
           </div>
