@@ -1271,7 +1271,14 @@ document.getElementById("search").onclick = async () => {
 
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
-    // ✅ ここも await で待つ必要はない（UIを止めない）
+
+    // ✅ モード切替時だけランキングを更新したい：固定解除
+    __rankingFrozen = false;
+
+    // ✅ 先に再描画（ランキングは初回呼び出しで出る）
+    scheduleRender();
+
+    // ✅ publicキャッシュは裏で温める（UIは止めない）
     if (state?.pops) {
       try{
         Promise.all([
@@ -1281,9 +1288,9 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
         ]).then(() => scheduleRender()).catch(() => {});
       }catch{}
     }
-    scheduleRender();
   })
 );
+
 
 document.getElementById("refresh").onclick = () => scheduleRender();
 
