@@ -465,6 +465,14 @@
         throw e;
       }
     }
+      // ======================================================
+  // ✅ 互換：古い呼び出し(callAdminFast)を生かす
+  // ======================================================
+  async function callAdminFast(paths, opts){
+    const arr = Array.isArray(paths) ? paths : [paths];
+    return await callAdminWithFallback(arr, opts);
+  }
+
     // ✅ 高速版：bodyは1種類だけ、404のときだけ次パスへ
 async function callAdminFast(paths, optsBase){
   let lastErr = null;
