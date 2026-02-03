@@ -1084,43 +1084,49 @@
   //   ids配列でも内部で「1件ずつ」{id} で確実に通す
   // - payload揺れにも耐える（id / ids / key）
   async function approveIds(ids){
-    if (!ids.length) return;
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
+  if (!ids.length) return;
+  abortInFlight();
+  __ctrl = new AbortController();
+  setBusy(true);
+  const signal = __ctrl.signal;
 
-    try{
-      const uniq = Array.from(new Set(ids)).filter(Boolean);
+  try{
+    const uniq = Array.from(new Set(ids)).filter(Boolean);
 
-      for (const id of uniq){
-        const payloads = [
-          { id },                 // ✅本命
-          { ids: [id] },          // 旧互換
-          { key: id },            // さらに旧互換
-          { ids: [id], id },      // どっちも入れる
-          { keys: [id] },         // 念のため
-        ];
+    // ✅ まとめて1回で送る（Workerは pickIdsFromBody で吸収）
+    const payloads = [
+      { ids: uniq },              // ✅本命
+      { keys: uniq },             // 互換
+      { ids: uniq, keys: uniq },  // 念のため両方
+      // 1件しかない場合の保険
+      ...(uniq.length === 1 ? [{ id: uniq[0] }, { key: uniq[0] }] : []),
+    ];
 
-        await callAdminWithFallbackAndPayload(
-          API.approve,
-          payloads,
-          { method:"POST", admin:true, signal }
-        );
-      }
+    await callAdminWithFallbackAndPayload(
+      API.approve,
+      payloads,
+      { method:"POST", admin:true, signal }
+    );
 
-      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
-      selectedIds = new Set();
-      syncCacheAll();
-      render();
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`承認に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
+    // ✅ 再取得は必要最小限（pending / public）
+    await Promise.all([loadPending(signal), loadPublic(signal)]);
+
+    // allタブは「開いた時に更新」で十分
+    if (activeTab === "all") {
+      await loadAll(signal);
     }
+
+    selectedIds = new Set();
+    syncCacheAll();
+    render();
+  } catch(e){
+    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    alert(`承認に失敗: ${e.message}`);
+  } finally {
+    setBusy(false);
+    __ctrl = null;
   }
+}
 
   async function deletePublicRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
