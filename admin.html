@@ -448,6 +448,7 @@
     return data;
   }
 
+  // ✅ 標準：pathsのフォールバック
   async function callAdminWithFallback(paths, opts){
     let lastErr = null;
     for (const p of paths){
@@ -465,7 +466,11 @@
         throw e;
       }
     }
-      // ======================================================
+    console.error("[API NOT FOUND] tried:", paths);
+    throw lastErr || new Error("API not found");
+  }
+
+  // ======================================================
   // ✅ 互換：古い呼び出し(callAdminFast)を生かす
   // ======================================================
   async function callAdminFast(paths, opts){
@@ -473,34 +478,8 @@
     return await callAdminWithFallback(arr, opts);
   }
 
-    // ✅ 高速版：bodyは1種類だけ、404のときだけ次パスへ
-async function callAdminFast(paths, optsBase){
-  let lastErr = null;
-  for (const p of paths){
-    try{
-      const data = await fetchOK(p, optsBase);
-      console.log("[API FAST OK]", p);
-      return data;
-    } catch(e){
-      lastErr = e;
-      if (e?.status === 404){
-        console.warn("[API FAST 404]", p);
-        continue;
-      }
-      console.error("[API FAST NG]", p, e);
-      throw e;
-    }
-  }
-  throw lastErr || new Error("API not found");
-}
-console.error("[API NOT FOUND] tried:", paths);
-    throw lastErr || new Error("API not found");
-  }
-
   // ======================================================
   // ✅ 追加：paths × payloads の“総当たり”で成功するまで試す
-  //  - approve が {id} 必須で 404 を返すケースに強い
-  //  - 400/422/500でも次を試す（最後にまとめて失敗）
   // ======================================================
   async function callAdminWithFallbackAndPayload(paths, payloads, optsBase){
     let lastErr = null;
@@ -515,10 +494,8 @@ console.error("[API NOT FOUND] tried:", paths);
           lastErr = e;
           tried.push({ p, status: e?.status, msg: e?.message });
           if (e?.status === 404){
-            // 404は「そのパスが無い」可能性が濃いので次のパスへ
             break;
           }
-          // 404以外は payload違いの可能性 → 次payloadへ
           continue;
         }
       }
@@ -555,12 +532,10 @@ console.error("[API NOT FOUND] tried:", paths);
       "/api/all",
     ],
 
-    // ✅ 承認：pathsは維持（揺れ吸収）。ただし“payload側”も揺れ吸収する
     approve: [
-  "/api/admin/approve",
-  "/api/approve",
-],
-
+      "/api/admin/approve",
+      "/api/approve",
+    ],
 
     reject: [
       "/api/reject",
@@ -1103,43 +1078,38 @@ console.error("[API NOT FOUND] tried:", paths);
   // =========================
   function getSelectedIds(){ return Array.from(selectedIds); }
 
-  // ✅ FIX: approve が 404 になる件の本体
-  // - Workers側が {id} を期待している可能性が高いので、
-  //   ids配列でも内部で「1件ずつ」{id} で確実に通す
-  // - payload揺れにも耐える（id / ids / key）
   async function approveIds(ids){
-  if (!ids.length) return;
-  abortInFlight();
-  __ctrl = new AbortController();
-  setBusy(true);
-  const signal = __ctrl.signal;
+    if (!ids.length) return;
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
 
-  try{
-    const uniq = Array.from(new Set(ids)).filter(Boolean);
+    try{
+      const uniq = Array.from(new Set(ids)).filter(Boolean);
 
-    // ✅ ここを固定：これだけ送る（高速）
-    const body = { ids: uniq };
+      // ✅ Workers側は ids を受ける（あなたの worker.js は ids/keys/id/key を吸収）
+      const body = { ids: uniq };
 
-    await callAdminFast(
-      API.approve,
-      { method:"POST", admin:true, body, signal }
-    );
+      await callAdminFast(
+        API.approve,
+        { method:"POST", admin:true, body, signal }
+      );
 
-    // ✅ 再取得は最小限
-    await Promise.all([loadPending(signal), loadPublic(signal)]);
-    if (activeTab === "all") await loadAll(signal);
+      await Promise.all([loadPending(signal), loadPublic(signal)]);
+      if (activeTab === "all") await loadAll(signal);
 
-    selectedIds = new Set();
-    syncCacheAll();
-    render();
-  } catch(e){
-    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-    alert(`承認に失敗: ${e.message}`);
-  } finally {
-    setBusy(false);
-    __ctrl = null;
+      selectedIds = new Set();
+      syncCacheAll();
+      render();
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`承認に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
   }
-}
 
   async function deletePublicRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
