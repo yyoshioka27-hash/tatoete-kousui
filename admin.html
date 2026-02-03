@@ -55,8 +55,7 @@
 
     .item{ border:1px solid rgba(15,23,42,.10); border-radius:14px; padding:12px; background:rgba(255,255,255,.9); }
 
-    /* ✅ FIX：上段をGridにして「左=可変 / 右=固定」へ
-       これでネタの長さに左右されずボタンが常に右端に揃う */
+    /* ✅ FIX：上段をGridにして「左=可変 / 右=固定」へ */
     .itemTop{
       display:grid;
       grid-template-columns: minmax(0, 1fr) auto;
@@ -79,10 +78,10 @@
     .actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-left:auto; justify-content:flex-end; }
     /* ✅ item行専用：右上に張り付け（Gridの右列に固定） */
     .itemActions{
-      margin-left:0;         /* ← toolbar用の margin-left:auto を打ち消す */
+      margin-left:0;
       justify-content:flex-end;
       align-self:start;
-      flex-wrap:nowrap;      /* ボタンが勝手に折り返して位置がズレるのを防ぐ */
+      flex-wrap:nowrap;
       white-space:nowrap;
     }
 
@@ -99,10 +98,7 @@
       margin-right: 6px;
     }
 
-    /* ======================================================
-       ✅ 追加(1)：雑学/お笑いの薄色塗り（ひと目で判別）
-       data-mode="trivia" or "comedy"
-       ====================================================== */
+    /* ✅ 追加(1)：雑学/お笑いの薄色塗り */
     .item[data-mode="trivia"]{
       background: rgba(37,99,235,.06);
       border-color: rgba(37,99,235,.18);
@@ -114,9 +110,7 @@
       box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
     }
 
-    /* ======================================================
-       ✅ 追加（検索＆ソート UI）
-       ====================================================== */
+    /* ✅ 追加（検索＆ソート UI） */
     .filters{
       display:flex;
       gap:8px;
@@ -125,7 +119,7 @@
       justify-content:flex-end;
     }
     .filterInput{
-      min-width: 220px; /* 全体inputのmin-width(280)を抑える */
+      min-width: 220px;
       width: 260px;
     }
     .filterSelect{
@@ -137,7 +131,7 @@
       font-size:13px;
     }
 
-    /* ✅ スマホでは2段でも自然に（狭いときだけ右列を下へ） */
+    /* ✅ スマホ */
     @media (max-width: 520px){
       .itemTop{ grid-template-columns: 1fr; }
       .itemActions{ justify-content:flex-start; flex-wrap:wrap; white-space:normal; }
@@ -207,7 +201,7 @@
         <span class="pill" id="viewCount">表示: 0件</span>
       </div>
 
-      <!-- ✅ 追加：検索＆ソート -->
+      <!-- ✅ 検索＆ソート -->
       <div class="filters">
         <input id="q" class="filterInput" placeholder="検索（本文 / pen / ID / 雑学70% など）" />
         <select id="sortKey" class="filterSelect">
@@ -256,8 +250,6 @@
 
   // ======================================================
   // ✅ 追加(2)：キャッシュ（差分追加）設定
-  //  - 一度読んだデータをlocalStorageに保持
-  //  - 更新時：まずキャッシュを即表示 → その後ネット取得 → 差分だけ追加（上書き更新も可）
   // ======================================================
   const ADMIN_CACHE_VER = "adminCache_v1";
   function _cacheKey(tabKey){
@@ -284,7 +276,7 @@
     }catch(e){}
   }
 
-  // 差分マージ：freshの順を優先し、oldにしか無いものは残す（＝追加だけ）
+  // 差分マージ
   function mergeById(oldItems, freshItems){
     const map = new Map();
     for(const it of (oldItems || [])){
@@ -297,13 +289,12 @@
       if(!it) continue;
       const id = it.id || it.key || it._id;
       if(!id) continue;
-      map.set(id, it); // 同IDはfreshで上書き
+      map.set(id, it);
     }
 
     const out = [];
     const seen = new Set();
 
-    // freshの順
     for(const it of (freshItems || [])){
       const id = it && (it.id || it.key || it._id);
       if(id && map.has(id) && !seen.has(id)){
@@ -311,7 +302,6 @@
         seen.add(id);
       }
     }
-    // oldの残り（＝ローカルに残す）
     for(const it of (oldItems || [])){
       const id = it && (it.id || it.key || it._id);
       if(id && map.has(id) && !seen.has(id)){
@@ -354,7 +344,6 @@
   const btnBulkReject  = $("btnBulkReject");
   const btnBulkDeletePublic = $("btnBulkDeletePublic");
 
-  // ✅ 検索＆ソートUI
   const elQ = $("q");
   const elSort = $("sortKey");
   const btnClearQ = $("btnClearQ");
@@ -363,13 +352,11 @@
   let itemsPending = [];
   let itemsPublic  = [];
   let itemsAll     = [];
-  let itemsAllKV   = []; // ✅ allタブ用：KV由来のみ（seed-local除外）
+  let itemsAllKV   = []; // ✅ allタブ用：KV由来のみ
   let selectedIds = new Set();
 
-  // ✅ metaphors.js 側の元ネタ（表示だけ）
   let itemsSeedLocal = [];
 
-  // ✅ 検索＆ソート状態
   let q = "";
   let sortKey = "new";
 
@@ -380,12 +367,12 @@
   let __ctrl = null;
 
   function apiBase(){
-  let b = String(elApiBase.value || "").trim().replace(/\/+$/,"");
-  // ✅ 入力ミス救済：末尾に /api が付いていたら外す
-  b = b.replace(/\/api$/i, "");
-  b = b.replace(/\/api\/$/i, ""); // 念のため
-  return b;
-}
+    let b = String(elApiBase.value || "").trim().replace(/\/+$/,"");
+    // ✅ 入力ミス救済：末尾に /api が付いていたら外す
+    b = b.replace(/\/api$/i, "");
+    b = b.replace(/\/api\/$/i, "");
+    return b;
+  }
 
   function adminKey(){
     return String(elAdminKey.value || "").trim();
@@ -462,108 +449,128 @@
   }
 
   async function callAdminWithFallback(paths, opts){
-  let lastErr = null;
-  for (const p of paths){
-    try{
-      const data = await fetchOK(p, opts);
-      console.log("[API OK]", p);
-      return data;
-    } catch(e){
-      lastErr = e;
-      if (e?.status === 404){
-        console.warn("[API 404]", p);
-        continue;
+    let lastErr = null;
+    for (const p of paths){
+      try{
+        const data = await fetchOK(p, opts);
+        console.log("[API OK]", p);
+        return data;
+      } catch(e){
+        lastErr = e;
+        if (e?.status === 404){
+          console.warn("[API 404]", p);
+          continue;
+        }
+        console.error("[API NG]", p, e);
+        throw e;
       }
-      console.error("[API NG]", p, e);
-      throw e;
     }
+    console.error("[API NOT FOUND] tried:", paths);
+    throw lastErr || new Error("API not found");
   }
-  console.error("[API NOT FOUND] tried:", paths);
-  throw lastErr || new Error("API not found");
-}
 
+  // ======================================================
+  // ✅ 追加：paths × payloads の“総当たり”で成功するまで試す
+  //  - approve が {id} 必須で 404 を返すケースに強い
+  //  - 400/422/500でも次を試す（最後にまとめて失敗）
+  // ======================================================
+  async function callAdminWithFallbackAndPayload(paths, payloads, optsBase){
+    let lastErr = null;
+    const tried = [];
+    for (const p of paths){
+      for (const body of payloads){
+        try{
+          const data = await fetchOK(p, { ...optsBase, body });
+          console.log("[API OK]", p, body);
+          return data;
+        } catch(e){
+          lastErr = e;
+          tried.push({ p, status: e?.status, msg: e?.message });
+          if (e?.status === 404){
+            // 404は「そのパスが無い」可能性が濃いので次のパスへ
+            break;
+          }
+          // 404以外は payload違いの可能性 → 次payloadへ
+          continue;
+        }
+      }
+    }
+    console.error("[API FAILED] tried:", tried.map(x => x.p));
+    throw lastErr || new Error("API failed");
+  }
 
   // ✅ API候補
   const API = {
-  health: ["/api/health"],
+    health: ["/api/health"],
 
-  // pending一覧（admin配下 / 直下 どちらでも拾う）
-  pending: [
-    "/api/admin/pending",
-    "/api/admin/pending/list",
-    "/api/pending",
-    "/api/admin/list_pending",
-    "/api/list_pending",
-  ],
+    pending: [
+      "/api/admin/pending",
+      "/api/admin/pending/list",
+      "/api/pending",
+      "/api/admin/list_pending",
+      "/api/list_pending",
+    ],
 
-  // public一覧（admin配下 / 直下）
-  list: [
-    "/api/admin/list",
-    "/api/admin/public",
-    "/api/list",
-    "/api/public",
-    "/api/admin/list_public",
-    "/api/list_public",
-  ],
+    list: [
+      "/api/admin/list",
+      "/api/admin/public",
+      "/api/list",
+      "/api/public",
+      "/api/admin/list_public",
+      "/api/list_public",
+    ],
 
-  // all一覧（admin配下 / 直下）
-  all: [
-    "/api/admin/all?scope=both",
-    "/api/admin/all",
-    "/api/all?scope=both",
-    "/api/all",
-  ],
+    all: [
+      "/api/admin/all?scope=both",
+      "/api/admin/all",
+      "/api/all?scope=both",
+      "/api/all",
+    ],
 
-  // ✅ 承認：ここが肝（admin配下 / 直下 / 名前揺れ）
-  approve: [
-  // ✅まず admin 配下を先に叩く（ここが本命）
-  "/api/admin/approve",
-  "/api/admin/approvePending",
-  "/api/admin/approve_pending",
-  "/api/admin/publish",
+    // ✅ 承認：pathsは維持（揺れ吸収）。ただし“payload側”も揺れ吸収する
+    approve: [
+      "/api/admin/approve",
+      "/api/admin/approvePending",
+      "/api/admin/approve_pending",
+      "/api/admin/publish",
 
-  // ✅旧互換（直下）※最後に回す
-  "/api/approve",
-  "/api/publish",
-],
+      "/api/approve",
+      "/api/publish",
+    ],
 
+    reject: [
+      "/api/reject",
+      "/api/reject_pending",
+      "/api/rejectPending",
+      "/api/admin/reject",
+      "/api/admin/reject_pending",
+      "/api/admin/rejectPending",
+    ],
 
-  // 却下（reject）も揺れ吸収
-  reject: [
-    "/api/reject",
-    "/api/reject_pending",
-    "/api/rejectPending",
-    "/api/admin/reject",
-    "/api/admin/reject_pending",
-    "/api/admin/rejectPending",
-  ],
+    del: [
+      "/api/delete",
+      "/api/delete_pending",
+      "/api/deletePending",
+      "/api/remove",
 
-  // delete/remove も直下を追加（あなたのrobust payloadが活きる）
-  del: [
-    "/api/delete",
-    "/api/delete_pending",
-    "/api/deletePending",
-    "/api/remove",
+      "/api/admin/delete",
+      "/api/admin/delete_pending",
+      "/api/admin/deletePending",
+      "/api/admin/remove",
+    ],
 
-    "/api/admin/delete",
-    "/api/admin/delete_pending",
-    "/api/admin/deletePending",
-    "/api/admin/remove",
-  ],
+    importSeed: [
+      "/api/import_seed",
+      "/api/importSeed",
+      "/api/seed/import",
+      "/api/seed",
 
-  importSeed: [
-    "/api/import_seed",
-    "/api/importSeed",
-    "/api/seed/import",
-    "/api/seed",
-
-    "/api/admin/import_seed",
-    "/api/admin/importSeed",
-    "/api/admin/seed/import",
-    "/api/admin/seed",
-  ],
-};
-
+      "/api/admin/import_seed",
+      "/api/admin/importSeed",
+      "/api/admin/seed/import",
+      "/api/admin/seed",
+    ],
+  };
 
   // =========================
   // 表示整形
@@ -615,12 +622,9 @@
     }).filter(x => x.id);
   }
 
-  // =========================
-  // ✅ mode/bucket を「雑学70%」「お笑い30%」に整形
-  // =========================
+  // mode/bucket ラベル
   function normModeLabel(mode){
     const m = String(mode ?? "").trim().toLowerCase();
-    // fun=お笑い、それ以外は雑学（trivia等）
     return (m === "fun") ? "お笑い" : "雑学";
   }
   function normBucketLabel(bucket){
@@ -633,9 +637,7 @@
     return b ? `${a}${b}` : `${a}`;
   }
 
-  // =========================
-  // seed (metaphors.js) 表示用
-  // =========================
+  // seed 表示用
   function hash32(str){
     let h = 2166136261;
     for (let i = 0; i < str.length; i++){
@@ -679,9 +681,6 @@
     }));
   }
 
-  // ======================================================
-  // ✅ キャッシュ→状態へ反映（allはKV＋seedで復元）
-  // ======================================================
   function rebuildAllFromKV(kvItems){
     loadSeedLocalFromMetaphorsJS();
     const kvIds = new Set((kvItems || []).map(x => x.id));
@@ -693,7 +692,7 @@
   function hydrateFromCache(){
     const cP = loadCache("pending");
     const cU = loadCache("public");
-    const cA = loadCache("allkv"); // ✅ allはKVのみ保存
+    const cA = loadCache("allkv");
 
     if (cP?.items) itemsPending = cP.items;
     if (cU?.items) itemsPublic  = cU.items;
@@ -706,9 +705,7 @@
     saveCache("allkv", itemsAllKV);
   }
 
-  // ======================================================
-  // ✅ 検索＆ソート
-  // ======================================================
+  // 検索＆ソート
   function normalizeQuery(str){
     return String(str || "").trim().replace(/\s+/g, " ");
   }
@@ -731,14 +728,12 @@
     const toks = tokens.map(t => t.toLowerCase());
     return items.filter(it => {
       const h = itemHaystack(it);
-      // スペース区切りはAND
       return toks.every(t => h.includes(t));
     });
   }
 
   function sortItemsCore(items){
     const arr = items.slice();
-
     const getLikes = (x) => {
       const n = Number(x?.likes);
       return Number.isFinite(n) ? n : 0;
@@ -765,14 +760,12 @@
         return getTs(b) - getTs(a);
       });
     } else {
-      // new
       arr.sort((a,b) => getTs(b) - getTs(a));
     }
     return arr;
   }
 
   function sortItems(items){
-    // allタブでは seed-local を“常に最後”に寄せる（見やすさ優先）
     if (activeTab === "all"){
       const seed = items.filter(x => x.scope === "seed-local");
       const non  = items.filter(x => x.scope !== "seed-local");
@@ -794,22 +787,16 @@
     return sorted;
   }
 
-  // =========================
   // タブ/描画
-  // =========================
   function updateCounts(){
     countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
   }
 
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
-
     const visible = getVisibleItems();
-
-    // 表示件数
     viewCount.textContent = `表示: ${visible.length}件`;
 
-    // allタブはseed-local除外
     const selectableIds = (activeTab === "all")
       ? visible.filter(x => x.scope !== "seed-local").map(x => x.id)
       : visible.map(x => x.id);
@@ -824,7 +811,6 @@
       chkAll.indeterminate = (!allSelected && anySelected);
     }
 
-    // ✅ 一括ボタンの表示制御
     bulkActionsPending.style.display = (activeTab === "pending") ? "" : "none";
     bulkActionsPublic.style.display  = (activeTab === "public")  ? "" : "none";
   }
@@ -851,11 +837,9 @@
     const html = items.map(item => {
       const checked = selectedIds.has(item.id) ? "checked" : "";
 
-      // ✅ 色分け用mode（fun=お笑い）
       const m = String(item.mode || "").trim().toLowerCase();
       const uiMode = (m === "fun") ? "comedy" : "trivia";
 
-      // バッジ（tabごと）
       let badgeScope = "";
       if (activeTab === "all"){
         if (item.scope === "pending") badgeScope = `<span class="badge badgePending">pending</span>`;
@@ -868,12 +852,8 @@
       }
 
       const metaParts = [];
-
-      /* mode/bucket を「雑学70%」「お笑い30%」として1つのバッジに */
       const mb = modeBucketLabel(item);
       if (mb) metaParts.push(`<span class="badge">${escapeHtml(mb)}</span>`);
-
-      /* likes/pen/日時 */
       metaParts.push(`<span class="badge">likes: ${escapeHtml(item.likes)}</span>`);
       if (item.penName) metaParts.push(`<span class="badge">pen: ${escapeHtml(item.penName)}</span>`);
       const ts = formatTs(item.createdAt);
@@ -882,7 +862,6 @@
       const text = item.text || "";
       const tooLong = text.length > 240;
 
-      /* 本文先頭に「雑学70%：」を付ける */
       const prefix = `<span class="pctLabel">${escapeHtml(modeBucketLabel(item))}：</span>`;
       const bodyHtml = `${prefix}${escapeHtml(text)}`;
 
@@ -890,7 +869,6 @@
         ? `<details><summary>本文を展開（${text.length}文字）</summary><div class="itemText">${bodyHtml}</div></details>`
         : `<div class="itemText">${bodyHtml}</div>`;
 
-      // ✅ 行の操作ボタン
       const perActions = [];
 
       if (activeTab === "pending"){
@@ -899,7 +877,6 @@
       } else if (activeTab === "public"){
         perActions.push(`<button class="smallBtn btnDanger" data-act="deletePublic" data-id="${escapeAttr(item.id)}">削除</button>`);
       } else if (activeTab === "all"){
-        // allタブ：seed-localは操作不可
         if (item.scope === "pending"){
           perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
           perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（削除）</button>`);
@@ -908,7 +885,6 @@
         }
       }
 
-      // seed-localは操作不可（checkboxもdisabled）
       const isSeed = (item.scope === "seed-local");
       const disableRow = (activeTab === "all" && isSeed);
 
@@ -935,9 +911,7 @@
     listEl.innerHTML = html;
   }
 
-  // =========================
   // Settings
-  // =========================
   function saveSettings(){
     localStorage.setItem(LS_API, apiBase() || DEFAULT_API_BASE);
     localStorage.setItem(LS_KEY, adminKey() || "");
@@ -949,7 +923,6 @@
     elAdminKey.value = k;
   }
 
-  // ✅ 検索/ソートの保存・復元
   function loadViewSettings(){
     q = normalizeQuery(localStorage.getItem(LS_Q) || "");
     sortKey = (localStorage.getItem(LS_SORT) || "new");
@@ -962,9 +935,7 @@
     localStorage.setItem(LS_SORT, sortKey);
   }
 
-  // =========================
-  // Loaders（戻り値を返す：差分マージ用）
-  // =========================
+  // Loaders
   async function loadPending(signal){
     const data = await callAdminWithFallback(API.pending, { admin:true, signal });
     itemsPending = normalizeItems(data.items || data.pending || [], "pending");
@@ -980,16 +951,12 @@
   async function loadAll(signal){
     const data = await callAdminWithFallback(API.all, { admin:true, signal });
     const raw = data.items || data.all || [];
-    itemsAllKV = normalizeItems(raw, ""); // ✅ KV由来のみを保持
+    itemsAllKV = normalizeItems(raw, "");
     rebuildAllFromKV(itemsAllKV);
     return itemsAll;
   }
 
-  // ======================================================
-  // ✅ 更新（差分追加）：キャッシュ即表示 → ネット差分マージ
-  // ======================================================
   function applyCacheToActiveTabInstant(){
-    // キャッシュを即表示する（待ち時間ゼロ）
     if (activeTab === "pending"){
       const c = loadCache("pending");
       if (c?.items){
@@ -1010,10 +977,8 @@
   }
 
   async function refreshCurrentTab(){
-    // 1) まずキャッシュを即表示（体感爆速）
     applyCacheToActiveTabInstant();
 
-    // 2) その後ネット取得して差分を追加
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
@@ -1032,13 +997,12 @@
         saveCache("public", itemsPublic);
       } else {
         const oldKV = (loadCache("allkv")?.items) || itemsAllKV || [];
-        await loadAll(signal); // itemsAllKV が更新される
+        await loadAll(signal);
         const mergedKV = mergeById(oldKV, itemsAllKV);
         rebuildAllFromKV(mergedKV);
         saveCache("allkv", itemsAllKV);
       }
 
-      // 全体キャッシュ同期（他タブへも反映しておくと切替が速い）
       syncCacheAll();
       render();
     } catch(e){
@@ -1051,11 +1015,9 @@
   }
 
   async function refreshAllTabs(){
-    // 1) まずキャッシュを即表示
     hydrateFromCache();
     render();
 
-    // 2) ネット取得→差分マージ
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
@@ -1066,13 +1028,11 @@
       const oldU = (loadCache("public")?.items)  || itemsPublic  || [];
       const oldA = (loadCache("allkv")?.items)  || itemsAllKV   || [];
 
-      // 並列取得（既存通り）
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
 
       itemsPending = mergeById(oldP, itemsPending);
       itemsPublic  = mergeById(oldU, itemsPublic);
 
-      // allはKVのみマージしてseedを再付与
       const mergedKV = mergeById(oldA, itemsAllKV);
       rebuildAllFromKV(mergedKV);
 
@@ -1098,7 +1058,6 @@
       const kv = (data.kv === true) ? "kv:OK" : "kv:?" ;
       setPill(pillHealth, `health: OK (${kv})`, true);
 
-      // admin確認：pending取得を試す
       try{
         await callAdminWithFallback(API.pending, { admin:true, signal });
         setPill(pillAdmin, "admin: OK", true);
@@ -1120,6 +1079,10 @@
   // =========================
   function getSelectedIds(){ return Array.from(selectedIds); }
 
+  // ✅ FIX: approve が 404 になる件の本体
+  // - Workers側が {id} を期待している可能性が高いので、
+  //   ids配列でも内部で「1件ずつ」{id} で確実に通す
+  // - payload揺れにも耐える（id / ids / key）
   async function approveIds(ids){
     if (!ids.length) return;
     abortInFlight();
@@ -1128,12 +1091,23 @@
     const signal = __ctrl.signal;
 
     try{
-      await callAdminWithFallback(API.approve, {
-        method:"POST",
-        admin:true,
-        body:{ ids },
-        signal
-      });
+      const uniq = Array.from(new Set(ids)).filter(Boolean);
+
+      for (const id of uniq){
+        const payloads = [
+          { id },                 // ✅本命
+          { ids: [id] },          // 旧互換
+          { key: id },            // さらに旧互換
+          { ids: [id], id },      // どっちも入れる
+          { keys: [id] },         // 念のため
+        ];
+
+        await callAdminWithFallbackAndPayload(
+          API.approve,
+          payloads,
+          { method:"POST", admin:true, signal }
+        );
+      }
 
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
       selectedIds = new Set();
@@ -1148,7 +1122,6 @@
     }
   }
 
-  // ✅ public削除：Workers側payloadの揺れを吸収（1件ずつ確実に消す）
   async function deletePublicRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
 
@@ -1200,11 +1173,7 @@
 
     try{
       await deletePublicRobust(ids, signal);
-
-      // 公開を更新（allも更新）
       await Promise.all([loadPublic(signal), loadAll(signal)]);
-
-      // 選択解除
       selectedIds = new Set();
       syncCacheAll();
       render();
@@ -1217,7 +1186,6 @@
     }
   }
 
-  // ✅ pending削除：Workers側の期待payloadの揺れを吸収（1件ずつ確実に消す）
   async function deletePendingRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
 
@@ -1267,7 +1235,6 @@
     const signal = __ctrl.signal;
 
     try{
-      // 1) reject を試す（あってもなくてもOK）
       try{
         await callAdminWithFallback(API.reject, {
           method:"POST",
@@ -1276,16 +1243,13 @@
           signal
         });
       } catch(e){
-        // 握りつぶして delete を優先
+        // rejectが無くてもOK
       }
 
-      // 2) pendingから確実に削除
       await deletePendingRobust(ids, signal);
 
-      // 3) 再読込
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
 
-      // 4) まだ残ってたら通知
       const remain = new Set(itemsPending.map(x => x.id));
       const still = ids.filter(id => remain.has(id));
       if (still.length){
@@ -1304,9 +1268,7 @@
     }
   }
 
-  // =========================
-  // 初期ネタ取り込み：NETA_TRIVIA / NETA をKVへ
-  // =========================
+  // 初期ネタ取り込み
   function buildSeedItemsFromMetaphors(){
     const trivia = window.NETA_TRIVIA;
     const fun    = window.NETA;
@@ -1344,7 +1306,6 @@
     const signal = __ctrl.signal;
 
     try{
-      // サーバ側が12件上限っぽいので自動分割
       const BATCH = 12;
       let imported = 0;
 
@@ -1372,9 +1333,7 @@
     }
   }
 
-  // =========================
   // Events
-  // =========================
   btnSave.addEventListener("click", () => {
     saveSettings();
     alert("保存しました（このブラウザに記憶）");
@@ -1389,16 +1348,13 @@
   tabPublic.addEventListener("click",  () => setActiveTab("public"));
   tabAll.addEventListener("click",     () => setActiveTab("all"));
 
-  // ✅ 検索入力
   elQ.addEventListener("input", () => {
     q = normalizeQuery(elQ.value);
     saveViewSettings();
-    // 検索結果が変わるので選択は解除（事故防止）
     selectedIds = new Set();
     render();
   });
 
-  // ✅ ソート切替
   elSort.addEventListener("change", () => {
     sortKey = elSort.value;
     if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
@@ -1406,7 +1362,6 @@
     render();
   });
 
-  // ✅ クリア
   btnClearQ.addEventListener("click", () => {
     q = "";
     elQ.value = "";
@@ -1434,7 +1389,6 @@
     });
   });
 
-  // pending一括
   btnBulkApprove.addEventListener("click", async () => {
     const ids = getSelectedIds();
     if (!ids.length) return alert("選択がありません");
@@ -1449,7 +1403,6 @@
     await rejectAndDeletePending(ids);
   });
 
-  // public一括削除
   btnBulkDeletePublic.addEventListener("click", async () => {
     const ids = getSelectedIds();
     if (!ids.length) return alert("選択がありません");
@@ -1457,7 +1410,6 @@
     await deletePublicItems(ids);
   });
 
-  // リスト内クリック（委譲）
   listEl.addEventListener("click", async (ev) => {
     const raw = ev.target;
     if (!raw) return;
@@ -1465,7 +1417,6 @@
     const el = (raw instanceof Element) ? raw.closest("button[data-act], input.itemChk") : null;
     if (!el) return;
 
-    // checkbox
     if (el instanceof HTMLInputElement && el.classList.contains("itemChk")) {
       const id = el.getAttribute("data-id");
       if (!id) return;
@@ -1475,7 +1426,6 @@
       return;
     }
 
-    // button
     if (el instanceof HTMLButtonElement) {
       const act = el.getAttribute("data-act");
       const id  = el.getAttribute("data-id");
@@ -1500,7 +1450,6 @@
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
 
-  // ✅ ページを開いた時点でキャッシュを読み、即表示（更新ボタン待ちでも見える）
   hydrateFromCache();
   render();
 
