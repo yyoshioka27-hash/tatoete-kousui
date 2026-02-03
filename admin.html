@@ -465,7 +465,27 @@
         throw e;
       }
     }
-    console.error("[API NOT FOUND] tried:", paths);
+    // ✅ 高速版：bodyは1種類だけ、404のときだけ次パスへ
+async function callAdminFast(paths, optsBase){
+  let lastErr = null;
+  for (const p of paths){
+    try{
+      const data = await fetchOK(p, optsBase);
+      console.log("[API FAST OK]", p);
+      return data;
+    } catch(e){
+      lastErr = e;
+      if (e?.status === 404){
+        console.warn("[API FAST 404]", p);
+        continue;
+      }
+      console.error("[API FAST NG]", p, e);
+      throw e;
+    }
+  }
+  throw lastErr || new Error("API not found");
+}
+console.error("[API NOT FOUND] tried:", paths);
     throw lastErr || new Error("API not found");
   }
 
@@ -529,14 +549,10 @@
 
     // ✅ 承認：pathsは維持（揺れ吸収）。ただし“payload側”も揺れ吸収する
     approve: [
-      "/api/admin/approve",
-      "/api/admin/approvePending",
-      "/api/admin/approve_pending",
-      "/api/admin/publish",
+  "/api/admin/approve",
+  "/api/approve",
+],
 
-      "/api/approve",
-      "/api/publish",
-    ],
 
     reject: [
       "/api/reject",
@@ -1093,28 +1109,17 @@
   try{
     const uniq = Array.from(new Set(ids)).filter(Boolean);
 
-    // ✅ まとめて1回で送る（Workerは pickIdsFromBody で吸収）
-    const payloads = [
-      { ids: uniq },              // ✅本命
-      { keys: uniq },             // 互換
-      { ids: uniq, keys: uniq },  // 念のため両方
-      // 1件しかない場合の保険
-      ...(uniq.length === 1 ? [{ id: uniq[0] }, { key: uniq[0] }] : []),
-    ];
+    // ✅ ここを固定：これだけ送る（高速）
+    const body = { ids: uniq };
 
-    await callAdminWithFallbackAndPayload(
+    await callAdminFast(
       API.approve,
-      payloads,
-      { method:"POST", admin:true, signal }
+      { method:"POST", admin:true, body, signal }
     );
 
-    // ✅ 再取得は必要最小限（pending / public）
+    // ✅ 再取得は最小限
     await Promise.all([loadPending(signal), loadPublic(signal)]);
-
-    // allタブは「開いた時に更新」で十分
-    if (activeTab === "all") {
-      await loadAll(signal);
-    }
+    if (activeTab === "all") await loadAll(signal);
 
     selectedIds = new Set();
     syncCacheAll();
