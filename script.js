@@ -809,7 +809,7 @@ function render() {
       picked = { text: "（非表示ワードが含まれるため表示できません）", source: null, id: null, penName: null, totalLikes: 0, hof: false };
     }
 
-    // ✅ ペンネーム未入力は常に「匿名」で統一（薄く表示）
+    // ✅ ペンネーム未入力は常に「匿名」で統一（内部状態として）
     const displayPen = (picked.penName && String(picked.penName).trim())
       ? String(picked.penName).trim()
       : "匿名";
@@ -818,9 +818,10 @@ function render() {
     const hofPicked = !!picked.hof || (totalLikesPicked >= Number(state.hofThreshold || 20));
 
     if (metaEl) {
-      const penHtml = (displayPen === "匿名")
-        ? `<span class="pen-muted">（匿名）</span>`
-        : `<span class="muted">（${escapeHtml(displayPen)}）</span>`;
+      // ✅FIX: 匿名は表示しない。名前がある時だけ表示する
+      const penHtml = (displayPen && displayPen !== "匿名")
+        ? `<span class="muted">（${escapeHtml(displayPen)}）</span>`
+        : "";
 
       const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
 
@@ -842,7 +843,7 @@ function render() {
       text: picked.text,
       source: picked.source || null,
       id: nextId,
-      penName: displayPen,
+      penName: displayPen, // 内部は「匿名」で保持してOK（表示はしない）
       likesToday: nextLikesToday,
       totalLikes: nextTotalLikes,
       hof: hofPicked,
@@ -1061,9 +1062,12 @@ async function renderRanking(){
     } else {
       const rows = items.map((it, idx) => {
         const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
-        const pen = (p === "匿名")
-          ? ` <span class="pen-muted">（匿名）</span>`
-          : ` <span class="muted">（${escapeHtml(p)}）</span>`;
+
+        // ✅FIX: 匿名は表示しない。名前がある時だけ表示
+        const pen = (p && p !== "匿名")
+          ? ` <span class="muted">（${escapeHtml(p)}）</span>`
+          : "";
+
         const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
         return `
           <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
@@ -1088,9 +1092,12 @@ async function renderRanking(){
     } else {
       const rows = items.map((it, idx) => {
         const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
-        const pen = (p === "匿名")
-          ? ` <span class="pen-muted">（匿名）</span>`
-          : ` <span class="muted">（${escapeHtml(p)}）</span>`;
+
+        // ✅FIX: 匿名は表示しない。名前がある時だけ表示
+        const pen = (p && p !== "匿名")
+          ? ` <span class="muted">（${escapeHtml(p)}）</span>`
+          : "";
+
         const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
         const totalLikes = Number(it.totalLikes || 0);
         const hof = !!it.hof || (totalLikes >= Number(state.hofThreshold || 20));
@@ -1120,9 +1127,12 @@ async function renderRanking(){
     } else {
       const rows = items.slice(0, 20).map((it, idx) => {
         const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
-        const pen = (p === "匿名")
-          ? ` <span class="pen-muted">（匿名）</span>`
-          : ` <span class="muted">（${escapeHtml(p)}）</span>`;
+
+        // ✅FIX: 匿名は表示しない。名前がある時だけ表示
+        const pen = (p && p !== "匿名")
+          ? ` <span class="muted">（${escapeHtml(p)}）</span>`
+          : "";
+
         const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
         const totalLikes = Number(it.totalLikes || 0);
         return `
