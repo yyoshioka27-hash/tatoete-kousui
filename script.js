@@ -769,40 +769,12 @@ function normalizePenName(name){
   if (!n) return null;
   if (n === "匿名") return null;
   if (n === "初期ネタ") return null;
-// =========================
-// theme（無ければ何もしない）
-// =========================
-function applyTheme(_rounded){
-  // 既存のHTML/CSS側にapplyThemeがあったり、色テーマ拡張してる場合に備えてダミー
+  return n;
 }
-
-// =========================
-// render
-// =========================
-function render() {
-  const hintEl = document.getElementById("popHint");
-  const sourceTag = document.getElementById("sourceTag");
-  const tzTag = document.getElementById("tzTag");
-
-  const metaAll = document.getElementById("metaphor");
-  const footEl = document.getElementById("metaFoot");
-
-  if (sourceTag) sourceTag.textContent = state.source;
-  if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
-
-  const setSlot = (slotKey, value, label) => {
-    const popEl = document.getElementById(`pop_${slotKey}`);
-    const metaEl = document.getElementById(`meta_${slotKey}`);
-
-    if (value == null) {
-      if (popEl) popEl.textContent = "--%";
-      if (metaEl) metaEl.textContent = "データなし";
-      setIcon(slotKey, null);
-
-      state.currentPhrases[slotKey] = { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null };
-      updateLikeUI(slotKey);
-      updateDeleteUI(slotKey);
-      r
+function penHtmlIfAny(name){
+  const n = normalizePenName(name);
+  return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
+}
 // =========================
 // theme（無ければ何もしない）
 // =========================
