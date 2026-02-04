@@ -841,6 +841,37 @@ function render() {
 
     const mode = getSelectedMode();
     let picked;
+// ==============================
+// ✅ 自分の投稿欄DOM（HTML改修不要）
+// ==============================
+function ensureMySubmissionsDom(){
+  if (document.getElementById("mySubmissionsWrap")) return;
+
+  // ネタ追加カードの親を探す（newPhrase があるカードの末尾に追加）
+  const ta = document.getElementById("newPhrase");
+  if (!ta) return;
+
+  // 一番近い card を探す
+  const card = ta.closest(".card");
+  const anchor = card ? card : ta.parentElement;
+  if (!anchor) return;
+
+  const wrap = document.createElement("div");
+  wrap.id = "mySubmissionsWrap";
+  wrap.className = "card";
+  wrap.style.marginTop = "12px";
+
+  wrap.innerHTML = `
+    <div style="font-weight:900;">あなたの投稿</div>
+    <div class="muted" style="margin-top:6px;font-size:12px;">
+      この端末から投稿した分だけ表示（他人には見えません）
+    </div>
+    <div id="my-submissions-list" style="margin-top:10px;"></div>
+  `;
+
+  // ネタ追加カードの直後に入れる（画面下に来る）
+  anchor.insertAdjacentElement("afterend", wrap);
+}
 
 // ✅ 固定中なら前回のネタを再利用
 if (__freezeMetaphor && state.currentPhrases[slotKey]?.text) {
@@ -874,7 +905,7 @@ if (__freezeMetaphor && state.currentPhrases[slotKey]?.text) {
 
       metaEl.innerHTML = `${escapeHtml(label)}：${escapeHtml(picked.text)} ${penHtml}${hofHtml}`;
     }
-
+　　
     const prevId = state.currentPhrases[slotKey]?.id || null;
     const nextId = picked.id || null;
 
@@ -911,6 +942,9 @@ if (__freezeMetaphor && state.currentPhrases[slotKey]?.text) {
     renderEmpty();
     if (footEl) footEl.textContent = "";
     try { renderRanking(); } catch {}
+    try { ensureMySubmissionsDom(); } catch {}
+    try { renderMySubmissions(); } catch(e) { console.warn("renderMySubmissions error", e); }
+
     return;
   }
 
@@ -1393,6 +1427,15 @@ function wireSubmit(){
 
     try{
       await submitToPending(mode, window.bucket10(bucket), text, (penName || null), (penName ? penPin : null));
+            // ✅ 投稿者本人だけの「承認中」表示用に保存（localStorage）
+      const my = {
+        id: "local_" + Date.now(),
+        text: text,               // ←ここは wireSubmit 内の const text を使うのでOK
+        status: "pending",
+        createdAt: Date.now()
+      };
+      saveMySubmission(my);
+
       ta.value = "";
       alert("承認待ちに送信しました（管理画面で承認すると公開されます）");
 
@@ -1412,16 +1455,7 @@ function wireSubmit(){
 
   console.log("wireSubmit: bound OK", btn);
 }
-// 送信成功したら（今はIDが無い前提で仮ID）
-const my = {
-  id: "local_" + Date.now(),
-  text: netaText,          // ←あなたの入力本文の変数名に合わせて
-  status: "pending",
-  createdAt: Date.now()
-};
 
-saveMySubmission(my);
-renderMySubmissions();
 
 // ==============================
 // ✅ 初期化
@@ -1651,5 +1685,36 @@ window.addEventListener("load", () => {
     console.warn("setupDebugApproveButton error", e);
   }
 });
+// ==============================
+// ✅ 自分の投稿：localStorage
+// ==============================
+function saveMySubmission(item){
+  const key = "my_submissions";
+  const list = JSON.parse(localStorage.getItem(key) || "[]");
+  list.unshift(item);
+  localStorage.setItem(key, JSON.stringify(list));
+}
+
+function renderMySubmissions(){
+  const host = document.getElementById("my-submissions-list");
+  if (!host) return;
+
+  const list = JSON.parse(localStorage.getItem("my_submissions") || "[]");
+
+  if (!list.length){
+    host.innerHTML = `<div class="muted" style="font-size:12px;">（まだありません）</div>`;
+    return;
+  }
+
+  host.innerHTML = list.slice(0, 20).map(item => {
+    const label = (item.status === "approved") ? "✅ 採用" : "🕒 承認中";
+    return `
+      <div style="padding:10px;border:1px solid rgba(15,23,42,.10);border-radius:12px;margin-top:8px;background:#fff;">
+        <div style="white-space:pre-wrap;">${escapeHtml(String(item.text || ""))}</div>
+        <div class="muted" style="margin-top:6px;font-size:12px;">${label}</div>
+      </div>
+    `;
+  }).join("");
+}
 
 // # END
