@@ -231,6 +231,8 @@
     </div>
 
     <div class="list" id="list"></div>
+    <div class="row" id="pager" style="justify-content:center; margin-top:10px;"></div>
+
   </div>
 
   <div class="muted" style="text-align:center; margin:14px 0 8px;">
@@ -354,6 +356,17 @@
   let itemsAll     = [];
   let itemsAllKV   = []; // ✅ allタブ用：KV由来のみ
   let selectedIds = new Set();
+　  // ======================================================
+  // ✅ Option C：描画を上限20件にする（「もっと読む」）
+  // ======================================================
+  const PAGE_SIZE = 20;
+  let renderLimit = PAGE_SIZE;
+
+  const pagerEl = $("pager");
+
+  function resetRenderLimit(){
+    renderLimit = PAGE_SIZE;
+  }
 
   let itemsSeedLocal = [];
 
@@ -779,12 +792,20 @@
     return itemsAll;
   }
 
-  function getVisibleItems(){
+    // ✅ フィルタ＆ソート後の「全件」
+  function getVisibleItemsAll(){
     const raw = getActiveItemsRaw();
     const filtered = filterItems(raw);
     const sorted = sortItems(filtered);
     return sorted;
   }
+
+  // ✅ 実際に描画する「上からN件だけ」
+  function getVisibleItems(){
+    const all = getVisibleItemsAll();
+    return all.slice(0, renderLimit);
+  }
+
 
   // タブ/描画
   function updateCounts(){
@@ -793,8 +814,10 @@
 
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
+        const all = getVisibleItemsAll();
     const visible = getVisibleItems();
-    viewCount.textContent = `表示: ${visible.length}件`;
+    viewCount.textContent = `表示: ${visible.length}件 / 全: ${all.length}件`;
+
 
     const selectableIds = (activeTab === "all")
       ? visible.filter(x => x.scope !== "seed-local").map(x => x.id)
@@ -820,6 +843,7 @@
     tabPublic.classList.toggle("active",  tab==="public");
     tabAll.classList.toggle("active",     tab==="all");
     selectedIds = new Set();
+    resetRenderLimit();
     render();
   }
 
@@ -909,6 +933,23 @@
 
     listEl.innerHTML = html;
   }
+    // ✅ pager（もっと読む）
+    const all = getVisibleItemsAll();
+    const shown = Math.min(renderLimit, all.length);
+
+    if (all.length > shown){
+      pagerEl.innerHTML = `
+        <button id="btnMore" class="btnPrimary" style="min-width:240px;">
+          もっと読む（あと ${all.length - shown} 件）
+        </button>
+      `;
+      $("btnMore").addEventListener("click", () => {
+        renderLimit += PAGE_SIZE;
+        render();
+      }, { once:true });
+    } else {
+      pagerEl.innerHTML = "";
+    }
 
   // Settings
   function saveSettings(){
@@ -1003,6 +1044,8 @@
       }
 
       syncCacheAll();
+      resetRenderLimit();
+
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1036,6 +1079,8 @@
       rebuildAllFromKV(mergedKV);
 
       syncCacheAll();
+      resetRenderLimit();
+
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1341,6 +1386,7 @@
     q = normalizeQuery(elQ.value);
     saveViewSettings();
     selectedIds = new Set();
+    resetRenderLimit(); 
     render();
   });
 
@@ -1348,7 +1394,8 @@
     sortKey = elSort.value;
     if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
     saveViewSettings();
-    render();
+    resetRenderLimit();
+     render();
   });
 
   btnClearQ.addEventListener("click", () => {
@@ -1356,6 +1403,7 @@
     elQ.value = "";
     saveViewSettings();
     selectedIds = new Set();
+    resetRenderLimit();
     render();
   });
 
