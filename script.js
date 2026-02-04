@@ -1751,5 +1751,44 @@ function renderMySubmissions(){
     `;
   }).join("");
 }
+// ==============================
+// ✅ 自分の投稿（承認中 / 採用）表示
+// ==============================
+function renderMySubmissions(){
+  const listEl = document.getElementById("my-submissions-list");
+  if (!listEl) return;
+
+  const list = JSON.parse(localStorage.getItem("my_submissions") || "[]");
+
+  if (!list.length){
+    listEl.innerHTML = `<div class="muted">まだ投稿はありません</div>`;
+    return;
+  }
+
+  listEl.innerHTML = list
+    .slice().reverse()
+    .map(item => {
+      const statusLabel =
+        item.status === "approved"
+          ? `<span style="color:#16a34a;font-weight:900;">採用</span>`
+          : `<span style="color:#f59e0b;font-weight:900;">承認中</span>`;
+
+      return `
+        <div style="
+          border:1px solid rgba(15,23,42,.12);
+          border-radius:12px;
+          padding:10px;
+          margin-bottom:8px;
+          background:#fff;
+        ">
+          <div style="font-size:14px;">${item.text}</div>
+          <div class="muted" style="margin-top:6px;font-size:12px;">
+            状態：${statusLabel}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
 
 // # END
