@@ -1385,19 +1385,13 @@ document.getElementById("refresh").onclick = () => {
 function ensureMySubmissionsDom(){
   if (document.getElementById("mySubmissionsWrap")) return true;
 
-  const ta = document.getElementById("newPhrase");
-  if (!ta) return false;
-
-  // newPhrase の「ネタ追加カード」内にあるはずの textarea の親を辿る
-  // closest(".card") が無い/効かない場合でも必ず拾えるようにする
-  let anchor = ta.closest(".card");
-  if (!anchor) anchor = ta.parentElement;
-  if (!anchor) return false;
-
   const wrap = document.createElement("div");
   wrap.id = "mySubmissionsWrap";
   wrap.className = "card";
   wrap.style.marginTop = "12px";
+  wrap.style.maxWidth = "760px";
+  wrap.style.marginLeft = "auto";
+  wrap.style.marginRight = "auto";
 
   wrap.innerHTML = `
     <div style="font-weight:900;">あなたの投稿</div>
@@ -1407,10 +1401,11 @@ function ensureMySubmissionsDom(){
     <div id="my-submissions-list" style="margin-top:10px;"></div>
   `;
 
-  // ✅一番確実：ネタ追加カードの「直後」に入れる
-  anchor.insertAdjacentElement("afterend", wrap);
+  // ✅ どんな画面構造でも確実に見える：bodyの末尾に固定で追加
+  document.body.appendChild(wrap);
   return true;
 }
+
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信）
@@ -1467,6 +1462,8 @@ function wireSubmit(){
         createdAt: Date.now()
       };
       saveMySubmission(my);
+　　　ensureMySubmissionsDom();
+　　　renderMySubmissions();
 
       ta.value = "";
       alert("承認待ちに送信しました（管理画面で承認すると公開されます）");
