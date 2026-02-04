@@ -436,6 +436,10 @@ async function fetchWithTimeout(url, ms = 4500){
     clearTimeout(t);
   }
 }
+// =========================
+// ✅ 上部ネタ固定フラグ（ランキング更新では再抽選しない）
+// =========================
+let __freezeMetaphor = false;
 
 let state = {
   pops: null,
@@ -816,7 +820,15 @@ function render() {
     setIcon(slotKey, rounded);
 
     const mode = getSelectedMode();
-    let picked = pickMetaphor(mode, rounded);
+    let picked;
+
+// ✅ 固定中なら前回のネタを再利用
+if (__freezeMetaphor && state.currentPhrases[slotKey]?.text) {
+  picked = state.currentPhrases[slotKey];
+} else {
+  picked = pickMetaphor(mode, rounded);
+}
+
 
     // ✅ 万一 NG を引いたら再抽選（最大5回）
     for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
@@ -1029,6 +1041,8 @@ function ensureRankingDom(){
 // - 殿堂入り（累計閾値以上）
 // =========================
 async function renderRanking(){
+    __freezeMetaphor = true; // ✅ ランキング更新中はネタ固定
+
   ensureRankingDom();
   const wrap = document.getElementById("todayRankingWrap");
   if (!wrap) return;
@@ -1304,7 +1318,11 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 );
 
 
-document.getElementById("refresh").onclick = () => scheduleRender();
+document.getElementById("refresh").onclick = () => {
+  __freezeMetaphor = false; // ✅ ここだけ再抽選OK
+  scheduleRender();
+};
+
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信）
