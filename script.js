@@ -926,6 +926,7 @@ if (__freezeMetaphor && state.currentPhrases[slotKey]?.text) {
   } else {
     const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
     if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
+    try { applyTheme(maxOne.value); } catch {}
   }
 
   if (footEl) footEl.textContent =
