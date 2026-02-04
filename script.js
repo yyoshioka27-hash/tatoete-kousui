@@ -1412,6 +1412,16 @@ function wireSubmit(){
 
   console.log("wireSubmit: bound OK", btn);
 }
+// 送信成功したら（今はIDが無い前提で仮ID）
+const my = {
+  id: "local_" + Date.now(),
+  text: netaText,          // ←あなたの入力本文の変数名に合わせて
+  status: "pending",
+  createdAt: Date.now()
+};
+
+saveMySubmission(my);
+renderMySubmissions();
 
 // ==============================
 // ✅ 初期化
@@ -1597,5 +1607,49 @@ function stopFireworks(){
     console.warn("setupFireworksDebugButton error", e);
   }
 })();
+// =========================
+// ✅ Debug approve button (only ?debug=1)
+// =========================
+window.addEventListener("load", () => {
+  try{
+    const params = new URLSearchParams(location.search);
+    if (params.get("debug") !== "1") return;
+
+    const btn2 = document.createElement("button");
+    btn2.textContent = "✅ 採用にする(テスト)";
+    btn2.style.position = "fixed";
+    btn2.style.right = "12px";
+    btn2.style.bottom = "56px"; // 花火テストの上
+    btn2.style.zIndex = "2147483647";
+    btn2.style.padding = "10px 12px";
+    btn2.style.borderRadius = "12px";
+    btn2.style.border = "1px solid rgba(15,23,42,.15)";
+    btn2.style.background = "#16a34a";
+    btn2.style.color = "#fff";
+    btn2.style.fontSize = "14px";
+    btn2.style.boxShadow = "0 10px 24px rgba(2,6,23,.18)";
+
+    btn2.onclick = () => {
+      const key = "my_submissions";
+      const list = JSON.parse(localStorage.getItem(key) || "[]");
+      if (!list.length) return alert("先にネタを送信してね（承認中が必要）");
+
+      // 一番上（最新）の pending を approved に変える
+      const target = list.find(x => x.status !== "approved");
+      if (!target) return alert("承認中がありません");
+
+      target.status = "approved";
+      localStorage.setItem(key, JSON.stringify(list));
+      renderMySubmissions();
+
+      // ✅ “承認中→採用”の瞬間だけ花火
+      fireworksOnce();
+    };
+
+    document.body.appendChild(btn2);
+  }catch(e){
+    console.warn("setupDebugApproveButton error", e);
+  }
+});
 
 // # END
