@@ -1429,5 +1429,173 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+// =========================
+// 🎆 Fireworks (no library)
+// =========================
+let __fwCanvas = null;
+let __fwCtx = null;
+let __fwRAF = 0;
+let __fwActive = false;
+let __fwParticles = [];
+let __fwStartAt = 0;
+let __fwDuration = 2600;
+
+function ensureFireworksCanvas(){
+  if (__fwCanvas) return;
+
+  __fwCanvas = document.createElement("canvas");
+  __fwCanvas.id = "fireworksCanvas";
+  __fwCanvas.style.position = "fixed";
+  __fwCanvas.style.left = "0";
+  __fwCanvas.style.top = "0";
+  __fwCanvas.style.width = "100%";
+  __fwCanvas.style.height = "100%";
+  __fwCanvas.style.pointerEvents = "none";
+  __fwCanvas.style.zIndex = "999999";
+  __fwCanvas.style.opacity = "0"; // 起動時に上げる
+  document.body.appendChild(__fwCanvas);
+
+  __fwCtx = __fwCanvas.getContext("2d");
+
+  const resize = () => {
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    __fwCanvas.width = Math.floor(window.innerWidth * dpr);
+    __fwCanvas.height = Math.floor(window.innerHeight * dpr);
+    __fwCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  resize();
+  window.addEventListener("resize", resize);
+}
+
+function rand(min, max){ return Math.random() * (max - min) + min; }
+
+function spawnBurst(x, y){
+  // 1回の爆発で粒を作る（軽量に）
+  const count = Math.floor(rand(40, 70));
+  for (let i=0; i<count; i++){
+    const a = rand(0, Math.PI * 2);
+    const sp = rand(2.0, 6.0);
+    __fwParticles.push({
+      x, y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp,
+      life: rand(40, 70),
+      r: rand(1.2, 2.6),
+      // 色は指定しない方針でも、花火は色が命なので “ランダム” で付けます
+      hue: rand(0, 360),
+      alpha: 1
+    });
+  }
+}
+
+function fireworksOnce(){
+  ensureFireworksCanvas();
+  // 連打に強く：起動中なら延長だけ
+  const now = performance.now();
+  if (__fwActive){
+    __fwStartAt = now;
+    __fwDuration = 2600;
+    __fwCanvas.style.opacity = "1";
+    return;
+  }
+  __fwActive = true;
+  __fwStartAt = now;
+  __fwDuration = 2600;
+  __fwParticles = [];
+  __fwCanvas.style.opacity = "1";
+
+  // 最初に数発
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  spawnBurst(rand(w*0.2, w*0.8), rand(h*0.2, h*0.45));
+  spawnBurst(rand(w*0.2, w*0.8), rand(h*0.2, h*0.45));
+
+  const tick = () => {
+    __fwRAF = requestAnimationFrame(tick);
+
+    const t = performance.now();
+    const elapsed = t - __fwStartAt;
+
+    // 時々追加で打ち上げ
+    if (Math.random() < 0.08 && elapsed < __fwDuration){
+      spawnBurst(rand(w*0.15, w*0.85), rand(h*0.18, h*0.5));
+    }
+
+    // 描画
+    __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    __fwCtx.globalCompositeOperation = "lighter";
+
+    // 粒子更新
+    for (let i=__fwParticles.length-1; i>=0; i--){
+      const p = __fwParticles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // 重力＋空気抵抗
+      p.vx *= 0.98;
+      p.vy = p.vy * 0.98 + 0.06;
+
+      p.life -= 1;
+      p.alpha *= 0.985;
+
+      __fwCtx.beginPath();
+      __fwCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      __fwCtx.fillStyle = `hsla(${p.hue}, 100%, 65%, ${Math.max(0, p.alpha)})`;
+      __fwCtx.fill();
+
+      if (p.life <= 0 || p.alpha <= 0.02){
+        __fwParticles.splice(i, 1);
+      }
+    }
+
+    // 終了条件
+    if (elapsed > __fwDuration && __fwParticles.length === 0){
+      stopFireworks();
+    }
+  };
+
+  tick();
+}
+
+function stopFireworks(){
+  if (!__fwActive) return;
+  __fwActive = false;
+  cancelAnimationFrame(__fwRAF);
+  __fwRAF = 0;
+  __fwParticles = [];
+  if (__fwCtx) __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  if (__fwCanvas) __fwCanvas.style.opacity = "0";
+}
+// =========================
+// 🎆 Debug button (only ?debug=1)
+// =========================
+(function setupFireworksDebugButton(){
+  try{
+    const params = new URLSearchParams(location.search);
+    if (params.get("debug") !== "1") return; // 本番では出ない
+
+    const btn = document.createElement("button");
+    btn.textContent = "🎆 花火テスト";
+    btn.style.position = "fixed";
+    btn.style.right = "12px";
+    btn.style.bottom = "12px";
+    btn.style.zIndex = "1000000";
+    btn.style.padding = "10px 12px";
+    btn.style.borderRadius = "12px";
+    btn.style.border = "1px solid rgba(15,23,42,.15)";
+    btn.style.background = "#0f172a";
+    btn.style.color = "#fff";
+    btn.style.fontSize = "14px";
+    btn.style.boxShadow = "0 10px 24px rgba(2,6,23,.18)";
+
+    btn.addEventListener("click", () => {
+      try{ fireworksOnce(); } catch(e){ console.warn("fireworks error", e); }
+    });
+
+    document.body.appendChild(btn);
+  }catch(e){
+    console.warn("setupFireworksDebugButton error", e);
+  }
+})();
 
 // # END
