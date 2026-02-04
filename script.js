@@ -1300,6 +1300,7 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 
     // ✅ モード切替時だけランキングを更新したい：固定解除
     __rankingFrozen = false;
+    __freezeMetaphor = false; // ✅ モードを変えたら上のネタも再抽選
 
     // ✅ 先に再描画（ランキングは初回呼び出しで出る）
     scheduleRender();
