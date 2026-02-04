@@ -1379,6 +1379,38 @@ document.getElementById("refresh").onclick = () => {
   scheduleRender();
 };
 
+// ==============================
+// ✅ 自分の投稿欄DOM（HTML改修不要）※強制版
+// ==============================
+function ensureMySubmissionsDom(){
+  if (document.getElementById("mySubmissionsWrap")) return true;
+
+  const ta = document.getElementById("newPhrase");
+  if (!ta) return false;
+
+  // newPhrase の「ネタ追加カード」内にあるはずの textarea の親を辿る
+  // closest(".card") が無い/効かない場合でも必ず拾えるようにする
+  let anchor = ta.closest(".card");
+  if (!anchor) anchor = ta.parentElement;
+  if (!anchor) return false;
+
+  const wrap = document.createElement("div");
+  wrap.id = "mySubmissionsWrap";
+  wrap.className = "card";
+  wrap.style.marginTop = "12px";
+
+  wrap.innerHTML = `
+    <div style="font-weight:900;">あなたの投稿</div>
+    <div class="muted" style="margin-top:6px;font-size:12px;">
+      この端末から投稿した分だけ表示（他人には見えません）
+    </div>
+    <div id="my-submissions-list" style="margin-top:10px;"></div>
+  `;
+
+  // ✅一番確実：ネタ追加カードの「直後」に入れる
+  anchor.insertAdjacentElement("afterend", wrap);
+  return true;
+}
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信）
@@ -1464,9 +1496,15 @@ async function init(){
   try { ensureRankingDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
   try { wireSubmit(); } catch (e) { console.warn(e); }
+
+  // ★★★ ここに追加 ★★★
+  try { ensureMySubmissionsDom(); } catch {}
+  try { renderMySubmissions(); } catch {}
+
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
 }
+
 
 if (document.readyState === "loading") {
   window.addEventListener("DOMContentLoaded", init, { once: true });
