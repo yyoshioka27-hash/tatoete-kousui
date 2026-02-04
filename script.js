@@ -780,11 +780,31 @@ function penHtmlIfAny(name){
   return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
 }
 // =========================
-// theme（無ければ何もしない）
+// theme：降水確率で背景を変える
+// - 0〜20: 晴れ
+// - 30〜60: くもり
+// - 70〜100: 雨
 // =========================
-function applyTheme(_rounded){
-  // 既存のHTML/CSS側にapplyThemeがあったり、色テーマ拡張してる場合に備えてダミー
+function applyTheme(rounded){
+  try{
+    const body = document.body;
+    if (!body) return;
+
+    // 既存テーマを一旦解除
+    body.classList.remove("theme-sunny", "theme-cloudy", "theme-rainy");
+
+    if (rounded == null) return;
+
+    const p = Number(rounded);
+
+    if (p <= 20) body.classList.add("theme-sunny");
+    else if (p <= 60) body.classList.add("theme-cloudy");
+    else body.classList.add("theme-rainy");
+  }catch(e){
+    console.warn("applyTheme error", e);
+  }
 }
+
 
 // =========================
 // render
