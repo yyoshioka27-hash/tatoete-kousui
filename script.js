@@ -700,7 +700,8 @@ function updateLikeUI(slot) {
         mode: phraseObj.mode || getSelectedMode(),
         bucket: Number(mainBucket ?? phraseObj.bucket ?? 0),
         text: phraseObj.text,
-        penName: (phraseObj.penName && phraseObj.penName !== "匿名") ? phraseObj.penName : null,
+        // ✅FIX: 「匿名」「初期ネタ」は送らない（名前が付いた時だけ送る）
+        penName: normalizePenName(phraseObj.penName),
         source: phraseObj.source || null
       });
 
@@ -759,6 +760,50 @@ function escapeHtml(s) {
 }
 
 // =========================
+// ✅ ペンネーム表示ルール
+// - 「匿名」「初期ネタ」「空」は表示しない
+// - ユーザーが付けた名前だけ表示する
+// =========================
+function normalizePenName(name){
+  const n = String(name || "").trim();
+  if (!n) return null;
+  if (n === "匿名") return null;
+  if (n === "初期ネタ") return null;
+// =========================
+// theme（無ければ何もしない）
+// =========================
+function applyTheme(_rounded){
+  // 既存のHTML/CSS側にapplyThemeがあったり、色テーマ拡張してる場合に備えてダミー
+}
+
+// =========================
+// render
+// =========================
+function render() {
+  const hintEl = document.getElementById("popHint");
+  const sourceTag = document.getElementById("sourceTag");
+  const tzTag = document.getElementById("tzTag");
+
+  const metaAll = document.getElementById("metaphor");
+  const footEl = document.getElementById("metaFoot");
+
+  if (sourceTag) sourceTag.textContent = state.source;
+  if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
+
+  const setSlot = (slotKey, value, label) => {
+    const popEl = document.getElementById(`pop_${slotKey}`);
+    const metaEl = document.getElementById(`meta_${slotKey}`);
+
+    if (value == null) {
+      if (popEl) popEl.textContent = "--%";
+      if (metaEl) metaEl.textContent = "データなし";
+      setIcon(slotKey, null);
+
+      state.currentPhrases[slotKey] = { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null };
+      updateLikeUI(slotKey);
+      updateDeleteUI(slotKey);
+      r
+// =========================
 // theme（無ければ何もしない）
 // =========================
 function applyTheme(_rounded){
@@ -809,7 +854,7 @@ function render() {
       picked = { text: "（非表示ワードが含まれるため表示できません）", source: null, id: null, penName: null, totalLikes: 0, hof: false };
     }
 
-    // ✅ ペンネーム未入力は常に「匿名」で統一（内部状態として）
+    // ✅ ペンネーム未入力は内部的に「匿名」だが、表示は normalizePenName で制御する
     const displayPen = (picked.penName && String(picked.penName).trim())
       ? String(picked.penName).trim()
       : "匿名";
@@ -818,10 +863,8 @@ function render() {
     const hofPicked = !!picked.hof || (totalLikesPicked >= Number(state.hofThreshold || 20));
 
     if (metaEl) {
-      // ✅FIX: 匿名は表示しない。名前がある時だけ表示する
-      const penHtml = (displayPen && displayPen !== "匿名")
-        ? `<span class="muted">（${escapeHtml(displayPen)}）</span>`
-        : "";
+      // ✅FIX: 名前が付いたネタの時だけ表示（匿名/初期ネタは出さない）
+      const penHtml = penHtmlIfAny(displayPen);
 
       const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
 
@@ -843,7 +886,7 @@ function render() {
       text: picked.text,
       source: picked.source || null,
       id: nextId,
-      penName: displayPen, // 内部は「匿名」で保持してOK（表示はしない）
+      penName: displayPen, // 内部は「匿名」/「初期ネタ」でも保持してOK（表示はしない）
       likesToday: nextLikesToday,
       totalLikes: nextTotalLikes,
       hof: hofPicked,
@@ -1061,17 +1104,13 @@ async function renderRanking(){
       if (bodyToday) bodyToday.textContent = "まだランキングがありません（今日の👍が0件）";
     } else {
       const rows = items.map((it, idx) => {
-        const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+        // ✅FIX: 名前が付いた時だけ表示（匿名/初期ネタは出さない）
+        const pen = penHtmlIfAny(it.penName);
 
-        // ✅FIX: 匿名は表示しない。名前がある時だけ表示
-        const pen = (p && p !== "匿名")
-          ? ` <span class="muted">（${escapeHtml(p)}）</span>`
-          : "";
-
-        const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
+        // ✅FIX: [base]/[seed]/[public] は表示しない
         return `
           <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${src}</div>
+            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}</div>
             <div class="muted">今日の👍：${Number(it.likes||0)}</div>
           </div>
         `;
@@ -1091,20 +1130,16 @@ async function renderRanking(){
       if (bodyTotal) bodyTotal.textContent = "まだ累計ランキングがありません（累計👍が0件）";
     } else {
       const rows = items.map((it, idx) => {
-        const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+        // ✅FIX: 名前が付いた時だけ表示（匿名/初期ネタは出さない）
+        const pen = penHtmlIfAny(it.penName);
 
-        // ✅FIX: 匿名は表示しない。名前がある時だけ表示
-        const pen = (p && p !== "匿名")
-          ? ` <span class="muted">（${escapeHtml(p)}）</span>`
-          : "";
-
-        const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
+        // ✅FIX: [base]/[seed]/[public] は表示しない
         const totalLikes = Number(it.totalLikes || 0);
         const hof = !!it.hof || (totalLikes >= Number(state.hofThreshold || 20));
         const hofTag = hof ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
         return `
           <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${src}${hofTag}</div>
+            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${hofTag}</div>
             <div class="muted">累計👍：${totalLikes}</div>
           </div>
         `;
@@ -1126,18 +1161,14 @@ async function renderRanking(){
       if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
     } else {
       const rows = items.slice(0, 20).map((it, idx) => {
-        const p = (it.penName && String(it.penName).trim()) ? String(it.penName).trim() : "匿名";
+        // ✅FIX: 名前が付いた時だけ表示（匿名/初期ネタは出さない）
+        const pen = penHtmlIfAny(it.penName);
 
-        // ✅FIX: 匿名は表示しない。名前がある時だけ表示
-        const pen = (p && p !== "匿名")
-          ? ` <span class="muted">（${escapeHtml(p)}）</span>`
-          : "";
-
-        const src = it.source ? ` <span class="muted">[${escapeHtml(it.source)}]</span>` : "";
+        // ✅FIX: [base]/[seed]/[public] は表示しない
         const totalLikes = Number(it.totalLikes || 0);
         return `
           <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-            <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${src} <span class="hof-badge">👑殿堂入り</span></div>
+            <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen} <span class="hof-badge">👑殿堂入り</span></div>
             <div class="muted">累計👍：${totalLikes}</div>
           </div>
         `;
@@ -1153,7 +1184,6 @@ async function renderRanking(){
     if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
   }
 }
-
 // =========================
 // UI: 検索→候補表示
 // =========================
