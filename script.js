@@ -1362,7 +1362,7 @@ let __fwRAF = 0;
 let __fwActive = false;
 let __fwParticles = [];
 let __fwStartAt = 0;
-let __fwDuration = 2600;
+let __fwDuration = 5000;
 
 function ensureFireworksCanvas(){
   if (__fwCanvas) return;
