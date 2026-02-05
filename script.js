@@ -183,11 +183,13 @@ function fixModeToggleAlignment(){
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
-async function submitToPending(mode, bucket, text, penName, penPin){
+// ✅✅✅ 修正1：clientId を送れるよう引数追加
+async function submitToPending(mode, bucket, text, penName, penPin, clientId){
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
     headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ mode, bucket, text, penName, penPin, from: "mobile" })
+    // ✅✅✅ 修正1：clientId を body に追加
+    body: JSON.stringify({ mode, bucket, text, penName, penPin, clientId, from: "mobile" })
   });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) {
@@ -1601,13 +1603,23 @@ function wireSubmit(){
     btn.textContent = "送信中…";
 
     try{
-      const out = await submitToPending(mode, window.bucket10(bucket), text, (penName || null), (penName ? penPin : null));
+      // ✅✅✅ 修正2：clientId を作って送る（canonicalId互換）
+      const clientId = makeGlobalId({ mode, bucket: window.bucket10(bucket), text, source: "local" });
+
+      const out = await submitToPending(
+        mode,
+        window.bucket10(bucket),
+        text,
+        (penName || null),
+        (penName ? penPin : null),
+        clientId
+      );
 
       // ✅超重要：WorkersのIDが空なら「同期不能」なので保存しない
       const serverId = String(out?.id || "").trim();
 
       // デバッグしやすいようにログ（本番でも害なし）
-      console.log("[submitToPending] out=", out, " serverId=", serverId);
+      console.log("[submitToPending] out=", out, " serverId=", serverId, " clientId=", clientId);
 
       if (!serverId) {
         alert("送信は成功しましたが、サーバIDが取得できませんでした。\n承認状態を同期できないため、この端末の『あなたの投稿』には保存しません。\n（worker.js の /api/submit が id を返しているか要確認）");
@@ -1812,4 +1824,4 @@ if (document.readyState === "loading") {
   init();
 }
 
-// # END
+// # ENDどこの行を修正しますか
