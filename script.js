@@ -761,7 +761,7 @@ function updateLikeUI(slot) {
       state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
 
       updateLikeUI(slot);
-      try { renderRanking(); } catch {}
+      try { renderRankingThrottled(60000); } catch {}
     }catch(e){
       alert(`いいね失敗：${e?.message || e}`);
     }finally{
@@ -1027,6 +1027,22 @@ function ensureRankingDom(){
   wrap.style.marginTop = "14px";
 
   refreshBtn.insertAdjacentElement("afterend", wrap);
+}
+// =========================
+// ✅ ランキング取得の呼びすぎ防止（KV Read節約）
+// =========================
+let __rankingLastAt = 0;
+let __rankingInFlight = false;
+
+async function renderRankingThrottled(minIntervalMs = 60000){
+  const now = Date.now();
+  if (__rankingInFlight) return;
+  if (now - __rankingLastAt < minIntervalMs) return;
+
+  __rankingInFlight = true;
+  __rankingLastAt = now;
+  try { await renderRanking(); }
+  finally { __rankingInFlight = false; }
 }
 
 // =========================
