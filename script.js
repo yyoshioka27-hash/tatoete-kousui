@@ -1409,8 +1409,12 @@ function wireSubmit(){
 
       saveMySubmission(my);
 
-      ensureMySubmissionsDom();
+      // ✅ approved にしたらローカルから消す（本番挙動に合わせる）
+      const cleaned = list.filter(x => String(x?.status || "") !== "approved");
+      localStorage.setItem(key, JSON.stringify(cleaned));
       renderMySubmissions();
+      fireworksOnce();
+
 
       ta.value = "";
       alert("承認待ちに送信しました（管理画面で承認すると公開されます）");
@@ -1682,7 +1686,11 @@ async function syncMySubmissionsStatus(){
       return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
     });
 
-    localStorage.setItem(key, JSON.stringify(next));
+    // ✅ 承認済みは「あなたの投稿」から消す（ここが追加仕様）
+const cleaned = next.filter(x => String(x?.status || "") !== "approved");
+
+localStorage.setItem(key, JSON.stringify(cleaned));
+
 
     if (becameApproved > 0) {
       try{ fireworksOnce(); }catch{}
