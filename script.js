@@ -1632,17 +1632,20 @@ function wireSubmit(){
         alert("サーバIDが local_ になっています。承認状態を同期できない可能性が高いです。\nworker.js の /api/submit を確認してください。");
       }
 
-      // ✅ WorkersのIDを保存（ここが重要）
-      const my = {
-        id: serverId,                 // ✅ out.id を必ず使う
-        text: text,
-        status: "pending",
-        createdAt: Date.now(),
-        mode: mode,
-        bucket: window.bucket10(bucket)
-      };
+      // ✅ WorkersのID + clientId の両方を保存（これで取りこぼし救済）
+const my = {
+  id: serverId,                 // 表示/基本キー（互換のため残す）
+  serverId: serverId,           // ✅ サーバー安定ID
+  clientId: clientId,           // ✅ ローカル生成ID（canonicalId互換）
+  text: text,
+  status: "pending",
+  createdAt: Date.now(),
+  mode: mode,
+  bucket: window.bucket10(bucket)
+};
 
-      saveMySubmission(my);
+saveMySubmission(my);
+
 
       // ✅ 送信後のUI更新
       ta.value = "";
@@ -1671,9 +1674,16 @@ async function syncMySubmissionsStatus(){
     if (!Array.isArray(list) || list.length === 0) return;
 
     // ✅ local_ はサーバに存在しない前提なので除外（ただし UI では「同期不可」と見せる）
-    const ids = Array.from(new Set(
-      list.map(x => String(x?.id || "").trim()).filter(id => id && !id.startsWith("local_"))
-    )).slice(0, 50);
+    // ✅ serverId/clientId を両方投げる（どちらで保存されていても拾える）
+// local_ は除外
+const ids = Array.from(new Set(
+  list.flatMap(x => {
+    const a = String(x?.serverId || x?.id || "").trim();
+    const b = String(x?.clientId || "").trim();
+    return [a, b].filter(v => v && !v.startsWith("local_"));
+  })
+)).slice(0, 50);
+
 
     if (ids.length === 0) return;
 
@@ -1692,30 +1702,33 @@ async function syncMySubmissionsStatus(){
     let becameApproved = 0;
 
     const next = list.map(x => {
-      const id = String(x?.id || "").trim();
-      const prev = String(x?.status || "pending");
-      const st = map.get(id);
-      if (!st) return x;
+  const serverId = String(x?.serverId || "").trim();
+  const clientId = String(x?.clientId || "").trim();
+  const id = String(x?.id || "").trim(); // 互換用
 
-      // ✅ ここが肝：
-      // - public → approved
-      // - pending → pending
-      // - missing → missing（“承認中が消えない”を可視化）
-      const nowStatus =
-        (st.status === "public")  ? "approved" :
-        (st.status === "pending") ? "pending"  :
-        (st.status === "missing") ? "missing"  :
-        prev;
+  const prev = String(x?.status || "pending");
 
-      if (prev !== "approved" && nowStatus === "approved") {
-        becameApproved++;
-      }
+  // ✅ 優先順：serverId → clientId → id
+  const st = map.get(serverId) || map.get(clientId) || map.get(id);
+  if (!st) return x;
 
-      return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
-    });
+  const nowStatus =
+    (st.status === "public")  ? "approved" :
+    (st.status === "pending") ? "pending"  :
+    (st.status === "missing") ? "missing"  :
+    prev;
+
+  return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
+});
+
 
     // ✅ 承認済みは「あなたの投稿」から消す（追加仕様）
-    const cleaned = next.filter(x => String(x?.status || "") !== "approved");
+    // ✅ 承認済み(approved) と サーバ削除(missing) はローカルから消す
+　const cleaned = next.filter(x => {
+  const st = String(x?.status || "");
+  return (st !== "approved" && st !== "missing");
+});
+
     localStorage.setItem(key, JSON.stringify(cleaned));
 
     if (becameApproved > 0) {
