@@ -401,8 +401,6 @@ const FC  = "https://api.open-meteo.com/v1/forecast";
 
 // =========================
 // ✅ 天気を「体感最速」にするためのキャッシュ（SWR）
-// - キャッシュがあれば即表示 → 裏で最新を取得して上書き
-// - 失敗してもキャッシュ表示は維持
 // =========================
 const WX_CACHE_KEY = "wx_pops_cache_v1";
 const WX_CACHE_TTL_MS = 10 * 60 * 1000; // 10分
@@ -662,7 +660,6 @@ function escapeHtml(s) {
 
 // =========================
 // ✅ ペンネーム表示ルール
-// - 「匿名」「初期ネタ」「空」は表示しない
 // =========================
 function normalizePenName(name){
   const n = String(name || "").trim();
@@ -694,6 +691,7 @@ function applyTheme(rounded){
     console.warn("applyTheme error", e);
   }
 }
+
 // =========================
 // ✅ いいねUI（公開ネタ＝全部対象）
 // =========================
@@ -898,9 +896,11 @@ function render() {
 
   const candidates = [a, b, c].filter(Boolean);
   if (!candidates.length) {
+    const metaAll = document.getElementById("metaphor");
     if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
   } else {
     const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
+    const metaAll = document.getElementById("metaphor");
     if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
     try { applyTheme(maxOne.value); } catch {}
   }
@@ -1335,83 +1335,8 @@ function ensureMySubmissionsDom(){
   return true;
 }
 
-// ==============================
-// ✅ ネタ追加（承認待ちへ送信）
-// ==============================
-function wireSubmit(){
-  const btn = document.getElementById("submitPendingBtn");
-  const ta  = document.getElementById("newPhrase");
-  const modeSel = document.getElementById("newPhraseMode");
-  const bucketSel = document.getElementById("newPhraseBucket");
-
-  if (!btn || !ta) {
-    console.warn("wireSubmit: submitPendingBtn/newPhrase not found");
-    return;
-  }
-
-  if (btn.dataset.wired === "1") return;
-  btn.dataset.wired = "1";
-
-  btn.addEventListener("click", async (ev) => {
-    ev.preventDefault();
-
-    const mode = modeSel ? String(modeSel.value || "trivia") : getSelectedMode();
-    const bucket = bucketSel ? Number(bucketSel.value) : (getCurrentMainBucket() ?? 0);
-
-    const text = String(ta.value || "").trim();
-    if (!text) { alert("ネタが空です"); return; }
-    if (isNgText(text)) { alert("この文言は登録できません（非表示ワードを含みます）"); return; }
-
-    const penEl = document.getElementById("penName");
-    const pinEl = document.getElementById("penPin");
-
-    const penName = penEl ? String(penEl.value || "").trim() : "";
-    const penPin  = pinEl ? String(pinEl.value || "").trim() : "";
-
-    if (penName && !penPin) {
-      alert("ペンネームを使う場合は合言葉（PIN）が必要です。");
-      return;
-    }
-
-    btn.disabled = true;
-    const oldText = btn.textContent;
-    btn.textContent = "送信中…";
-
-    try{
-      const out = await submitToPending(mode, window.bucket10(bucket), text, (penName || null), (penName ? penPin : null));
-
-      // ✅超重要：WorkersのIDが空なら「同期不能」なので保存しない
-      const serverId = String(out?.id || "").trim();
-
-      // デバッグしやすいようにログ（本番でも害なし）
-      console.log("[submitToPending] out=", out, " serverId=", serverId);
-
-      if (!serverId) {
-        alert("送信は成功しましたが、サーバIDが取得できませんでした。\n承認状態を同期できないため、この端末の『あなたの投稿』には保存しません。\n（worker.js の /api/submit が id を返しているか要確認）");
-        ta.value = "";
-        return;
-      }
-
-      if (serverId.startsWith("local_")) {
-        // 念のため（今後local_は使わない運用）
-        alert("サーバIDが local_ になっています。承認状態を同期できない可能性が高いです。\nworker.js の /api/submit を確認してください。");
-      }
-
-      // ✅ WorkersのIDを保存（ここが重要）
-      const my = {
-        id: serverId,                 // ✅ out.id を必ず使う
-        text: text,
-        status: "pending",
-        createdAt: Date.now(),
-        mode: mode,
-        bucket: window.bucket10(bucket)
-      };
-
-      saveMySubmission(my);
-
-      
 // =========================
-// 🎆 Fireworks (no library)
+// 🎆 Fireworks (no library)  ※←ここがグローバル（submitの中に入れない）
 // =========================
 let __fwCanvas = null;
 let __fwCtx = null;
@@ -1546,8 +1471,10 @@ function stopFireworks(){
   try{
     const params = new URLSearchParams(location.search);
     if (params.get("debug") !== "1") return;
+    if (document.getElementById("fwDebugBtn")) return;
 
     const btn = document.createElement("button");
+    btn.id = "fwDebugBtn";
     btn.textContent = "🎆 花火テスト";
     btn.style.position = "fixed";
     btn.style.right = "12px";
@@ -1578,8 +1505,10 @@ window.addEventListener("load", () => {
   try{
     const params = new URLSearchParams(location.search);
     if (params.get("debug") !== "1") return;
+    if (document.getElementById("approveDebugBtn")) return;
 
     const btn2 = document.createElement("button");
+    btn2.id = "approveDebugBtn";
     btn2.textContent = "✅ 採用にする(テスト)";
     btn2.style.position = "fixed";
     btn2.style.right = "12px";
@@ -1614,6 +1543,97 @@ window.addEventListener("load", () => {
 });
 
 // ==============================
+// ✅ ネタ追加（承認待ちへ送信）
+// ==============================
+function wireSubmit(){
+  const btn = document.getElementById("submitPendingBtn");
+  const ta  = document.getElementById("newPhrase");
+  const modeSel = document.getElementById("newPhraseMode");
+  const bucketSel = document.getElementById("newPhraseBucket");
+
+  if (!btn || !ta) {
+    console.warn("wireSubmit: submitPendingBtn/newPhrase not found");
+    return;
+  }
+
+  if (btn.dataset.wired === "1") return;
+  btn.dataset.wired = "1";
+
+  btn.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+
+    const mode = modeSel ? String(modeSel.value || "trivia") : getSelectedMode();
+    const bucket = bucketSel ? Number(bucketSel.value) : (getCurrentMainBucket() ?? 0);
+
+    const text = String(ta.value || "").trim();
+    if (!text) { alert("ネタが空です"); return; }
+    if (isNgText(text)) { alert("この文言は登録できません（非表示ワードを含みます）"); return; }
+
+    const penEl = document.getElementById("penName");
+    const pinEl = document.getElementById("penPin");
+
+    const penName = penEl ? String(penEl.value || "").trim() : "";
+    const penPin  = pinEl ? String(pinEl.value || "").trim() : "";
+
+    if (penName && !penPin) {
+      alert("ペンネームを使う場合は合言葉（PIN）が必要です。");
+      return;
+    }
+
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = "送信中…";
+
+    try{
+      const out = await submitToPending(mode, window.bucket10(bucket), text, (penName || null), (penName ? penPin : null));
+
+      // ✅超重要：WorkersのIDが空なら「同期不能」なので保存しない
+      const serverId = String(out?.id || "").trim();
+
+      // デバッグしやすいようにログ（本番でも害なし）
+      console.log("[submitToPending] out=", out, " serverId=", serverId);
+
+      if (!serverId) {
+        alert("送信は成功しましたが、サーバIDが取得できませんでした。\n承認状態を同期できないため、この端末の『あなたの投稿』には保存しません。\n（worker.js の /api/submit が id を返しているか要確認）");
+        ta.value = "";
+        return;
+      }
+
+      if (serverId.startsWith("local_")) {
+        // 念のため（今後local_は使わない運用）
+        alert("サーバIDが local_ になっています。承認状態を同期できない可能性が高いです。\nworker.js の /api/submit を確認してください。");
+      }
+
+      // ✅ WorkersのIDを保存（ここが重要）
+      const my = {
+        id: serverId,                 // ✅ out.id を必ず使う
+        text: text,
+        status: "pending",
+        createdAt: Date.now(),
+        mode: mode,
+        bucket: window.bucket10(bucket)
+      };
+
+      saveMySubmission(my);
+
+      // ✅ 送信後のUI更新
+      ta.value = "";
+      try{ ensureMySubmissionsDom(); }catch{}
+      try{ renderMySubmissions(); }catch{}
+      // すぐ同期（承認済みなら即消える）
+      try{ await syncMySubmissionsStatus(); }catch{}
+
+      alert("送信しました！（承認待ちに入りました）");
+    }catch(e){
+      alert(`送信失敗：${e?.message || e}`);
+    }finally{
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  });
+}
+
+// ==============================
 // ✅ 自分の投稿：承認状態をWorkersで同期（pending→approved）
 // ==============================
 async function syncMySubmissionsStatus(){
@@ -1631,6 +1651,12 @@ async function syncMySubmissionsStatus(){
 
     const res = await fetch(`${API_BASE}/api/status?ids=${encodeURIComponent(ids.join(","))}`, { method:"GET" });
     const data = await res.json().catch(()=>null);
+
+    // ✅ missing_guard：レスポンス壊れ/ok=false のときは更新しない
+    if (!res.ok || !data?.ok) {
+      console.warn("syncMySubmissionsStatus: bad response", res.status, data);
+      return;
+    }
 
     const items = Array.isArray(data?.items) ? data.items : [];
     const map = new Map(items.map(x => [String(x.id), x]));
@@ -1660,11 +1686,9 @@ async function syncMySubmissionsStatus(){
       return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
     });
 
-    // ✅ 承認済みは「あなたの投稿」から消す（ここが追加仕様）
-const cleaned = next.filter(x => String(x?.status || "") !== "approved");
-
-localStorage.setItem(key, JSON.stringify(cleaned));
-
+    // ✅ 承認済みは「あなたの投稿」から消す（追加仕様）
+    const cleaned = next.filter(x => String(x?.status || "") !== "approved");
+    localStorage.setItem(key, JSON.stringify(cleaned));
 
     if (becameApproved > 0) {
       try{ fireworksOnce(); }catch{}
@@ -1715,6 +1739,7 @@ function renderMySubmissions(){
       const isLocal = id.startsWith("local_");
       const isMissing = (st === "missing");
 
+      // ※仕様上 approved は同期時に消えるが、念のため表示ラベルは残す
       const statusLabel =
         (st === "approved")
           ? `<span style="color:#16a34a;font-weight:900;">採用</span>`
