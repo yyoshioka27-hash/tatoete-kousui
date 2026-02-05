@@ -254,6 +254,12 @@
   // ✅ 追加(2)：キャッシュ（差分追加）設定
   // ======================================================
   const ADMIN_CACHE_VER = "adminCache_v1";
+
+  const $ = (id) => document.getElementById(id);
+
+  const elApiBase = $("apiBase");
+  const elAdminKey = $("adminKey");
+
   function _cacheKey(tabKey){
     const base = (String(elApiBase?.value || "").trim() || DEFAULT_API_BASE).replace(/\/+$/,"");
     return `${ADMIN_CACHE_VER}:${base}:${tabKey}`;
@@ -314,11 +320,6 @@
     return out;
   }
 
-  const $ = (id) => document.getElementById(id);
-
-  const elApiBase = $("apiBase");
-  const elAdminKey = $("adminKey");
-
   const pillHealth = $("pillHealth");
   const pillAdmin  = $("pillAdmin");
   const pillBusy   = $("pillBusy");
@@ -356,17 +357,19 @@
   let itemsAll     = [];
   let itemsAllKV   = []; // ✅ allタブ用：KV由来のみ
   let selectedIds = new Set();
-　// ======================================================
-// ✅ Pagination：20件ずつ「前へ / 次へ」
-// ======================================================
-const PAGE_SIZE = 20;     // 1ページの件数
-let page = 1;             // 1-based
-const pagerEl = $("pager");
 
-function resetPager(){
-  page = 1;
-}
+  // ======================================================
+  // ✅ Pagination：20件ずつ「前へ / 次へ」
+  // ======================================================
+  const PAGE_SIZE = 20;     // 1ページの件数
+  let page = 1;             // 1-based
+  const pagerEl = $("pager");
+  function resetPager(){ page = 1; }
 
+  let itemsSeedLocal = [];
+
+  let q = "";
+  let sortKey = "new";
 
   // =========================
   // in-flight制御
@@ -787,29 +790,27 @@ function resetPager(){
     return itemsAll;
   }
 
-    // ✅ フィルタ＆ソート後の「全件」
+  // ✅ フィルタ＆ソート後の「全件」
   function getVisibleItemsAll(){
-  const raw = getActiveItemsRaw();
-  const filtered = filterItems(raw);
-  const sorted = sortItems(filtered);
-  return sorted;
-}
+    const raw = getActiveItemsRaw();
+    const filtered = filterItems(raw);
+    const sorted = sortItems(filtered);
+    return sorted;
+  }
 
-// ✅ ページング後の「このページの items」
-function getVisibleItems(){
-  const all = getVisibleItemsAll();
-  const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+  // ✅ ページング後の「このページの items」
+  function getVisibleItems(){
+    const all = getVisibleItemsAll();
+    const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
 
-  // ページ範囲を安全に丸める
-  if (page < 1) page = 1;
-  if (page > totalPages) page = totalPages;
+    // ページ範囲を安全に丸める
+    if (page < 1) page = 1;
+    if (page > totalPages) page = totalPages;
 
-  const start = (page - 1) * PAGE_SIZE;
-  const end = start + PAGE_SIZE;
-  return all.slice(start, end);
-}
-
-
+    const start = (page - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    return all.slice(start, end);
+  }
 
   // タブ/描画
   function updateCounts(){
@@ -818,14 +819,13 @@ function getVisibleItems(){
 
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
-        const all = getVisibleItemsAll();
-const visible = getVisibleItems();
-const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
-const start = all.length ? (page - 1) * PAGE_SIZE + 1 : 0;
-const end = Math.min(page * PAGE_SIZE, all.length);
-viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全: ${all.length}件 / ${totalPages}p`;
 
-
+    const all = getVisibleItemsAll();
+    const visible = getVisibleItems();
+    const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+    const start = all.length ? (page - 1) * PAGE_SIZE + 1 : 0;
+    const end = Math.min(page * PAGE_SIZE, all.length);
+    viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全: ${all.length}件 / ${totalPages}p`;
 
     const selectableIds = (activeTab === "all")
       ? visible.filter(x => x.scope !== "seed-local").map(x => x.id)
@@ -862,6 +862,7 @@ viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全
     const items = getVisibleItems();
     if (!items.length){
       listEl.innerHTML = `<div class="muted">（データがありません）</div>`;
+      pagerEl.innerHTML = "";
       return;
     }
 
@@ -939,12 +940,12 @@ viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全
       `;
     }).join("");
 
-        listEl.innerHTML = html;
+    listEl.innerHTML = html;
 
     // ✅ pager（前へ / 次へ）
     const all = getVisibleItemsAll();
     const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
-    const start = (page - 1) * PAGE_SIZE + 1;
+    const start = all.length ? ((page - 1) * PAGE_SIZE + 1) : 0;
     const end = Math.min(page * PAGE_SIZE, all.length);
 
     if (all.length === 0){
@@ -966,7 +967,7 @@ viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全
         if (page < totalPages) { page++; render(); }
       });
     }
-
+  }
 
   // Settings
   function saveSettings(){
@@ -1061,8 +1062,7 @@ viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全
       }
 
       syncCacheAll();
-      resetRenderLimit();
-
+      resetPager();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1096,8 +1096,7 @@ viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全
       rebuildAllFromKV(mergedKV);
 
       syncCacheAll();
-      resetRenderLimit();
-
+      resetPager();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1373,6 +1372,7 @@ viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全
 
       await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
       syncCacheAll();
+      resetPager();
       render();
       alert(`初期ネタを取り込みました（${imported}件）`);
     } catch(e){
@@ -1412,7 +1412,7 @@ viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全
     if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
     saveViewSettings();
     resetPager();
-     render();
+    render();
   });
 
   btnClearQ.addEventListener("click", () => {
