@@ -1375,21 +1375,32 @@ function ensureFireworksCanvas(){
   __fwCanvas.style.width = "100%";
   __fwCanvas.style.height = "100%";
   __fwCanvas.style.pointerEvents = "none";
-  __fwCanvas.style.zIndex = "999999";
+  // ✅最前面を確実に
+  __fwCanvas.style.zIndex = "2147483647";
   __fwCanvas.style.opacity = "0";
+  __fwCanvas.style.willChange = "opacity, transform";
   document.body.appendChild(__fwCanvas);
 
-  __fwCtx = __fwCanvas.getContext("2d");
+  __fwCtx = __fwCanvas.getContext("2d", { alpha: true });
+  if (!__fwCtx) {
+    console.warn("fireworks: getContext failed");
+    return;
+  }
 
   const resize = () => {
     const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    __fwCanvas.width = Math.floor(window.innerWidth * dpr);
+    __fwCanvas.width  = Math.floor(window.innerWidth  * dpr);
     __fwCanvas.height = Math.floor(window.innerHeight * dpr);
-    __fwCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // ✅ setTransform(dpr...) だと環境によっては見えないことがあるので、確実な方式に
+    __fwCtx.setTransform(1, 0, 0, 1, 0, 0);
+    __fwCtx.scale(dpr, dpr);
   };
+
   resize();
   window.addEventListener("resize", resize);
 }
+
 
 function rand(min, max){ return Math.random() * (max - min) + min; }
 
@@ -1412,13 +1423,18 @@ function spawnBurst(x, y){
 
 function fireworksOnce(){
   ensureFireworksCanvas();
+  if (!__fwCtx || !__fwCanvas) return;
+
   const now = performance.now();
+
+  // すでに動作中なら延長だけ
   if (__fwActive){
     __fwStartAt = now;
     __fwDuration = 2600;
     __fwCanvas.style.opacity = "1";
     return;
   }
+
   __fwActive = true;
   __fwStartAt = now;
   __fwDuration = 2600;
@@ -1427,6 +1443,7 @@ function fireworksOnce(){
 
   const w = window.innerWidth;
   const h = window.innerHeight;
+
   spawnBurst(rand(w*0.2, w*0.8), rand(h*0.2, h*0.45));
   spawnBurst(rand(w*0.2, w*0.8), rand(h*0.2, h*0.45));
 
@@ -1440,8 +1457,12 @@ function fireworksOnce(){
       spawnBurst(rand(w*0.15, w*0.85), rand(h*0.18, h*0.5));
     }
 
+    // ✅ clearRect は “CSSピクセル” で確実に
+    __fwCtx.globalCompositeOperation = "source-over";
     __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    __fwCtx.globalCompositeOperation = "lighter";
+
+    // ✅ 見えやすく（lighter は環境で薄くなることがある）
+    __fwCtx.globalCompositeOperation = "source-over";
 
     for (let i=__fwParticles.length-1; i>=0; i--){
       const p = __fwParticles[i];
@@ -1456,7 +1477,7 @@ function fireworksOnce(){
 
       __fwCtx.beginPath();
       __fwCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
-      __fwCtx.fillStyle = `hsla(${p.hue}, 100%, 65%, ${Math.max(0, p.alpha)})`;
+      __fwCtx.fillStyle = `hsla(${p.hue}, 100%, 55%, ${Math.max(0, p.alpha)})`;
       __fwCtx.fill();
 
       if (p.life <= 0 || p.alpha <= 0.02){
