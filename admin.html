@@ -231,9 +231,7 @@
     </div>
 
     <div class="list" id="list" data-top-anchor="1"></div>
-
     <div class="row" id="pager" style="justify-content:center; margin-top:10px;"></div>
-
   </div>
 
   <div class="muted" style="text-align:center; margin:14px 0 8px;">
@@ -413,6 +411,16 @@
     el.style.borderColor = ok===true ? "rgba(22,163,74,.45)"
                       : ok===false ? "rgba(239,68,68,.45)"
                       : "rgba(15,23,42,.20)";
+  }
+
+  // ✅ ページ切替後、一覧の先頭へスクロール（1回だけ定義）
+  function scrollToListTop(){
+    try{
+      const topEl = document.getElementById("list");
+      if (!topEl) return;
+      const y = topEl.getBoundingClientRect().top + window.pageYOffset - 10;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    }catch(e){}
   }
 
   // =========================
@@ -855,7 +863,6 @@
     resetPager();
     render();
   }
-　  
 
   function render(){
     updateCounts();
@@ -944,7 +951,7 @@
 
     listEl.innerHTML = html;
 
-        // ✅ pager（前へ / 次へ / ページ指定）
+    // ✅ pager（前へ / 次へ / ページ指定）
     const all = getVisibleItemsAll();
     const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
     const start = all.length ? (page - 1) * PAGE_SIZE + 1 : 0;
@@ -974,16 +981,6 @@
           <button id="btnGoPage" class="miniBtn">移動</button>
         </span>
       `;
-
-      // ✅ ページ切替後一覧の先頭へスクロール（あなたの「次へで上へ」要望）
-      function scrollToListTop(){
-        try{
-          const topEl = document.getElementById("list");
-          if (!topEl) return;
-          const y = topEl.getBoundingClientRect().top + window.pageYOffset - 10;
-          window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
-        }catch(e){}
-      }
 
       $("btnPrev").addEventListener("click", () => {
         if (page > 1) {
@@ -1025,7 +1022,7 @@
           if (e.key === "Enter") goToPage();
         });
       }
-     }
+    }
   } // END render()
 
   // Settings
@@ -1207,8 +1204,6 @@
 
     try{
       const uniq = Array.from(new Set(ids)).filter(Boolean);
-
-      // ✅ Workers側は ids を受ける（あなたの worker.js は ids/keys/id/key を吸収）
       const body = { ids: uniq };
 
       await callAdminFast(
