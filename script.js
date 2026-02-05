@@ -1453,7 +1453,7 @@ function fireworksOnce(){
     const t = performance.now();
     const elapsed = t - __fwStartAt;
 
-    if (Math.random() < 0.08 && elapsed < __fwDuration){
+    if (Math.random() < 0.12 && elapsed < __fwDuration){
       spawnBurst(rand(w*0.15, w*0.85), rand(h*0.18, h*0.5));
     }
 
