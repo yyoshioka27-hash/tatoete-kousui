@@ -1409,33 +1409,7 @@ function wireSubmit(){
 
       saveMySubmission(my);
 
-      // ✅ approved にしたらローカルから消す（本番挙動に合わせる）
-      const cleaned = list.filter(x => String(x?.status || "") !== "approved");
-      localStorage.setItem(key, JSON.stringify(cleaned));
-      renderMySubmissions();
-      fireworksOnce();
-
-
-      ta.value = "";
-      alert("承認待ちに送信しました（管理画面で承認すると公開されます）");
-
-      const b = window.bucket10(bucket);
-      const k = keyMB(mode, b);
-      publicCache.delete(k);
-      await warmPublicCache(mode, b);
-
-      scheduleRender();
-    }catch(e){
-      alert(`送信失敗：${e?.message || e}`);
-    }finally{
-      btn.disabled = false;
-      btn.textContent = oldText || "承認待ちへ送信";
-    }
-  }, { passive:false });
-
-  console.log("wireSubmit: bound OK", btn);
-}
-
+      
 // =========================
 // 🎆 Fireworks (no library)
 // =========================
