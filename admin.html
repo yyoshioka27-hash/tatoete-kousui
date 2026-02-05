@@ -356,22 +356,17 @@
   let itemsAll     = [];
   let itemsAllKV   = []; // ✅ allタブ用：KV由来のみ
   let selectedIds = new Set();
-　  // ======================================================
-  // ✅ Option C：描画を上限20件にする（「もっと読む」）
-  // ======================================================
-  const PAGE_SIZE = 20;
-  let renderLimit = PAGE_SIZE;
+　// ======================================================
+// ✅ Pagination：20件ずつ「前へ / 次へ」
+// ======================================================
+const PAGE_SIZE = 20;     // 1ページの件数
+let page = 1;             // 1-based
+const pagerEl = $("pager");
 
-  const pagerEl = $("pager");
+function resetPager(){
+  page = 1;
+}
 
-  function resetRenderLimit(){
-    renderLimit = PAGE_SIZE;
-  }
-
-  let itemsSeedLocal = [];
-
-  let q = "";
-  let sortKey = "new";
 
   // =========================
   // in-flight制御
@@ -794,17 +789,26 @@
 
     // ✅ フィルタ＆ソート後の「全件」
   function getVisibleItemsAll(){
-    const raw = getActiveItemsRaw();
-    const filtered = filterItems(raw);
-    const sorted = sortItems(filtered);
-    return sorted;
-  }
+  const raw = getActiveItemsRaw();
+  const filtered = filterItems(raw);
+  const sorted = sortItems(filtered);
+  return sorted;
+}
 
-  // ✅ 実際に描画する「上からN件だけ」
-  function getVisibleItems(){
-    const all = getVisibleItemsAll();
-    return all.slice(0, renderLimit);
-  }
+// ✅ ページング後の「このページの items」
+function getVisibleItems(){
+  const all = getVisibleItemsAll();
+  const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+
+  // ページ範囲を安全に丸める
+  if (page < 1) page = 1;
+  if (page > totalPages) page = totalPages;
+
+  const start = (page - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  return all.slice(start, end);
+}
+
 
 
   // タブ/描画
@@ -815,8 +819,12 @@
   function updateSelectionUI(){
     selCount.textContent = `選択: ${selectedIds.size}件`;
         const all = getVisibleItemsAll();
-    const visible = getVisibleItems();
-    viewCount.textContent = `表示: ${visible.length}件 / 全: ${all.length}件`;
+const visible = getVisibleItems();
+const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+const start = all.length ? (page - 1) * PAGE_SIZE + 1 : 0;
+const end = Math.min(page * PAGE_SIZE, all.length);
+viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全: ${all.length}件 / ${totalPages}p`;
+
 
 
     const selectableIds = (activeTab === "all")
@@ -843,7 +851,7 @@
     tabPublic.classList.toggle("active",  tab==="public");
     tabAll.classList.toggle("active",     tab==="all");
     selectedIds = new Set();
-    resetRenderLimit();
+    resetPager();
     render();
   }
 
@@ -931,25 +939,34 @@
       `;
     }).join("");
 
-    listEl.innerHTML = html;
-  }
-    // ✅ pager（もっと読む）
-    const all = getVisibleItemsAll();
-    const shown = Math.min(renderLimit, all.length);
+        listEl.innerHTML = html;
 
-    if (all.length > shown){
-      pagerEl.innerHTML = `
-        <button id="btnMore" class="btnPrimary" style="min-width:240px;">
-          もっと読む（あと ${all.length - shown} 件）
-        </button>
-      `;
-      $("btnMore").addEventListener("click", () => {
-        renderLimit += PAGE_SIZE;
-        render();
-      }, { once:true });
-    } else {
+    // ✅ pager（前へ / 次へ）
+    const all = getVisibleItemsAll();
+    const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+    const start = (page - 1) * PAGE_SIZE + 1;
+    const end = Math.min(page * PAGE_SIZE, all.length);
+
+    if (all.length === 0){
       pagerEl.innerHTML = "";
+    } else {
+      pagerEl.innerHTML = `
+        <button id="btnPrev" ${page<=1 ? "disabled" : ""}>前へ</button>
+        <span class="pill" style="margin:0 10px;">
+          ページ ${page} / ${totalPages}（${start}-${end} / ${all.length}件）
+        </span>
+        <button id="btnNext" ${page>=totalPages ? "disabled" : ""}>次へ</button>
+      `;
+
+      $("btnPrev").addEventListener("click", () => {
+        if (page > 1) { page--; render(); }
+      });
+
+      $("btnNext").addEventListener("click", () => {
+        if (page < totalPages) { page++; render(); }
+      });
     }
+
 
   // Settings
   function saveSettings(){
@@ -1386,7 +1403,7 @@
     q = normalizeQuery(elQ.value);
     saveViewSettings();
     selectedIds = new Set();
-    resetRenderLimit(); 
+    resetPager();
     render();
   });
 
@@ -1394,7 +1411,7 @@
     sortKey = elSort.value;
     if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
     saveViewSettings();
-    resetRenderLimit();
+    resetPager();
      render();
   });
 
@@ -1403,7 +1420,7 @@
     elQ.value = "";
     saveViewSettings();
     selectedIds = new Set();
-    resetRenderLimit();
+    resetPager();
     render();
   });
 
