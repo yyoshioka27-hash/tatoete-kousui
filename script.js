@@ -1171,6 +1171,29 @@ async function renderRanking(){
     if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
   }
 }
+function fireIfApprovedOnNextSearch(){
+  try{
+    const raw = localStorage.getItem("fw_on_next_search");
+    if (!raw) return;
+
+    const obj = JSON.parse(raw || "{}");
+    const ts = Number(obj.ts || 0);
+    if (!ts) { localStorage.removeItem("fw_on_next_search"); return; }
+
+    // ✅ 古すぎるフラグは捨てる（例：24時間）
+    const TTL = 24 * 60 * 60 * 1000;
+    if (Date.now() - ts > TTL) {
+      localStorage.removeItem("fw_on_next_search");
+      return;
+    }
+
+    // ✅ ここで発射（1回だけ）
+    localStorage.removeItem("fw_on_next_search");
+    fireworksOnce();
+  }catch(e){
+    console.warn("fireIfApprovedOnNextSearch error", e);
+  }
+}
 
 // =========================
 // UI: 検索→候補表示
@@ -1270,6 +1293,8 @@ async function renderRanking(){
             state.pops = null;
           } else {
             setStatus("取得しました", "ok");
+            // ✅ 承認があった場合は「地域検索成功」タイミングで花火
+  　　　　　　try { fireIfApprovedOnNextSearch(); } catch {}
           }
 
           scheduleRender();
@@ -1753,9 +1778,13 @@ const ids = Array.from(new Set(
     localStorage.setItem(key, JSON.stringify(cleaned));
 
     if (becameApproved > 0) {
-  // ✅ 承認検知をフラグで保持（タブ非アクティブでも「後で確実に花火」）
-  try { localStorage.setItem("fw_pending", String(Date.now())); } catch {}
-  try { fireworksOnce(); } catch {}
+  // ✅ 花火は「次の地域検索で」上げるため、フラグだけ立てる
+  try {
+    localStorage.setItem("fw_on_next_search", JSON.stringify({
+      ts: Date.now(),
+      count: becameApproved
+    }));
+  } catch {}
 }
 
 
