@@ -1,6 +1,6 @@
 // script.js
 // ✅ BUILD（反映確認用）
-const BUILD = "2026-02-05_script_fix_mySubmissions_unify_v2_missing_guard";
+const BUILD = "2026-02-05_script_fix_mySubmissions_unify_v2_fireworks_5s_v1";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -633,9 +633,7 @@ function getCurrentMainBucket(){
   return window.bucket10(Math.max(...arr));
 }
 
-// =========================
 // UI helper
-// =========================
 function setStatus(text, kind="muted") {
   const el = document.getElementById("placeStatus");
   if (!el) return;
@@ -660,9 +658,7 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-// =========================
 // ✅ ペンネーム表示ルール
-// =========================
 function normalizePenName(name){
   const n = String(name || "").trim();
   if (!n) return null;
@@ -675,9 +671,7 @@ function penHtmlIfAny(name){
   return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
 }
 
-// =========================
 // theme：降水確率で背景を変える
-// =========================
 function applyTheme(rounded){
   try{
     const body = document.body;
@@ -772,16 +766,13 @@ function updateLikeUI(slot) {
   };
 }
 
-// =========================
 // 「このネタを削除」：ローカルネタ廃止につき常に非表示
-// =========================
 function updateDeleteUI(slotKey) {
   const btn = document.getElementById(`del_${slotKey}`);
   if (!btn) return;
   btn.style.display = "none";
   btn.onclick = null;
 }
-
 // =========================
 // render（メイン）
 // =========================
@@ -1030,6 +1021,7 @@ function ensureRankingDom(){
 
   refreshBtn.insertAdjacentElement("afterend", wrap);
 }
+
 // =========================
 // ✅ ランキング取得の呼びすぎ防止（KV Read節約）
 // =========================
@@ -1171,6 +1163,10 @@ async function renderRanking(){
     if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
   }
 }
+
+// =========================
+// ✅ 承認フラグがあれば「次の地域検索成功」で花火（1回だけ）
+// =========================
 function fireIfApprovedOnNextSearch(){
   try{
     const raw = localStorage.getItem("fw_on_next_search");
@@ -1194,7 +1190,6 @@ function fireIfApprovedOnNextSearch(){
     console.warn("fireIfApprovedOnNextSearch error", e);
   }
 }
-
 // =========================
 // UI: 検索→候補表示
 // =========================
@@ -1293,8 +1288,8 @@ function fireIfApprovedOnNextSearch(){
             state.pops = null;
           } else {
             setStatus("取得しました", "ok");
-            // ✅ 承認があった場合は「地域検索成功」タイミングで花火
-  　　　　　　try { fireIfApprovedOnNextSearch(); } catch {}
+            // ✅ 承認があった場合は「地域検索成功」タイミングで花火（1回だけ）
+            try { fireIfApprovedOnNextSearch(); } catch {}
           }
 
           scheduleRender();
@@ -1387,7 +1382,7 @@ let __fwRAF = 0;
 let __fwActive = false;
 let __fwParticles = [];
 let __fwStartAt = 0;
-let __fwDuration = 5000;
+let __fwDuration = 5000; // ✅ 5秒
 
 function ensureFireworksCanvas(){
   if (__fwCanvas) return;
@@ -1400,7 +1395,6 @@ function ensureFireworksCanvas(){
   __fwCanvas.style.width = "100%";
   __fwCanvas.style.height = "100%";
   __fwCanvas.style.pointerEvents = "none";
-  // ✅最前面を確実に
   __fwCanvas.style.zIndex = "2147483647";
   __fwCanvas.style.opacity = "0";
   __fwCanvas.style.willChange = "opacity, transform";
@@ -1416,8 +1410,6 @@ function ensureFireworksCanvas(){
     const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     __fwCanvas.width  = Math.floor(window.innerWidth  * dpr);
     __fwCanvas.height = Math.floor(window.innerHeight * dpr);
-
-    // ✅ setTransform(dpr...) だと環境によっては見えないことがあるので、確実な方式に
     __fwCtx.setTransform(1, 0, 0, 1, 0, 0);
     __fwCtx.scale(dpr, dpr);
   };
@@ -1425,7 +1417,6 @@ function ensureFireworksCanvas(){
   resize();
   window.addEventListener("resize", resize);
 }
-
 
 function rand(min, max){ return Math.random() * (max - min) + min; }
 
@@ -1452,17 +1443,17 @@ function fireworksOnce(){
 
   const now = performance.now();
 
-  // すでに動作中なら延長だけ
+  // ✅ すでに動作中なら「5秒に延長」して続行
   if (__fwActive){
     __fwStartAt = now;
-    __fwDuration = 2600;
+    __fwDuration = 5000; // ✅ 5秒
     __fwCanvas.style.opacity = "1";
     return;
   }
 
   __fwActive = true;
   __fwStartAt = now;
-  __fwDuration = 2600;
+  __fwDuration = 5000; // ✅ 5秒
   __fwParticles = [];
   __fwCanvas.style.opacity = "1";
 
@@ -1478,15 +1469,13 @@ function fireworksOnce(){
     const t = performance.now();
     const elapsed = t - __fwStartAt;
 
-    if (Math.random() < 0.12 && elapsed < __fwDuration){
+    // ✅ 5秒間は追加バーストも出す（少し多め）
+    if (Math.random() < 0.16 && elapsed < __fwDuration){
       spawnBurst(rand(w*0.15, w*0.85), rand(h*0.18, h*0.5));
     }
 
-    // ✅ clearRect は “CSSピクセル” で確実に
     __fwCtx.globalCompositeOperation = "source-over";
     __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-    // ✅ 見えやすく（lighter は環境で薄くなることがある）
     __fwCtx.globalCompositeOperation = "source-over";
 
     for (let i=__fwParticles.length-1; i>=0; i--){
@@ -1596,8 +1585,14 @@ window.addEventListener("load", () => {
 
       target.status = "approved";
       localStorage.setItem(key, JSON.stringify(list));
+
+      // ✅ 本番仕様：承認されたら「次の地域検索で」花火
+      try {
+        localStorage.setItem("fw_on_next_search", JSON.stringify({ ts: Date.now(), count: 1 }));
+      } catch {}
+
       renderMySubmissions();
-      fireworksOnce();
+      alert("承認(テスト)にしました。次に地域検索で花火が上がります。");
     };
 
     document.body.appendChild(btn2);
@@ -1649,7 +1644,6 @@ function wireSubmit(){
     btn.textContent = "送信中…";
 
     try{
-      // ✅✅✅ 修正2：clientId を作って送る（canonicalId互換）
       const clientId = makeGlobalId({ mode, bucket: window.bucket10(bucket), text, source: "local" });
 
       const out = await submitToPending(
@@ -1661,10 +1655,7 @@ function wireSubmit(){
         clientId
       );
 
-      // ✅超重要：WorkersのIDが空なら「同期不能」なので保存しない
       const serverId = String(out?.id || "").trim();
-
-      // デバッグしやすいようにログ（本番でも害なし）
       console.log("[submitToPending] out=", out, " serverId=", serverId, " clientId=", clientId);
 
       if (!serverId) {
@@ -1673,31 +1664,22 @@ function wireSubmit(){
         return;
       }
 
-      if (serverId.startsWith("local_")) {
-        // 念のため（今後local_は使わない運用）
-        alert("サーバIDが local_ になっています。承認状態を同期できない可能性が高いです。\nworker.js の /api/submit を確認してください。");
-      }
+      const my = {
+        id: serverId,                 // 互換のため残す
+        serverId: serverId,           // ✅ サーバー安定ID
+        clientId: clientId,           // ✅ ローカル生成ID
+        text: text,
+        status: "pending",
+        createdAt: Date.now(),
+        mode: mode,
+        bucket: window.bucket10(bucket)
+      };
 
-      // ✅ WorkersのID + clientId の両方を保存（これで取りこぼし救済）
-const my = {
-  id: serverId,                 // 表示/基本キー（互換のため残す）
-  serverId: serverId,           // ✅ サーバー安定ID
-  clientId: clientId,           // ✅ ローカル生成ID（canonicalId互換）
-  text: text,
-  status: "pending",
-  createdAt: Date.now(),
-  mode: mode,
-  bucket: window.bucket10(bucket)
-};
+      saveMySubmission(my);
 
-saveMySubmission(my);
-
-
-      // ✅ 送信後のUI更新
       ta.value = "";
       try{ ensureMySubmissionsDom(); }catch{}
       try{ renderMySubmissions(); }catch{}
-      // すぐ同期（承認済みなら即消える）
       try{ await syncMySubmissionsStatus(); }catch{}
 
       alert("送信しました！（承認待ちに入りました）");
@@ -1719,24 +1701,19 @@ async function syncMySubmissionsStatus(){
     const list = JSON.parse(localStorage.getItem(key) || "[]");
     if (!Array.isArray(list) || list.length === 0) return;
 
-    // ✅ local_ はサーバに存在しない前提なので除外（ただし UI では「同期不可」と見せる）
-    // ✅ serverId/clientId を両方投げる（どちらで保存されていても拾える）
-// local_ は除外
-const ids = Array.from(new Set(
-  list.flatMap(x => {
-    const a = String(x?.serverId || x?.id || "").trim();
-    const b = String(x?.clientId || "").trim();
-    return [a, b].filter(v => v && !v.startsWith("local_"));
-  })
-)).slice(0, 50);
-
+    const ids = Array.from(new Set(
+      list.flatMap(x => {
+        const a = String(x?.serverId || x?.id || "").trim();
+        const b = String(x?.clientId || "").trim();
+        return [a, b].filter(v => v && !v.startsWith("local_"));
+      })
+    )).slice(0, 50);
 
     if (ids.length === 0) return;
 
     const res = await fetch(`${API_BASE}/api/status?ids=${encodeURIComponent(ids.join(","))}`, { method:"GET" });
     const data = await res.json().catch(()=>null);
 
-    // ✅ missing_guard：レスポンス壊れ/ok=false のときは更新しない
     if (!res.ok || !data?.ok) {
       console.warn("syncMySubmissionsStatus: bad response", res.status, data);
       return;
@@ -1748,45 +1725,43 @@ const ids = Array.from(new Set(
     let becameApproved = 0;
 
     const next = list.map(x => {
-  const serverId = String(x?.serverId || "").trim();
-  const clientId = String(x?.clientId || "").trim();
-  const id = String(x?.id || "").trim(); // 互換用
+      const serverId = String(x?.serverId || "").trim();
+      const clientId = String(x?.clientId || "").trim();
+      const id = String(x?.id || "").trim();
 
-  const prev = String(x?.status || "pending");
+      const prev = String(x?.status || "pending");
 
-  // ✅ 優先順：serverId → clientId → id
-  const st = map.get(serverId) || map.get(clientId) || map.get(id);
-  if (!st) return x;
+      const st = map.get(serverId) || map.get(clientId) || map.get(id);
+      if (!st) return x;
 
-  const nowStatus =
-    (st.status === "public")  ? "approved" :
-    (st.status === "pending") ? "pending"  :
-    (st.status === "missing") ? "missing"  :
-    prev;
+      const nowStatus =
+        (st.status === "public")  ? "approved" :
+        (st.status === "pending") ? "pending"  :
+        (st.status === "missing") ? "missing"  :
+        prev;
 
-  return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
-});
+      if (prev !== "approved" && nowStatus === "approved") becameApproved++;
 
+      return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
+    });
 
-    // ✅ 承認済みは「あなたの投稿」から消す（追加仕様）
     // ✅ 承認済み(approved) と サーバ削除(missing) はローカルから消す
-　const cleaned = next.filter(x => {
-  const st = String(x?.status || "");
-  return (st !== "approved" && st !== "missing");
-});
+    const cleaned = next.filter(x => {
+      const st = String(x?.status || "");
+      return (st !== "approved" && st !== "missing");
+    });
 
     localStorage.setItem(key, JSON.stringify(cleaned));
 
     if (becameApproved > 0) {
-  // ✅ 花火は「次の地域検索で」上げるため、フラグだけ立てる
-  try {
-    localStorage.setItem("fw_on_next_search", JSON.stringify({
-      ts: Date.now(),
-      count: becameApproved
-    }));
-  } catch {}
-}
-
+      // ✅ 花火は「次の地域検索で」上げる（フラグだけ）
+      try {
+        localStorage.setItem("fw_on_next_search", JSON.stringify({
+          ts: Date.now(),
+          count: becameApproved
+        }));
+      } catch {}
+    }
 
     try{ renderMySubmissions(); }catch{}
   }catch(e){
@@ -1803,7 +1778,6 @@ function saveMySubmission(item){
 
   list.unshift(item);
 
-  // ✅ 無限に増えないように上限（過去分でlocal_が溜まっても暴れない）
   const MAX = 200;
   if (list.length > MAX) list.length = MAX;
 
@@ -1833,7 +1807,6 @@ function renderMySubmissions(){
       const isLocal = id.startsWith("local_");
       const isMissing = (st === "missing");
 
-      // ※仕様上 approved は同期時に消えるが、念のため表示ラベルは残す
       const statusLabel =
         (st === "approved")
           ? `<span style="color:#16a34a;font-weight:900;">採用</span>`
@@ -1866,26 +1839,6 @@ function renderMySubmissions(){
     })
     .join("");
 }
-function triggerPendingFireworks(){
-  try{
-    const ts = Number(localStorage.getItem("fw_pending") || 0);
-    if (!ts) return;
-
-    // 5分以内の保留だけ有効
-    if (Date.now() - ts > 5 * 60 * 1000) {
-      localStorage.removeItem("fw_pending");
-      return;
-    }
-
-    // タブが見えてる時だけ発射
-    if (document.visibilityState !== "visible") return;
-
-    localStorage.removeItem("fw_pending");
-    fireworksOnce();
-  }catch(e){
-    console.warn("triggerPendingFireworks error", e);
-  }
-}
 
 // ==============================
 // ✅ 初期化
@@ -1902,8 +1855,6 @@ async function init(){
 
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
-  try { triggerPendingFireworks(); } catch {}
-
 }
 
 if (document.readyState === "loading") {
@@ -1911,13 +1862,5 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    try { triggerPendingFireworks(); } catch {}
-  }
-});
-window.addEventListener("focus", () => {
-  try { triggerPendingFireworks(); } catch {}
-});
 
-// # ENDどこの行を修正しますか
+// # END
