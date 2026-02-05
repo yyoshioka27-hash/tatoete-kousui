@@ -952,10 +952,10 @@
 
     listEl.innerHTML = html;
 
-    // ✅ pager（前へ / 次へ）
+        // ✅ pager（前へ / 次へ / ページ指定）
     const all = getVisibleItemsAll();
     const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
-    const start = all.length ? ((page - 1) * PAGE_SIZE + 1) : 0;
+    const start = all.length ? (page - 1) * PAGE_SIZE + 1 : 0;
     const end = Math.min(page * PAGE_SIZE, all.length);
 
     if (all.length === 0){
@@ -963,13 +963,37 @@
     } else {
       pagerEl.innerHTML = `
         <button id="btnPrev" ${page<=1 ? "disabled" : ""}>前へ</button>
+
         <span class="pill" style="margin:0 10px;">
           ページ ${page} / ${totalPages}（${start}-${end} / ${all.length}件）
         </span>
+
         <button id="btnNext" ${page>=totalPages ? "disabled" : ""}>次へ</button>
+
+        <span class="pill" style="margin-left:12px; display:inline-flex; gap:8px; align-items:center;">
+          <span class="muted" style="font-size:12px;">ページ指定</span>
+          <input id="pageInput"
+                 type="number"
+                 min="1"
+                 max="${totalPages}"
+                 value="${page}"
+                 style="width:90px; min-width:0; padding:8px 10px; border-radius:10px; border:1px solid rgba(15,23,42,.12); font-size:14px;"
+          />
+          <button id="btnGoPage" class="miniBtn">移動</button>
+        </span>
       `;
 
-            $("btnPrev").addEventListener("click", () => {
+      // ✅ ページ切替後、一覧の先頭へスクロール（あなたの「次へで上へ」要望）
+      function scrollToListTop(){
+        try{
+          const topEl = document.getElementById("list");
+          if (!topEl) return;
+          const y = topEl.getBoundingClientRect().top + window.pageYOffset - 10;
+          window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+        }catch(e){}
+      }
+
+      $("btnPrev").addEventListener("click", () => {
         if (page > 1) {
           page--;
           render();
@@ -985,8 +1009,31 @@
         }
       });
 
+      // ✅ ページ指定：移動
+      function goToPage(){
+        const inp = document.getElementById("pageInput");
+        if (!inp) return;
+        let p = Number(inp.value);
+        if (!Number.isFinite(p)) return;
+        p = Math.floor(p);
+        if (p < 1) p = 1;
+        if (p > totalPages) p = totalPages;
+        if (p === page) return;
+        page = p;
+        render();
+        scrollToListTop();
+      }
+
+      $("btnGoPage").addEventListener("click", goToPage);
+
+      // ✅ Enterキーで移動
+      const pi = document.getElementById("pageInput");
+      if (pi){
+        pi.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") goToPage();
+        });
+      }
     }
-  }
 
   // Settings
   function saveSettings(){
