@@ -1,6 +1,6 @@
 // script.js
 // ✅ BUILD（反映確認用）
-const BUILD = "2026-02-05_script_fix_mySubmissions_unify_v1";
+const BUILD = "2026-02-05_script_fix_mySubmissions_unify_v2_missing_guard";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -291,6 +291,7 @@ async function fetchHallOfFame(mode, bucket, limit = 50){
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return Array.isArray(data.items) ? data.items : [];
 }
+
 // ==============================
 // 共有ネタ（GitHub PagesのJSON / metaphors.json）
 // ==============================
@@ -1379,9 +1380,26 @@ function wireSubmit(){
     try{
       const out = await submitToPending(mode, window.bucket10(bucket), text, (penName || null), (penName ? penPin : null));
 
+      // ✅超重要：WorkersのIDが空なら「同期不能」なので保存しない
+      const serverId = String(out?.id || "").trim();
+
+      // デバッグしやすいようにログ（本番でも害なし）
+      console.log("[submitToPending] out=", out, " serverId=", serverId);
+
+      if (!serverId) {
+        alert("送信は成功しましたが、サーバIDが取得できませんでした。\n承認状態を同期できないため、この端末の『あなたの投稿』には保存しません。\n（worker.js の /api/submit が id を返しているか要確認）");
+        ta.value = "";
+        return;
+      }
+
+      if (serverId.startsWith("local_")) {
+        // 念のため（今後local_は使わない運用）
+        alert("サーバIDが local_ になっています。承認状態を同期できない可能性が高いです。\nworker.js の /api/submit を確認してください。");
+      }
+
       // ✅ WorkersのIDを保存（ここが重要）
       const my = {
-        id: String(out.id || "").trim(),
+        id: serverId,                 // ✅ out.id を必ず使う
         text: text,
         status: "pending",
         createdAt: Date.now(),
@@ -1626,6 +1644,7 @@ async function syncMySubmissionsStatus(){
     const list = JSON.parse(localStorage.getItem(key) || "[]");
     if (!Array.isArray(list) || list.length === 0) return;
 
+    // ✅ local_ はサーバに存在しない前提なので除外（ただし UI では「同期不可」と見せる）
     const ids = Array.from(new Set(
       list.map(x => String(x?.id || "").trim()).filter(id => id && !id.startsWith("local_"))
     )).slice(0, 50);
@@ -1634,6 +1653,7 @@ async function syncMySubmissionsStatus(){
 
     const res = await fetch(`${API_BASE}/api/status?ids=${encodeURIComponent(ids.join(","))}`, { method:"GET" });
     const data = await res.json().catch(()=>null);
+
     const items = Array.isArray(data?.items) ? data.items : [];
     const map = new Map(items.map(x => [String(x.id), x]));
 
@@ -1645,13 +1665,20 @@ async function syncMySubmissionsStatus(){
       const st = map.get(id);
       if (!st) return x;
 
-      const nowStatus = (st.status === "public") ? "approved"
-                      : (st.status === "pending") ? "pending"
-                      : prev;
+      // ✅ ここが肝：
+      // - public → approved
+      // - pending → pending
+      // - missing → missing（“承認中が消えない”を可視化）
+      const nowStatus =
+        (st.status === "public")  ? "approved" :
+        (st.status === "pending") ? "pending"  :
+        (st.status === "missing") ? "missing"  :
+        prev;
 
       if (prev !== "approved" && nowStatus === "approved") {
         becameApproved++;
       }
+
       return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
     });
 
@@ -1673,12 +1700,18 @@ async function syncMySubmissionsStatus(){
 function saveMySubmission(item){
   const key = "my_submissions";
   const list = JSON.parse(localStorage.getItem(key) || "[]");
+
   list.unshift(item);
+
+  // ✅ 無限に増えないように上限（過去分でlocal_が溜まっても暴れない）
+  const MAX = 200;
+  if (list.length > MAX) list.length = MAX;
+
   localStorage.setItem(key, JSON.stringify(list));
 }
 
 // ==============================
-// ✅ 自分の投稿（承認中 / 採用）表示（※これが唯一の定義）
+// ✅ 自分の投稿（承認中 / 採用 / 同期不可）表示（※これが唯一の定義）
 // ==============================
 function renderMySubmissions(){
   const listEl = document.getElementById("my-submissions-list");
@@ -1691,14 +1724,28 @@ function renderMySubmissions(){
     return;
   }
 
-  // 新しい順で上に（見やすい）
   listEl.innerHTML = list
     .slice(0, 30)
     .map(item => {
+      const id = String(item?.id || "");
+      const st = String(item?.status || "pending");
+
+      const isLocal = id.startsWith("local_");
+      const isMissing = (st === "missing");
+
       const statusLabel =
-        item.status === "approved"
+        (st === "approved")
           ? `<span style="color:#16a34a;font-weight:900;">採用</span>`
-          : `<span style="color:#f59e0b;font-weight:900;">承認中</span>`;
+          : (isLocal || isMissing)
+            ? `<span style="color:#64748b;font-weight:900;">同期不可</span>`
+            : `<span style="color:#f59e0b;font-weight:900;">承認中</span>`;
+
+      const note =
+        isLocal
+          ? `<div class="muted" style="margin-top:4px;font-size:11px;">※この投稿は local_ のため承認状態を自動更新できません</div>`
+          : isMissing
+            ? `<div class="muted" style="margin-top:4px;font-size:11px;">※サーバ側にIDが見つかりません（/api/status=missing）。worker.js の保存キー/参照キーが一致しているか確認してください</div>`
+            : "";
 
       return `
         <div style="
@@ -1712,6 +1759,7 @@ function renderMySubmissions(){
           <div class="muted" style="margin-top:6px;font-size:12px;">
             状態：${statusLabel}
           </div>
+          ${note}
         </div>
       `;
     })
