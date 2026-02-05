@@ -855,15 +855,7 @@
     resetPager();
     render();
   }
-　  // ✅ ページ切替後、一覧の先頭へスクロール（ヘッダーに隠れないよう少し上余白）
-  function scrollToListTop(){
-    try{
-      const topEl = document.getElementById("list"); // ここに移動
-      if (!topEl) return;
-      const y = topEl.getBoundingClientRect().top + window.pageYOffset - 10;
-      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
-    }catch(e){}
-  }
+　  
 
   function render(){
     updateCounts();
@@ -983,7 +975,7 @@
         </span>
       `;
 
-      // ✅ ページ切替後、一覧の先頭へスクロール（あなたの「次へで上へ」要望）
+      // ✅ ページ切替後一覧の先頭へスクロール（あなたの「次へで上へ」要望）
       function scrollToListTop(){
         try{
           const topEl = document.getElementById("list");
@@ -1033,8 +1025,9 @@
           if (e.key === "Enter") goToPage();
         });
       }
-    }
-　}
+     }
+  } // END render()
+
   // Settings
   function saveSettings(){
     localStorage.setItem(LS_API, apiBase() || DEFAULT_API_BASE);
@@ -1228,6 +1221,7 @@
 
       selectedIds = new Set();
       syncCacheAll();
+      resetPager();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1292,6 +1286,7 @@
       await Promise.all([loadPublic(signal), loadAll(signal)]);
       selectedIds = new Set();
       syncCacheAll();
+      resetPager();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1374,6 +1369,7 @@
 
       selectedIds = new Set();
       syncCacheAll();
+      resetPager();
       render();
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
