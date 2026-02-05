@@ -1753,8 +1753,11 @@ const ids = Array.from(new Set(
     localStorage.setItem(key, JSON.stringify(cleaned));
 
     if (becameApproved > 0) {
-      try{ fireworksOnce(); }catch{}
-    }
+  // ✅ 承認検知をフラグで保持（タブ非アクティブでも「後で確実に花火」）
+  try { localStorage.setItem("fw_pending", String(Date.now())); } catch {}
+  try { fireworksOnce(); } catch {}
+}
+
 
     try{ renderMySubmissions(); }catch{}
   }catch(e){
@@ -1834,6 +1837,26 @@ function renderMySubmissions(){
     })
     .join("");
 }
+function triggerPendingFireworks(){
+  try{
+    const ts = Number(localStorage.getItem("fw_pending") || 0);
+    if (!ts) return;
+
+    // 5分以内の保留だけ有効
+    if (Date.now() - ts > 5 * 60 * 1000) {
+      localStorage.removeItem("fw_pending");
+      return;
+    }
+
+    // タブが見えてる時だけ発射
+    if (document.visibilityState !== "visible") return;
+
+    localStorage.removeItem("fw_pending");
+    fireworksOnce();
+  }catch(e){
+    console.warn("triggerPendingFireworks error", e);
+  }
+}
 
 // ==============================
 // ✅ 初期化
@@ -1850,6 +1873,8 @@ async function init(){
 
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
+  try { triggerPendingFireworks(); } catch {}
+
 }
 
 if (document.readyState === "loading") {
@@ -1857,5 +1882,13 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    try { triggerPendingFireworks(); } catch {}
+  }
+});
+window.addEventListener("focus", () => {
+  try { triggerPendingFireworks(); } catch {}
+});
 
 // # ENDどこの行を修正しますか
