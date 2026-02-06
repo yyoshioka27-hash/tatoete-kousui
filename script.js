@@ -32,6 +32,30 @@ function isNgText(text){
   if (!t) return true;
   return NG_PHRASES.some(ng => ng && t.includes(ng));
 }
+// ✅ ネタ本文内の「xx%」がバケットと一致しない場合は除外する
+function hasMismatchedPercent(text, bucket){
+  try{
+    const t = String(text || "");
+    const b = Number(bucket);
+    if (!Number.isFinite(b)) return false;
+
+    const re = /(\d{1,3})\s*%/g;
+    let m;
+
+    while ((m = re.exec(t)) !== null){
+      const p = Number(m[1]);
+      if (!Number.isFinite(p)) continue;
+      if (p < 0 || p > 100) continue;
+
+      // ✅ 1つでもズレてたら除外
+      if (p !== b) return true;
+    }
+
+    return false; // %が無いならOK
+  }catch{
+    return false;
+  }
+}
 
 // =========================
 // ✅ いいね演出用CSSを注入（HTML改修不要）
