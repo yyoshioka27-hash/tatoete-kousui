@@ -831,6 +831,7 @@ function render() {
     }
 
     const rounded = window.bucket10(value);
+    console.log("[pick]", slotKey, label, "value=", value, "rounded=", rounded, "mode=", getSelectedMode());
     if (popEl) popEl.textContent = `${rounded}%`;
     setIcon(slotKey, rounded);
 
