@@ -898,10 +898,20 @@ function render() {
     if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
   } else {
     const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
-    const metaAll = document.getElementById("metaphor");
-    if (metaAll) metaAll.textContent = `今日いちばん怪しいのは【${maxOne.label}】：${maxOne.value}% → ${maxOne.text}`;
-    try { applyTheme(maxOne.value); } catch {}
-  }
+const metaAll = document.getElementById("metaphor");
+
+if (metaAll) {
+  // maxOne.label は "朝/昼/夜"。slotKeyへ変換
+  const slotKey = (maxOne.label === "朝") ? "m" : (maxOne.label === "昼") ? "d" : "e";
+  const p = state.currentPhrases?.[slotKey] || {};
+  const src = p.source || "base";
+  const bkt = Number(p.bucket ?? maxOne.value);
+
+  metaAll.innerHTML =
+    `今日いちばん怪しいのは【${escapeHtml(maxOne.label)}】：${escapeHtml(String(maxOne.value))}% → ${escapeHtml(String(maxOne.text))}` +
+    ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(src)} b:${escapeHtml(String(bkt))}]</span>`;
+}
+
 
   if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
