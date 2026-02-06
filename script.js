@@ -835,11 +835,14 @@ function render() {
     const hofPicked = !!picked.hof || (totalLikesPicked >= Number(state.hofThreshold || 20));
 
     if (metaEl) {
-      const penHtml = penHtmlIfAny(displayPen);
-      const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
-     metaEl.innerHTML =
-  `${escapeHtml(label)}：${escapeHtml(picked.text)}${penHtml}${hofHtml}` +
-  ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source||"base")} b:${rounded}]</span>`;
+  const penHtml = penHtmlIfAny(displayPen);
+  const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
+
+  metaEl.innerHTML =
+    `${escapeHtml(label)}：${escapeHtml(picked.text)}${penHtml}${hofHtml}` +
+    ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source||"base")} b:${rounded}]</span>`;
+}
+
 
 
     const prevId = state.currentPhrases[slotKey]?.id || null;
