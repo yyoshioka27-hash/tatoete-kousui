@@ -56,6 +56,19 @@ function hasMismatchedPercent(text, bucket){
     return false;
   }
 }
+// ✅ 「100%/100％」だけは、bucketが100以外なら確実に除外（0%に100%ネタ混入対策）
+function hasHard100PercentMismatch(text, bucket){
+  try{
+    const t = String(text || "");
+    const b = Number(bucket);
+    if (!Number.isFinite(b)) return false;
+    if (b === 100) return false; // 100%バケットならOK
+    // 100%/100％/約100% を検出
+    return /100\s*(%|％)/.test(t);
+  }catch{
+    return false;
+  }
+}
 
 // =========================
 // ✅ いいね演出用CSSを注入（HTML改修不要）
@@ -614,6 +627,7 @@ function buildCandidatePool(mode, bucket) {
     const t = String(item?.text || "").trim();
     if (!t) continue;
     if (isNgText(t)) continue;
+    if (hasHard100PercentMismatch(t, b)) continue;
     if (seen.has(t)) continue;
     seen.add(t);
 
@@ -624,6 +638,8 @@ function buildCandidatePool(mode, bucket) {
       penName: item.penName || null,
       totalLikes: Number(item.totalLikes || 0),
       hof: !!item.hof
+      bucket: b,   // ✅ 追加
+      mode: m      // ✅ 追加
     });
   }
   return out;
