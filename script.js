@@ -434,6 +434,7 @@ async function fetchWithTimeout(url, ms = 4500){
 // ✅ 上部ネタ固定フラグ（ランキング更新では再抽選しない）
 // =========================
 let __freezeMetaphor = false;
+window.__forceRepick = false; // ✅ true のときだけ朝昼夜を再抽選する
 
 // =========================
 // state
@@ -812,12 +813,23 @@ function render() {
     const mode = getSelectedMode();
     let picked;
 
-    // ✅ 固定中なら前回のネタを再利用
-    if (__freezeMetaphor && state.currentPhrases[slotKey]?.text) {
-      picked = state.currentPhrases[slotKey];
-    } else {
-      picked = pickMetaphor(mode, rounded);
-    }
+    // ✅ 仕様：同じ mode×同じバケットなら、ランキング読み込み等の再renderでは「同じネタを固定」する
+const prev = state.currentPhrases[slotKey] || {};
+const sameContext =
+  !!prev.text &&
+  prev.mode === mode &&
+  Number(prev.bucket) === Number(rounded) &&
+  !isNgText(prev.text);
+
+// ✅ 強制的に再抽選したい時だけ false にする（下で作る）
+if (!window.__forceRepick && sameContext) {
+  picked = prev;                // ← 固定
+} else if (__freezeMetaphor && prev?.text) {
+  picked = prev;                // ← ランキング中の固定
+} else {
+  picked = pickMetaphor(mode, rounded);
+}
+
 
     // ✅ 万一 NG を引いたら再抽選（最大5回）
     for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
@@ -1264,6 +1276,8 @@ function fireIfApprovedOnNextSearch(){
         const opt = sel.options[sel.selectedIndex];
         const lat = Number(opt.dataset.lat);
         const lon = Number(opt.dataset.lon);
+        window.__forceRepick = true;   // ✅ 地点を変えたら再抽選
+        setTimeout(() => { window.__forceRepick = false; }, 0);
 
         state.placeLabel = opt.textContent;
         state.source = "API: Open-Meteo";
@@ -1364,9 +1378,12 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   const btn = document.getElementById("refresh");
   if (!btn) return;
   btn.onclick = () => {
-    __freezeMetaphor = false;
-    scheduleRender();
-  };
+  window.__forceRepick = true;   // ✅ 今回だけ再抽選
+  __freezeMetaphor = false;
+  scheduleRender();
+  setTimeout(() => { window.__forceRepick = false; }, 0);
+};
+
 })();
 
 // ==============================
