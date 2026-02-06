@@ -632,6 +632,12 @@ function buildCandidatePool(mode, bucket) {
 function pickMetaphor(mode, bucket) {
   const b = window.bucket10(bucket);
   const pool = buildCandidatePool(mode, b);
+  console.log("[pool]", mode, bucket,
+  "len=", pool.length,
+  "sources=", Array.from(new Set(pool.map(x=>x.source))).join(","),
+  "hasShower=", pool.some(x => String(x.text||"").includes("帰宅後のシャワー")),
+  "sample=", pool.slice(0,3).map(x=>`[${x.source}]${x.text}`));
+
   if (!pool.length) return { text: "データなし", source: null, id: null, penName: null, totalLikes: 0, hof: false };
 
   const key = `${mode}_${b}`;
