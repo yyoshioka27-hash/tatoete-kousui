@@ -925,13 +925,16 @@ if (metaAll) {
 }
 
 
-  if (footEl) footEl.textContent =
+    if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
 
   try { renderRanking(); } catch {}
-}
+}   // ← これは else の終わり
+
+}   // ✅ これを追加：render() の終わり
 
 function renderEmpty() {
+
   const metaAll = document.getElementById("metaphor");
 
   ["m","d","e"].forEach(k => {
