@@ -1043,124 +1043,132 @@ async function renderRankingThrottled(minIntervalMs = 60000){
 // ランキング表示
 // =========================
 async function renderRanking(){
-  __freezeMetaphor = true; // ✅ ランキング更新中はネタ固定
+  // ✅ ランキング更新中だけネタ固定（終わったら必ず元に戻す）
+  const __prevFreeze = __freezeMetaphor;
+  __freezeMetaphor = true;
 
-  ensureRankingDom();
-  const wrap = document.getElementById("todayRankingWrap");
-  if (!wrap) return;
-
-  const bucket = getCurrentMainBucket();
-  const mode = getSelectedMode();
-
-  if (bucket == null) {
-    wrap.innerHTML = "";
-    return;
-  }
-
-  const hofTh = Number(state.hofThreshold || 20);
-
-  wrap.innerHTML = `
-    <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
-      <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（毎日0:00にリセット）</div>
-      <div class="muted" id="rankingBodyToday">読み込み中…</div>
-    </div>
-
-    <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">累計ランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
-      <div class="muted" style="margin-bottom:8px;">※累計👍（全期間）で集計</div>
-      <div class="muted" id="rankingBodyTotal">読み込み中…</div>
-    </div>
-
-    <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（累計👍${hofTh}以上）</div>
-      <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
-      <div class="muted" id="rankingBodyHof">読み込み中…</div>
-    </div>
-  `;
-
-  const bodyToday = document.getElementById("rankingBodyToday");
-  const bodyTotal = document.getElementById("rankingBodyTotal");
-  const bodyHof   = document.getElementById("rankingBodyHof");
-
-  // ---- 今日TOP3 ----
   try{
-    const items = (await fetchRankingToday(mode, bucket, 3))
-      .filter(it => !isNgText(it?.text));
+    ensureRankingDom();
+    const wrap = document.getElementById("todayRankingWrap");
+    if (!wrap) return;
 
-    if (!items.length) {
-      if (bodyToday) bodyToday.textContent = "まだランキングがありません（今日の👍が0件）";
-    } else {
-      const rows = items.map((it, idx) => {
-        const pen = penHtmlIfAny(it.penName);
-        return `
-          <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}</div>
-            <div class="muted">今日の👍：${Number(it.likes||0)}</div>
-          </div>
-        `;
-      }).join("");
-      if (bodyToday) bodyToday.innerHTML = rows;
+    const bucket = getCurrentMainBucket();
+    const mode = getSelectedMode();
+
+    if (bucket == null) {
+      wrap.innerHTML = "";
+      return;
     }
-  } catch (e) {
-    if (bodyToday) bodyToday.textContent = `ランキング取得に失敗：${e?.message || e}`;
-  }
 
-  // ---- 累計TOP3 ----
-  try{
-    const items = (await fetchRankingTotal(mode, bucket, 3))
-      .filter(it => !isNgText(it?.text));
+    const hofTh = Number(state.hofThreshold || 20);
 
-    if (!items.length) {
-      if (bodyTotal) bodyTotal.textContent = "まだ累計ランキングがありません（累計👍が0件）";
-    } else {
-      const rows = items.map((it, idx) => {
-        const pen = penHtmlIfAny(it.penName);
-        const totalLikes = Number(it.totalLikes || 0);
-        const hof = !!it.hof || (totalLikes >= Number(state.hofThreshold || 20));
-        const hofTag = hof ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
-        return `
-          <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-            <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${hofTag}</div>
-            <div class="muted">累計👍：${totalLikes}</div>
-          </div>
-        `;
-      }).join("");
-      if (bodyTotal) bodyTotal.innerHTML = rows;
+    wrap.innerHTML = `
+      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
+        <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（毎日0:00にリセット）</div>
+        <div class="muted" id="rankingBodyToday">読み込み中…</div>
+      </div>
+
+      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">累計ランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
+        <div class="muted" style="margin-bottom:8px;">※累計👍（全期間）で集計</div>
+        <div class="muted" id="rankingBodyTotal">読み込み中…</div>
+      </div>
+
+      <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（累計👍${hofTh}以上）</div>
+        <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
+        <div class="muted" id="rankingBodyHof">読み込み中…</div>
+      </div>
+    `;
+
+    const bodyToday = document.getElementById("rankingBodyToday");
+    const bodyTotal = document.getElementById("rankingBodyTotal");
+    const bodyHof   = document.getElementById("rankingBodyHof");
+
+    // ---- 今日TOP3 ----
+    try{
+      const items = (await fetchRankingToday(mode, bucket, 3))
+        .filter(it => !isNgText(it?.text));
+
+      if (!items.length) {
+        if (bodyToday) bodyToday.textContent = "まだランキングがありません（今日の👍が0件）";
+      } else {
+        const rows = items.map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}</div>
+              <div class="muted">今日の👍：${Number(it.likes||0)}</div>
+            </div>
+          `;
+        }).join("");
+        if (bodyToday) bodyToday.innerHTML = rows;
+      }
+    } catch (e) {
+      if (bodyToday) bodyToday.textContent = `ランキング取得に失敗：${e?.message || e}`;
     }
-  } catch (e) {
-    if (bodyTotal) bodyTotal.textContent = `累計ランキング取得に失敗：${e?.message || e}`;
-  }
 
-  // ---- 殿堂入り ----
-  try{
-    const items = (await fetchHallOfFame(mode, bucket, 50))
-      .filter(it => !isNgText(it?.text));
+    // ---- 累計TOP3 ----
+    try{
+      const items = (await fetchRankingTotal(mode, bucket, 3))
+        .filter(it => !isNgText(it?.text));
 
-    const hofTh2 = Number(state.hofThreshold || 20);
-
-    if (!items.length) {
-      if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
-    } else {
-      const rows = items.slice(0, 20).map((it, idx) => {
-        const pen = penHtmlIfAny(it.penName);
-        const totalLikes = Number(it.totalLikes || 0);
-        return `
-          <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-            <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen} <span class="hof-badge">👑殿堂入り</span></div>
-            <div class="muted">累計👍：${totalLikes}</div>
-          </div>
-        `;
-      }).join("");
-
-      const more = (items.length > 20)
-        ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${items.length}件）</div>`
-        : "";
-
-      if (bodyHof) bodyHof.innerHTML = rows + more;
+      if (!items.length) {
+        if (bodyTotal) bodyTotal.textContent = "まだ累計ランキングがありません（累計👍が0件）";
+      } else {
+        const rows = items.map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          const totalLikes = Number(it.totalLikes || 0);
+          const hof = !!it.hof || (totalLikes >= Number(state.hofThreshold || 20));
+          const hofTag = hof ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${hofTag}</div>
+              <div class="muted">累計👍：${totalLikes}</div>
+            </div>
+          `;
+        }).join("");
+        if (bodyTotal) bodyTotal.innerHTML = rows;
+      }
+    } catch (e) {
+      if (bodyTotal) bodyTotal.textContent = `累計ランキング取得に失敗：${e?.message || e}`;
     }
-  } catch (e) {
-    if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
+
+    // ---- 殿堂入り ----
+    try{
+      const items = (await fetchHallOfFame(mode, bucket, 50))
+        .filter(it => !isNgText(it?.text));
+
+      const hofTh2 = Number(state.hofThreshold || 20);
+
+      if (!items.length) {
+        if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
+      } else {
+        const rows = items.slice(0, 20).map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          const totalLikes = Number(it.totalLikes || 0);
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen} <span class="hof-badge">👑殿堂入り</span></div>
+              <div class="muted">累計👍：${totalLikes}</div>
+            </div>
+          `;
+        }).join("");
+
+        const more = (items.length > 20)
+          ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${items.length}件）</div>`
+          : "";
+
+        if (bodyHof) bodyHof.innerHTML = rows + more;
+      }
+    } catch (e) {
+      if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
+    }
+
+  } finally {
+    // ✅ ここが超重要：固定を戻す（これが無いと降水確率とネタがズレる）
+    __freezeMetaphor = __prevFreeze;
   }
 }
 
