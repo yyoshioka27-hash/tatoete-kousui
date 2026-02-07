@@ -637,7 +637,7 @@ function buildCandidatePool(mode, bucket) {
       id: item.id || makeGlobalId({ mode: m, bucket: b, text: t, source: item.source || "base" }),
       penName: item.penName || null,
       totalLikes: Number(item.totalLikes || 0),
-      hof: !!item.hof
+      hof: !!item.hof,
       bucket: b,   // ✅ 追加
       mode: m      // ✅ 追加
     });
