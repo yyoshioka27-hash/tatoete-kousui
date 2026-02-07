@@ -210,6 +210,8 @@
           <option value="bucket">並び替え：%順</option>
         </select>
         <button id="btnClearQ" class="miniBtn">× クリア</button>
+        <!-- ✅ 追加：復旧ボタン（public index 再構築） -->
+        <button id="btnReindex" class="miniBtn">復旧（reindex）</button>
       </div>
 
       <!-- ✅ pending用：承認/却下 -->
@@ -227,7 +229,8 @@
     <div class="muted" style="margin-top:10px;">
       ※ ここは Workers 側のAPIが揺れても動くように、複数パスを自動で試します（404フォールバック）<br/>
       ※ 「却下」は最終的に <span class="mono">pending</span> から確実に消える（rejectが無ければdelete(pending)へ）。<br/>
-      ※ 「公開の削除」は <span class="mono">public</span> から確実に消える（delete(public) を複数payloadで試行）。
+      ※ 「公開の削除」は <span class="mono">public</span> から確実に消える（delete(public) を複数payloadで試行）。<br/>
+      ※ 「復旧（reindex）」は <span class="mono">idx:public:*</span> を public データから再構築します（/api/public が空になる事故の復旧）。
     </div>
 
     <div class="list" id="list" data-top-anchor="1"></div>
@@ -350,6 +353,9 @@
   const elSort = $("sortKey");
   const btnClearQ = $("btnClearQ");
 
+  // ✅ 追加：reindexボタン
+  const btnReindex = $("btnReindex");
+
   let activeTab = "pending"; // pending | public | all
   let itemsPending = [];
   let itemsPublic  = [];
@@ -396,7 +402,8 @@
       btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed,
       tabPending, tabPublic, tabAll,
       btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
-      elQ, elSort, btnClearQ
+      elQ, elSort, btnClearQ,
+      btnReindex
     ].forEach(b => { try{ b.disabled = dis; }catch{} });
   }
 
@@ -588,6 +595,11 @@
       "/api/admin/importSeed",
       "/api/admin/seed/import",
       "/api/admin/seed",
+    ],
+
+    // ✅ 追加：reindex（worker.js の /api/admin/reindex_public）
+    reindex: [
+      "/api/admin/reindex_public",
     ],
   };
 
@@ -1190,6 +1202,34 @@
     }
   }
 
+  // ✅ 追加：復旧（reindex_public）
+  async function doReindexPublic(){
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
+
+    try{
+      // worker.js 側は {mode,bucket,max} を受ける。全部復旧は all/null でOK。
+      const body = { mode: "all", bucket: "all", max: 20000 };
+      const r = await callAdminWithFallback(API.reindex, { method:"POST", admin:true, body, signal });
+
+      const scanned = Number(r?.scanned ?? 0);
+      const wrote   = Number(r?.wrote ?? 0);
+
+      // 復旧後、表示も更新
+      await refreshAllTabs();
+
+      alert(`復旧（reindex）完了\nscanned: ${scanned}\nwrote: ${wrote}`);
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`復旧（reindex）に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
+
   // =========================
   // Actions：承認 / 却下(=削除) / 公開削除
   // =========================
@@ -1451,6 +1491,12 @@
   btnRefresh.addEventListener("click", refreshCurrentTab);
   btnRefreshAll.addEventListener("click", refreshAllTabs);
   btnImportSeed.addEventListener("click", importSeed);
+
+  // ✅ 追加：復旧ボタン
+  btnReindex.addEventListener("click", async () => {
+    if (!confirm("復旧（reindex）を実行しますか？\npublicデータから idx:public:* を再構築します。")) return;
+    await doReindexPublic();
+  });
 
   tabPending.addEventListener("click", () => setActiveTab("pending"));
   tabPublic.addEventListener("click",  () => setActiveTab("public"));
