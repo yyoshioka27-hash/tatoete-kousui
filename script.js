@@ -1,6 +1,9 @@
-// script.js
+// =========================
+// script.js  (PART 1 / 3)
+// =========================
+
 // ✅ BUILD（反映確認用）
-const BUILD = "2026-02-05_script_fix_mySubmissions_unify_v2_fireworks_5s_v1";
+const BUILD = "2026-02-07_script_reindex_hint_fix_full_v1";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -32,6 +35,7 @@ function isNgText(text){
   if (!t) return true;
   return NG_PHRASES.some(ng => ng && t.includes(ng));
 }
+
 // ✅ ネタ本文内の「xx%」がバケットと一致しない場合は除外する
 function hasMismatchedPercent(text, bucket){
   try{
@@ -50,12 +54,12 @@ function hasMismatchedPercent(text, bucket){
       // ✅ 1つでもズレてたら除外
       if (p !== b) return true;
     }
-
     return false; // %が無いならOK
   }catch{
     return false;
   }
 }
+
 // ✅ 「100%/100％」だけは、bucketが100以外なら確実に除外（0%に100%ネタ混入対策）
 function hasHard100PercentMismatch(text, bucket){
   try{
@@ -63,7 +67,6 @@ function hasHard100PercentMismatch(text, bucket){
     const b = Number(bucket);
     if (!Number.isFinite(b)) return false;
     if (b === 100) return false; // 100%バケットならOK
-    // 100%/100％/約100% を検出
     return /100\s*(%|％)/.test(t);
   }catch{
     return false;
@@ -170,7 +173,6 @@ function likeFxPlusOne(btnEl){
 
 // ==============================
 // ✅ モバイルで「雑学/お笑い」の位置ズレを強制整列（HTML改修不要）
-// - input[name="mode"] の label を同じ幅・同じ高さにして揃える
 // ==============================
 function fixModeToggleAlignment(){
   try{
@@ -218,6 +220,117 @@ function fixModeToggleAlignment(){
 }
 
 // ==============================
+// UI helper
+// ==============================
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text, kind="muted") {
+  const el = document.getElementById("placeStatus");
+  if (!el) return;
+  el.className = kind;
+  el.textContent = text;
+}
+
+function normalizePlaceName(input) {
+  return input
+    .replace(/[ 　]+/g, " ")
+    .replace(/(都|道|府|県|市|区|町|村)$/g, "")
+    .replace(/(都|道|府|県|市|区|町|村)/g, "")
+    .trim();
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+// =========================
+// ✅ 復旧（reindex）案内UI（HTML改修不要）
+// - /api/public が no_index_or_empty の時に表示する
+// =========================
+function ensureReindexHintDom(){
+  if (document.getElementById("reindexHint")) return;
+
+  const target = document.getElementById("todayRankingWrap")
+              || document.getElementById("placeStatus")
+              || document.body;
+
+  const box = document.createElement("div");
+  box.id = "reindexHint";
+  box.style.display = "none";
+  box.style.maxWidth = "760px";
+  box.style.margin = "12px auto 0 auto";
+  box.style.padding = "12px 14px";
+  box.style.borderRadius = "14px";
+  box.style.border = "1px solid rgba(239,68,68,.25)";
+  box.style.background = "rgba(254, 226, 226, .75)";
+  box.style.color = "#7f1d1d";
+  box.style.fontWeight = "900";
+  box.style.boxShadow = "0 10px 24px rgba(2,6,23,.08)";
+  box.style.lineHeight = "1.35";
+
+  box.innerHTML = `
+    <div style="font-size:14px;">⚠️ 公開ネタの目次（index）が空の可能性があります</div>
+    <div style="margin-top:6px; font-weight:700; font-size:12px;">
+      管理画面（admin.html）で <b>「復旧（reindex）」</b> を押してください。<br>
+      ※投稿データ本体は消えず、一覧（idx）を作り直す処理です。
+    </div>
+  `;
+
+  if (target && target.id === "todayRankingWrap" && target.parentElement){
+    target.parentElement.insertBefore(box, target);
+  } else if (target && target !== document.body) {
+    target.insertAdjacentElement("afterend", box);
+  } else {
+    document.body.appendChild(box);
+  }
+}
+
+function setReindexHint(need, detailText){
+  try{
+    ensureReindexHintDom();
+    const el = document.getElementById("reindexHint");
+    if (!el) return;
+
+    if (!need){
+      el.style.display = "none";
+      return;
+    }
+
+    if (detailText){
+      const lines = el.querySelectorAll("div");
+      if (lines && lines[1]) {
+        lines[1].innerHTML = `<span style="font-weight:700; font-size:12px;">${escapeHtml(detailText)}</span>`;
+      }
+    }
+
+    el.style.display = "";
+  }catch(e){
+    console.warn("setReindexHint error", e);
+  }
+}
+
+// ✅ ペンネーム表示ルール
+function normalizePenName(name){
+  const n = String(name || "").trim();
+  if (!n) return null;
+  if (n === "匿名") return null;
+  if (n === "初期ネタ") return null;
+  return n;
+}
+function penHtmlIfAny(name){
+  const n = normalizePenName(name);
+  return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
+}
+// =========================
+// script.js  (PART 2 / 3)
+// =========================
+
+// ==============================
 // 承認待ち投稿（Workers）
 // ==============================
 // ✅✅✅ 修正1：clientId を送れるよう引数追加
@@ -225,7 +338,6 @@ async function submitToPending(mode, bucket, text, penName, penPin, clientId){
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
     headers: { "Content-Type":"application/json" },
-    // ✅✅✅ 修正1：clientId を body に追加
     body: JSON.stringify({ mode, bucket, text, penName, penPin, clientId, from: "mobile" })
   });
   const data = await res.json().catch(()=>null);
@@ -248,9 +360,28 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 
   const url = `${API_BASE}/api/public?${params.toString()}`;
   const res = await fetch(url, { method: "GET" });
-  if (!res.ok) throw new Error(`public fetch failed: ${res.status}`);
+
+  if (!res.ok){
+    setReindexHint(false);
+    throw new Error(`public fetch failed: ${res.status}`);
+  }
+
   const data = await res.json().catch(()=>null);
-  if (!data?.ok) throw new Error("public not ok");
+  if (!data?.ok) {
+    setReindexHint(false);
+    throw new Error("public not ok");
+  }
+
+  // ✅ /api/public が idx 空を示すなら「復旧（reindex）」を案内
+  try{
+    const note = String(data?.note || "");
+    const itemsRaw = Array.isArray(data?.items) ? data.items : [];
+    if (data?.ok === true && note === "no_index_or_empty" && itemsRaw.length === 0){
+      setReindexHint(true, "公開ネタが0件です（no_index_or_empty）。管理画面で「復旧（reindex）」を実行してください。");
+    } else {
+      setReindexHint(false);
+    }
+  }catch{}
 
   // ✅ 殿堂入り閾値も受け取る（無ければ20）
   state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
@@ -265,7 +396,7 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
       hof: !!it.hof
     }))
     .filter(x => x.id && x.text)
-    .filter(x => !isNgText(x.text)); // ✅ NG排除
+    .filter(x => !isNgText(x.text));
 }
 
 // ==============================
@@ -282,7 +413,6 @@ async function likeAny(payload){
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
 
-  // ✅ 閾値を同期
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return data;
 }
@@ -301,9 +431,6 @@ async function fetchRankingToday(mode, bucket, limit = 3){
   return Array.isArray(data.items) ? data.items : [];
 }
 
-// ==============================
-// ✅ 累計ランキング（Workers）
-// ==============================
 async function fetchRankingTotal(mode, bucket, limit = 3){
   const params = new URLSearchParams();
   params.set("mode", mode);
@@ -316,9 +443,6 @@ async function fetchRankingTotal(mode, bucket, limit = 3){
   return Array.isArray(data.items) ? data.items : [];
 }
 
-// ==============================
-// ✅ 殿堂入り（Workers）
-// ==============================
 async function fetchHallOfFame(mode, bucket, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
@@ -354,7 +478,7 @@ async function loadSharedJSON() {
         text: String(it.text || "").trim()
       }))
       .filter(it => it.text)
-      .filter(it => !isNgText(it.text)); // ✅ NG排除
+      .filter(it => !isNgText(it.text));
 
     window.JSON_METAPHORS = items || [];
   } catch {
@@ -377,7 +501,7 @@ function getSharedItems(mode, bucket) {
 
   return base
     .filter(x => x.mode === m && x.bucket === b)
-    .filter(x => !isNgText(x.text)); // ✅ NG排除
+    .filter(x => !isNgText(x.text));
 }
 
 // ==============================
@@ -438,9 +562,7 @@ window.bucket10 = window.bucket10 || function (p) {
 const GEO = "https://geocoding-api.open-meteo.com/v1/search";
 const FC  = "https://api.open-meteo.com/v1/forecast";
 
-// =========================
 // ✅ 天気を「体感最速」にするためのキャッシュ（SWR）
-// =========================
 const WX_CACHE_KEY = "wx_pops_cache_v1";
 const WX_CACHE_TTL_MS = 10 * 60 * 1000; // 10分
 
@@ -456,7 +578,6 @@ function loadWxCache(){
 function saveWxCache(obj){
   try { localStorage.setItem(WX_CACHE_KEY, JSON.stringify(obj)); } catch {}
 }
-
 async function fetchWithTimeout(url, ms = 4500){
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), ms);
@@ -467,11 +588,9 @@ async function fetchWithTimeout(url, ms = 4500){
   }
 }
 
-// =========================
 // ✅ 上部ネタ固定フラグ（ランキング更新では再抽選しない）
-// =========================
 let __freezeMetaphor = false;
-window.__forceRepick = false; // ✅ true のときだけ朝昼夜を再抽選する
+window.__forceRepick = false; // true のときだけ朝昼夜を再抽選する
 
 // =========================
 // state
@@ -481,8 +600,6 @@ let state = {
   placeLabel: null,
   tz: null,
   source: "API: 未接続",
-
-  // ✅ 殿堂入り閾値（サーバから受け取る）
   hofThreshold: 20,
 
   currentPhrases: {
@@ -492,11 +609,7 @@ let state = {
   }
 };
 
-const $ = (id) => document.getElementById(id);
-
-// =========================
 // ✅ 全ネタを一意ID化（base/json も集計対象）
-// =========================
 function fnv1a32(str){
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++){
@@ -505,16 +618,13 @@ function fnv1a32(str){
   }
   return (h >>> 0).toString(16);
 }
-
 function makeGlobalId({mode, bucket, text, source}){
   const m = (mode === "fun" ? "fun" : "trivia");
   const t = String(text || "").trim();
   return `t_${m}_${fnv1a32(`${m}|${t}`)}`;
 }
 
-// =========================
 // お天気アイコン（%の前）
-// =========================
 function iconForPop(roundedPop) {
   const p = Number(roundedPop);
   if (p <= 20) return "☀️";
@@ -527,6 +637,26 @@ function setIcon(slotKey, roundedPop) {
   if (roundedPop == null) { el.textContent = "--"; return; }
   el.textContent = iconForPop(roundedPop);
 }
+
+// theme：降水確率で背景を変える
+function applyTheme(rounded){
+  try{
+    const body = document.body;
+    if (!body) return;
+    body.classList.remove("theme-sunny", "theme-cloudy", "theme-rainy");
+    if (rounded == null) return;
+
+    const p = Number(rounded);
+    if (p <= 20) body.classList.add("theme-sunny");
+    else if (p <= 60) body.classList.add("theme-cloudy");
+    else body.classList.add("theme-rainy");
+  }catch(e){
+    console.warn("applyTheme error", e);
+  }
+}
+// =========================
+// script.js  (PART 3 / 3)
+// =========================
 
 // =========================
 // ✅ いいねUI：既存HTMLを活かしつつ、足りない要素は自動生成
@@ -574,11 +704,6 @@ function ensureLikeDom(slot){
   }
 }
 
-// =========================
-// ネタ抽選（base + JSON + public）
-// =========================
-const lastPickKey = {};
-
 function getSelectedMode() {
   const el = document.querySelector('input[name="mode"]:checked');
   return el ? el.value : "trivia";
@@ -592,7 +717,7 @@ function getBaseTexts(mode, bucket) {
   return base
     .map(x => String(x || "").trim())
     .filter(Boolean)
-    .filter(t => !isNgText(t)); // ✅ NG排除
+    .filter(t => !isNgText(t));
 }
 
 function buildCandidatePool(mode, bucket) {
@@ -628,6 +753,7 @@ function buildCandidatePool(mode, bucket) {
     if (!t) continue;
     if (isNgText(t)) continue;
     if (hasHard100PercentMismatch(t, b)) continue;
+    if (hasMismatchedPercent(t, b)) continue;
     if (seen.has(t)) continue;
     seen.add(t);
 
@@ -638,23 +764,19 @@ function buildCandidatePool(mode, bucket) {
       penName: item.penName || null,
       totalLikes: Number(item.totalLikes || 0),
       hof: !!item.hof,
-      bucket: b,   // ✅ 追加
-      mode: m      // ✅ 追加
+      bucket: b,
+      mode: m
     });
   }
   return out;
 }
 
+const lastPickKey = {};
 function pickMetaphor(mode, bucket) {
   const b = window.bucket10(bucket);
   const pool = buildCandidatePool(mode, b);
-  console.log("[pool]", mode, bucket,
-  "len=", pool.length,
-  "sources=", Array.from(new Set(pool.map(x=>x.source))).join(","),
-  "hasShower=", pool.some(x => String(x.text||"").includes("帰宅後のシャワー")),
-  "sample=", pool.slice(0,3).map(x=>`[${x.source}]${x.text}`));
 
-  if (!pool.length) return { text: "データなし", source: null, id: null, penName: null, totalLikes: 0, hof: false };
+  if (!pool.length) return { text: "データなし", source: null, id: null, penName: null, totalLikes: 0, hof: false, bucket: b, mode };
 
   const key = `${mode}_${b}`;
   let picked = pool[Math.floor(Math.random() * pool.length)];
@@ -670,69 +792,12 @@ function pickMetaphor(mode, bucket) {
   return picked;
 }
 
-// =========================
 // ✅ ランキングが参照する “代表バケット”
-// =========================
 function getCurrentMainBucket(){
   if (!state?.pops) return null;
   const arr = [state.pops.m, state.pops.d, state.pops.e].filter(v => v != null);
   if (!arr.length) return null;
   return window.bucket10(Math.max(...arr));
-}
-
-// UI helper
-function setStatus(text, kind="muted") {
-  const el = document.getElementById("placeStatus");
-  if (!el) return;
-  el.className = kind;
-  el.textContent = text;
-}
-
-function normalizePlaceName(input) {
-  return input
-    .replace(/[ 　]+/g, " ")
-    .replace(/(都|道|府|県|市|区|町|村)$/g, "")
-    .replace(/(都|道|府|県|市|区|町|村)/g, "")
-    .trim();
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-// ✅ ペンネーム表示ルール
-function normalizePenName(name){
-  const n = String(name || "").trim();
-  if (!n) return null;
-  if (n === "匿名") return null;
-  if (n === "初期ネタ") return null;
-  return n;
-}
-function penHtmlIfAny(name){
-  const n = normalizePenName(name);
-  return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
-}
-
-// theme：降水確率で背景を変える
-function applyTheme(rounded){
-  try{
-    const body = document.body;
-    if (!body) return;
-    body.classList.remove("theme-sunny", "theme-cloudy", "theme-rainy");
-    if (rounded == null) return;
-
-    const p = Number(rounded);
-    if (p <= 20) body.classList.add("theme-sunny");
-    else if (p <= 60) body.classList.add("theme-cloudy");
-    else body.classList.add("theme-rainy");
-  }catch(e){
-    console.warn("applyTheme error", e);
-  }
 }
 
 // =========================
@@ -820,6 +885,32 @@ function updateDeleteUI(slotKey) {
   btn.style.display = "none";
   btn.onclick = null;
 }
+
+// =========================
+// renderEmpty
+// =========================
+function renderEmpty() {
+  const metaAll = document.getElementById("metaphor");
+
+  ["m","d","e"].forEach(k => {
+    const popEl = document.getElementById(`pop_${k}`);
+    const metaEl = document.getElementById(`meta_${k}`);
+
+    if (popEl) popEl.textContent = "--%";
+    if (metaEl) metaEl.textContent = "データなし";
+    setIcon(k, null);
+
+    state.currentPhrases[k] = {
+      text: null, source: null, id: null, penName: null,
+      likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null
+    };
+    updateLikeUI(k);
+    updateDeleteUI(k);
+  });
+
+  if (metaAll) metaAll.textContent = "地点を選んでください";
+}
+
 // =========================
 // render（メイン）
 // =========================
@@ -827,7 +918,6 @@ function render() {
   const hintEl = document.getElementById("popHint");
   const sourceTag = document.getElementById("sourceTag");
   const tzTag = document.getElementById("tzTag");
-
   const metaAll = document.getElementById("metaphor");
   const footEl = document.getElementById("metaFoot");
 
@@ -853,37 +943,33 @@ function render() {
     }
 
     const rounded = window.bucket10(value);
-    console.log("[pick]", slotKey, label, "value=", value, "rounded=", rounded, "mode=", getSelectedMode());
     if (popEl) popEl.textContent = `${rounded}%`;
     setIcon(slotKey, rounded);
 
     const mode = getSelectedMode();
     let picked;
 
-    // ✅ 仕様：同じ mode×同じバケットなら、ランキング読み込み等の再renderでは「同じネタを固定」する
-const prev = state.currentPhrases[slotKey] || {};
-const sameContext =
-  !!prev.text &&
-  prev.mode === mode &&
-  Number(prev.bucket) === Number(rounded) &&
-  !isNgText(prev.text);
+    const prev = state.currentPhrases[slotKey] || {};
+    const sameContext =
+      !!prev.text &&
+      prev.mode === mode &&
+      Number(prev.bucket) === Number(rounded) &&
+      !isNgText(prev.text);
 
-// ✅ 強制的に再抽選したい時だけ false にする（下で作る）
-if (!window.__forceRepick && sameContext) {
-  picked = prev;                // ← 固定
-} else if (__freezeMetaphor && prev?.text) {
-  picked = prev;                // ← ランキング中の固定
-} else {
-  picked = pickMetaphor(mode, rounded);
-}
-
+    if (!window.__forceRepick && sameContext) {
+      picked = prev;
+    } else if (__freezeMetaphor && prev?.text) {
+      picked = prev;
+    } else {
+      picked = pickMetaphor(mode, rounded);
+    }
 
     // ✅ 万一 NG を引いたら再抽選（最大5回）
     for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
       picked = pickMetaphor(mode, rounded);
     }
     if (picked?.text && isNgText(picked.text)) {
-      picked = { text: "（非表示ワードが含まれるため表示できません）", source: null, id: null, penName: null, totalLikes: 0, hof: false };
+      picked = { text: "（非表示ワードが含まれるため表示できません）", source: null, id: null, penName: null, totalLikes: 0, hof: false, bucket: rounded, mode };
     }
 
     const displayPen = (picked.penName && String(picked.penName).trim())
@@ -894,15 +980,12 @@ if (!window.__forceRepick && sameContext) {
     const hofPicked = !!picked.hof || (totalLikesPicked >= Number(state.hofThreshold || 20));
 
     if (metaEl) {
-  const penHtml = penHtmlIfAny(displayPen);
-  const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
-
-  metaEl.innerHTML =
-    `${escapeHtml(label)}：${escapeHtml(picked.text)}${penHtml}${hofHtml}` +
-    ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source||"base")} b:${rounded}]</span>`;
-}
-
-
+      const penHtml = penHtmlIfAny(displayPen);
+      const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
+      metaEl.innerHTML =
+        `${escapeHtml(label)}：${escapeHtml(picked.text)}${penHtml}${hofHtml}` +
+        ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source||"base")} b:${rounded}]</span>`;
+    }
 
     const prevId = state.currentPhrases[slotKey]?.id || null;
     const nextId = picked.id || null;
@@ -932,7 +1015,7 @@ if (!window.__forceRepick && sameContext) {
 
     try { applyTheme(rounded); } catch {}
 
-    return { value: rounded, text: picked.text, label };
+    return { slotKey, value: rounded, text: picked.text, label };
   };
 
   if (!state.pops) {
@@ -953,55 +1036,27 @@ if (!window.__forceRepick && sameContext) {
 
   const candidates = [a, b, c].filter(Boolean);
   if (!candidates.length) {
-    const metaAll = document.getElementById("metaphor");
     if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
-  } else {
-    const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
-const metaAll = document.getElementById("metaphor");
+    if (footEl) footEl.textContent = "";
+    try { renderRanking(); } catch {}
+    return;
+  }
 
-if (metaAll) {
-  // maxOne.label は "朝/昼/夜"。slotKeyへ変換
-  const slotKey = (maxOne.label === "朝") ? "m" : (maxOne.label === "昼") ? "d" : "e";
-  const p = state.currentPhrases?.[slotKey] || {};
-  const src = p.source || "base";
-  const bkt = Number(p.bucket ?? maxOne.value);
+  const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
+  if (metaAll) {
+    const p = state.currentPhrases?.[maxOne.slotKey] || {};
+    const src = p.source || "base";
+    const bkt = Number(p.bucket ?? maxOne.value);
 
-  metaAll.innerHTML =
-    `今日いちばん怪しいのは【${escapeHtml(maxOne.label)}】：${escapeHtml(String(maxOne.value))}% → ${escapeHtml(String(maxOne.text))}` +
-    ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(src)} b:${escapeHtml(String(bkt))}]</span>`;
-}
+    metaAll.innerHTML =
+      `今日いちばん怪しいのは【${escapeHtml(maxOne.label)}】：${escapeHtml(String(maxOne.value))}% → ${escapeHtml(String(maxOne.text))}` +
+      ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(src)} b:${escapeHtml(String(bkt))}]</span>`;
+  }
 
-
-    if (footEl) footEl.textContent =
+  if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
 
   try { renderRanking(); } catch {}
-}   // ← これは else の終わり
-
-}   // ✅ これを追加：render() の終わり
-
-function renderEmpty() {
-
-  const metaAll = document.getElementById("metaphor");
-
-  ["m","d","e"].forEach(k => {
-    const popEl = document.getElementById(`pop_${k}`);
-    const metaEl = document.getElementById(`meta_${k}`);
-
-    if (popEl) popEl.textContent = "--%";
-    if (metaEl) metaEl.textContent = "データなし";
-
-    setIcon(k, null);
-
-    state.currentPhrases[k] = {
-      text: null, source: null, id: null, penName: null,
-      likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null
-    };
-    updateLikeUI(k);
-    updateDeleteUI(k);
-  });
-
-  if (metaAll) metaAll.textContent = "地点を選んでください";
 }
 
 // =========================
@@ -1018,9 +1073,7 @@ async function geocode(name) {
   return await res.json();
 }
 
-// =========================
 // ✅（内部）Open-Meteoへ“生”で取りに行く本体
-// =========================
 async function fetchPopsBySlotsNetwork(lat, lon, timeoutMs = 4500) {
   const url = new URL(FC);
   url.searchParams.set("latitude", String(lat));
@@ -1060,9 +1113,7 @@ async function fetchPopsBySlotsNetwork(lat, lon, timeoutMs = 4500) {
   };
 }
 
-// =========================
 // ✅（表）天気を体感最速で返す：SWR（キャッシュ即表示→裏で更新）
-// =========================
 async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}) {
   const key = wxKey(lat, lon);
   const cache = loadWxCache();
@@ -1099,9 +1150,7 @@ function ensureRankingDom(){
   refreshBtn.insertAdjacentElement("afterend", wrap);
 }
 
-// =========================
 // ✅ ランキング取得の呼びすぎ防止（KV Read節約）
-// =========================
 let __rankingLastAt = 0;
 let __rankingInFlight = false;
 
@@ -1116,11 +1165,8 @@ async function renderRankingThrottled(minIntervalMs = 60000){
   finally { __rankingInFlight = false; }
 }
 
-// =========================
 // ランキング表示
-// =========================
 async function renderRanking(){
-  // ✅ ランキング更新中だけネタ固定（終わったら必ず元に戻す）
   const __prevFreeze = __freezeMetaphor;
   __freezeMetaphor = true;
 
@@ -1244,7 +1290,6 @@ async function renderRanking(){
     }
 
   } finally {
-    // ✅ ここが超重要：固定を戻す（これが無いと降水確率とネタがズレる）
     __freezeMetaphor = __prevFreeze;
   }
 }
@@ -1261,20 +1306,19 @@ function fireIfApprovedOnNextSearch(){
     const ts = Number(obj.ts || 0);
     if (!ts) { localStorage.removeItem("fw_on_next_search"); return; }
 
-    // ✅ 古すぎるフラグは捨てる（例：24時間）
     const TTL = 24 * 60 * 60 * 1000;
     if (Date.now() - ts > TTL) {
       localStorage.removeItem("fw_on_next_search");
       return;
     }
 
-    // ✅ ここで発射（1回だけ）
     localStorage.removeItem("fw_on_next_search");
     fireworksOnce();
   }catch(e){
     console.warn("fireIfApprovedOnNextSearch error", e);
   }
 }
+
 // =========================
 // UI: 検索→候補表示
 // =========================
@@ -1326,7 +1370,8 @@ function fireIfApprovedOnNextSearch(){
         const opt = sel.options[sel.selectedIndex];
         const lat = Number(opt.dataset.lat);
         const lon = Number(opt.dataset.lon);
-        window.__forceRepick = true;   // ✅ 地点を変えたら再抽選
+
+        window.__forceRepick = true;
         setTimeout(() => { window.__forceRepick = false; }, 0);
 
         state.placeLabel = opt.textContent;
@@ -1375,7 +1420,6 @@ function fireIfApprovedOnNextSearch(){
             state.pops = null;
           } else {
             setStatus("取得しました", "ok");
-            // ✅ 承認があった場合は「地域検索成功」タイミングで花火（1回だけ）
             try { fireIfApprovedOnNextSearch(); } catch {}
           }
 
@@ -1409,7 +1453,7 @@ function fireIfApprovedOnNextSearch(){
 // =========================
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
-    __freezeMetaphor = false; // ✅ モードを変えたら上のネタも再抽選
+    __freezeMetaphor = false;
     scheduleRender();
 
     if (state?.pops) {
@@ -1428,17 +1472,15 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   const btn = document.getElementById("refresh");
   if (!btn) return;
   btn.onclick = () => {
-  window.__forceRepick = true;   // ✅ 今回だけ再抽選
-  __freezeMetaphor = false;
-  scheduleRender();
-  setTimeout(() => { window.__forceRepick = false; }, 0);
-};
-
+    window.__forceRepick = true;
+    __freezeMetaphor = false;
+    scheduleRender();
+    setTimeout(() => { window.__forceRepick = false; }, 0);
+  };
 })();
 
 // ==============================
 // ✅ 自分の投稿欄DOM（HTML改修不要）
-// - 1回だけ作る（重複禁止）
 // ==============================
 function ensureMySubmissionsDom(){
   if (document.getElementById("mySubmissionsWrap")) return true;
@@ -1464,7 +1506,7 @@ function ensureMySubmissionsDom(){
 }
 
 // =========================
-// 🎆 Fireworks (no library)  ※←ここがグローバル（submitの中に入れない）
+// 🎆 Fireworks (no library)
 // =========================
 let __fwCanvas = null;
 let __fwCtx = null;
@@ -1472,7 +1514,7 @@ let __fwRAF = 0;
 let __fwActive = false;
 let __fwParticles = [];
 let __fwStartAt = 0;
-let __fwDuration = 5000; // ✅ 5秒
+let __fwDuration = 5000;
 
 function ensureFireworksCanvas(){
   if (__fwCanvas) return;
@@ -1533,17 +1575,16 @@ function fireworksOnce(){
 
   const now = performance.now();
 
-  // ✅ すでに動作中なら「5秒に延長」して続行
   if (__fwActive){
     __fwStartAt = now;
-    __fwDuration = 5000; // ✅ 5秒
+    __fwDuration = 5000;
     __fwCanvas.style.opacity = "1";
     return;
   }
 
   __fwActive = true;
   __fwStartAt = now;
-  __fwDuration = 5000; // ✅ 5秒
+  __fwDuration = 5000;
   __fwParticles = [];
   __fwCanvas.style.opacity = "1";
 
@@ -1559,7 +1600,6 @@ function fireworksOnce(){
     const t = performance.now();
     const elapsed = t - __fwStartAt;
 
-    // ✅ 5秒間は追加バーストも出す（少し多め）
     if (Math.random() < 0.16 && elapsed < __fwDuration){
       spawnBurst(rand(w*0.15, w*0.85), rand(h*0.18, h*0.5));
     }
@@ -1608,7 +1648,7 @@ function stopFireworks(){
 }
 
 // =========================
-// 🎆 Debug button (only ?debug=1)
+// Debug button (only ?debug=1)
 // =========================
 (function setupFireworksDebugButton(){
   try{
@@ -1640,56 +1680,6 @@ function stopFireworks(){
     console.warn("setupFireworksDebugButton error", e);
   }
 })();
-
-// =========================
-// ✅ Debug approve button (only ?debug=1)
-// =========================
-window.addEventListener("load", () => {
-  try{
-    const params = new URLSearchParams(location.search);
-    if (params.get("debug") !== "1") return;
-    if (document.getElementById("approveDebugBtn")) return;
-
-    const btn2 = document.createElement("button");
-    btn2.id = "approveDebugBtn";
-    btn2.textContent = "✅ 採用にする(テスト)";
-    btn2.style.position = "fixed";
-    btn2.style.right = "12px";
-    btn2.style.bottom = "56px";
-    btn2.style.zIndex = "2147483647";
-    btn2.style.padding = "10px 12px";
-    btn2.style.borderRadius = "12px";
-    btn2.style.border = "1px solid rgba(15,23,42,.15)";
-    btn2.style.background = "#16a34a";
-    btn2.style.color = "#fff";
-    btn2.style.fontSize = "14px";
-    btn2.style.boxShadow = "0 10px 24px rgba(2,6,23,.18)";
-
-    btn2.onclick = () => {
-      const key = "my_submissions";
-      const list = JSON.parse(localStorage.getItem(key) || "[]");
-      if (!list.length) return alert("先にネタを送信してね（承認中が必要）");
-
-      const target = list.find(x => x.status !== "approved");
-      if (!target) return alert("承認中がありません");
-
-      target.status = "approved";
-      localStorage.setItem(key, JSON.stringify(list));
-
-      // ✅ 本番仕様：承認されたら「次の地域検索で」花火
-      try {
-        localStorage.setItem("fw_on_next_search", JSON.stringify({ ts: Date.now(), count: 1 }));
-      } catch {}
-
-      renderMySubmissions();
-      alert("承認(テスト)にしました。次に地域検索で花火が上がります。");
-    };
-
-    document.body.appendChild(btn2);
-  }catch(e){
-    console.warn("setupDebugApproveButton error", e);
-  }
-});
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信）
@@ -1746,18 +1736,16 @@ function wireSubmit(){
       );
 
       const serverId = String(out?.id || "").trim();
-      console.log("[submitToPending] out=", out, " serverId=", serverId, " clientId=", clientId);
-
       if (!serverId) {
-        alert("送信は成功しましたが、サーバIDが取得できませんでした。\n承認状態を同期できないため、この端末の『あなたの投稿』には保存しません。\n（worker.js の /api/submit が id を返しているか要確認）");
+        alert("送信は成功しましたが、サーバIDが取得できませんでした。");
         ta.value = "";
         return;
       }
 
       const my = {
-        id: serverId,                 // 互換のため残す
-        serverId: serverId,           // ✅ サーバー安定ID
-        clientId: clientId,           // ✅ ローカル生成ID
+        id: serverId,
+        serverId: serverId,
+        clientId: clientId,
         text: text,
         status: "pending",
         createdAt: Date.now(),
@@ -1844,7 +1832,6 @@ async function syncMySubmissionsStatus(){
     localStorage.setItem(key, JSON.stringify(cleaned));
 
     if (becameApproved > 0) {
-      // ✅ 花火は「次の地域検索で」上げる（フラグだけ）
       try {
         localStorage.setItem("fw_on_next_search", JSON.stringify({
           ts: Date.now(),
@@ -1875,7 +1862,7 @@ function saveMySubmission(item){
 }
 
 // ==============================
-// ✅ 自分の投稿（承認中 / 採用 / 同期不可）表示（※これが唯一の定義）
+// ✅ 自分の投稿表示
 // ==============================
 function renderMySubmissions(){
   const listEl = document.getElementById("my-submissions-list");
@@ -1935,13 +1922,14 @@ function renderMySubmissions(){
 // ==============================
 async function init(){
   try { ensureRankingDom(); } catch {}
+  try { ensureReindexHintDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
   try { wireSubmit(); } catch (e) { console.warn(e); }
 
   try { ensureMySubmissionsDom(); } catch {}
   try { renderMySubmissions(); } catch {}
   try { await syncMySubmissionsStatus(); } catch {}
-  try { setInterval(syncMySubmissionsStatus, 30000); } catch {} // 30秒ごと
+  try { setInterval(syncMySubmissionsStatus, 30000); } catch {}
 
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
