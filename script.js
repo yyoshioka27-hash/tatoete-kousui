@@ -1940,5 +1940,23 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+// =========================
+// ✅ アプリを開くQR（トップ下）
+// =========================
+(function renderOpenAppQr(){
+  const el = document.getElementById("openAppQr");
+  if (!el || !window.QRCode) return;
+
+  // ✅ 配布用：固定URL（今のURLではなくこれが安定）
+  const url = "https://yyoshioka27-hash.github.io/tatoete-kousui/";
+
+  el.innerHTML = "";
+  new QRCode(el, {
+    text: url,
+    width: 150,
+    height: 150,
+    correctLevel: QRCode.CorrectLevel.M
+  });
+})();
 
 // # END
