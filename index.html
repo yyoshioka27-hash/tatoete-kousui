@@ -229,6 +229,25 @@
       #meta_m, #meta_d, #meta_e{ font-size: 15px; }
       .pill{ font-size: 11px; padding: 5px 8px; }
     }
+/* =========================
+   ✅ FIX: 例えモードを左寄せに固定（中央寄りを潰す）
+   ========================= */
+.card.example-mode{
+  text-align: left;                 /* カード全体を左寄せ */
+}
+
+.card.example-mode .small{
+  text-align: left;                 /* 「例えモード」見出しも左寄せ */
+}
+
+.card.example-mode .modeWrap{
+  align-items: flex-start !important; /* flexの中央寄りを潰す */
+}
+
+.card.example-mode .modeWrap label{
+  justify-content: flex-start !important; /* ラベル内も左寄せ */
+  text-align: left !important;
+}
 
     /* =========================
       ✅ ホーム画面に追加の「手順カード」
@@ -565,3 +584,4 @@
   <!-- # END -->
 </body>
 </html>
+
