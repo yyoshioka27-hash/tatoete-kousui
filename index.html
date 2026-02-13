@@ -335,6 +335,13 @@
 
     <div style="margin-left:auto;">
       <div id="openAppQr" style="width:150px; height:150px; background:#fff; padding:10px; border-radius:12px;"></div>
+      <!-- ✅ ホーム画面に追加（案内/インストール） -->
+　　　<div style="margin-top:10px; text-align:center;">
+　　　<button id="btnAddHome" class="btnPrimary" type="button" style="width:150px;">
+    ホーム画面に追加
+  </button>
+</div>
+
     </div>
   </div>
 </section>
@@ -495,8 +502,132 @@
   <script defer src="script.js?v=99"></script>
 
   <!-- # END -->
+  <!-- ✅ Add to Home / Install Modal -->
+<div id="a2hsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;">
+  <div style="max-width:560px; margin:10vh auto; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+      <h3 style="margin:0; font-size:18px;">ホーム画面に追加</h3>
+      <button id="a2hsClose" type="button" style="border:none; background:transparent; font-size:20px; cursor:pointer;">×</button>
+    </div>
+
+    <div id="a2hsBody" style="margin-top:10px; line-height:1.7; color:#0f172a;"></div>
+
+    <div id="a2hsActions" style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end;">
+      <button id="a2hsInstall" type="button" style="display:none; padding:11px 14px; border-radius:14px; border:0; cursor:pointer;" class="btnPrimary">
+        インストールする
+      </button>
+      <button id="a2hsOk" type="button" style="padding:11px 14px; border-radius:14px; border:1px solid rgba(15,23,42,0.10); background:#fff; cursor:pointer;">
+        OK
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const btn = document.getElementById("btnAddHome");
+  const modal = document.getElementById("a2hsModal");
+  const body = document.getElementById("a2hsBody");
+  const closeBtn = document.getElementById("a2hsClose");
+  const okBtn = document.getElementById("a2hsOk");
+  const installBtn = document.getElementById("a2hsInstall");
+
+  if (!btn || !modal || !body || !closeBtn || !okBtn || !installBtn) return;
+
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(ua);
+
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+
+  let deferredPrompt = null;
+
+  function openModal(html, canInstall){
+    body.innerHTML = html;
+    modal.style.display = "block";
+    installBtn.style.display = canInstall ? "inline-block" : "none";
+  }
+  function closeModal(){
+    modal.style.display = "none";
+  }
+
+  closeBtn.addEventListener("click", closeModal);
+  okBtn.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e)=>{ if(e.target === modal) closeModal(); });
+
+  // ✅ Android(PWA) インストール可能イベント
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
+  // ✅ ボタン押下
+  btn.addEventListener("click", async () => {
+    if (isStandalone) {
+      openModal("すでにホーム画面から起動できる状態です 👍<br>（インストール済み）", false);
+      return;
+    }
+
+    // Androidでインストール可能ならプロンプトを出す
+    if (deferredPrompt) {
+      openModal("この端末はインストールできます。<br>下の「インストールする」を押してください。", true);
+      return;
+    }
+
+    // iOSは仕様で自動表示できないので手順案内
+    if (isIOS) {
+      openModal(
+        "iPhone/iPadでは自動で「ホーム画面に追加」を開けません（仕様）。<br><br>" +
+        "手順：<br>" +
+        "1) 画面下（または上）の共有ボタン（□↑）<br>" +
+        "2) 「ホーム画面に追加」<br>" +
+        "3) 右上の「追加」",
+        false
+      );
+      return;
+    }
+
+    // Androidでも拾えないブラウザ向けに手順案内
+    if (isAndroid) {
+      openModal(
+        "AndroidはChrome推奨です。<br><br>" +
+        "手順：<br>" +
+        "1) Chromeでこのページを開く<br>" +
+        "2) 右上「︙」<br>" +
+        "3) 「ホーム画面に追加」または「アプリをインストール」",
+        false
+      );
+      return;
+    }
+
+    openModal(
+      "スマホ（iPhone/Android）で開くとホーム画面に追加できます。<br>QRからスマホで開いてお試しください。",
+      false
+    );
+  });
+
+  // ✅ モーダル内「インストールする」
+  installBtn.addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+
+    if (choice && choice.outcome === "accepted") {
+      openModal("インストールを開始しました。ホーム画面にアイコンが追加されます。", false);
+    } else {
+      openModal("キャンセルされました。必要なら、またこのボタンから試せます。", false);
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
+
 
 
 
