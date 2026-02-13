@@ -229,25 +229,17 @@
       #meta_m, #meta_d, #meta_e{ font-size: 15px; }
       .pill{ font-size: 11px; padding: 5px 8px; }
     }
-/* =========================
-   ✅ FIX: 例えモードを左寄せに固定（中央寄りを潰す）
-   ========================= */
-.card.example-mode{
-  text-align: left;                 /* カード全体を左寄せ */
-}
 
-.card.example-mode .small{
-  text-align: left;                 /* 「例えモード」見出しも左寄せ */
-}
-
-.card.example-mode .modeWrap{
-  align-items: flex-start !important; /* flexの中央寄りを潰す */
-}
-
-.card.example-mode .modeWrap label{
-  justify-content: flex-start !important; /* ラベル内も左寄せ */
-  text-align: left !important;
-}
+    /* =========================
+       ✅ FIX: 例えモードを左寄せに固定（中央寄りを潰す）
+       ========================= */
+    .card.example-mode{ text-align:left !important; }
+    .card.example-mode .small{ text-align:left !important; }
+    .card.example-mode .modeWrap{ align-items:flex-start !important; }
+    .card.example-mode .modeWrap label{
+      justify-content:flex-start !important;
+      text-align:left !important;
+    }
 
     /* =========================
       ✅ ホーム画面に追加の「手順カード」
@@ -514,7 +506,7 @@
     const installBtn = document.getElementById("a2hsInstall");
     const guide = document.getElementById("a2hsGuide");
 
-    if (!btn || !modal || !body || !closeBtn || !okBtn || !installBtn) return;
+    if (!btn) return; // ✅ ボタンがなければ終了（guideだけでも動かすため最小条件にする）
 
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -523,11 +515,16 @@
     let deferredPrompt = null;
 
     function openModal(html, canInstall){
+      // ✅ modal一式が無い場合でもguide表示は壊さない
+      if (!modal || !body || !installBtn) return;
       body.innerHTML = html;
       modal.style.display = "block";
       installBtn.style.display = canInstall ? "inline-block" : "none";
     }
-    function closeModal(){ modal.style.display = "none"; }
+    function closeModal(){
+      if (!modal) return;
+      modal.style.display = "none";
+    }
 
     function toggleGuide(){
       if (!guide) return;
@@ -536,9 +533,9 @@
       if (hidden) guide.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    closeBtn.addEventListener("click", closeModal);
-    okBtn.addEventListener("click", closeModal);
-    modal.addEventListener("click", (e)=>{ if(e.target === modal) closeModal(); });
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    if (okBtn) okBtn.addEventListener("click", closeModal);
+    if (modal) modal.addEventListener("click", (e)=>{ if(e.target === modal) closeModal(); });
 
     // ✅ Android(PWA) インストール可能イベント
     window.addEventListener("beforeinstallprompt", (e) => {
@@ -565,23 +562,24 @@
     });
 
     // ✅ モーダル内「インストールする」
-    installBtn.addEventListener("click", async () => {
-      if (!deferredPrompt) return;
+    if (installBtn) {
+      installBtn.addEventListener("click", async () => {
+        if (!deferredPrompt) return;
 
-      deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      deferredPrompt = null;
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        deferredPrompt = null;
 
-      if (choice && choice.outcome === "accepted") {
-        openModal("インストールを開始しました。ホーム画面にアイコンが追加されます。", false);
-      } else {
-        openModal("キャンセルされました。必要なら、またこのボタンから試せます。", false);
-      }
-    });
+        if (choice && choice.outcome === "accepted") {
+          openModal("インストールを開始しました。ホーム画面にアイコンが追加されます。", false);
+        } else {
+          openModal("キャンセルされました。必要なら、またこのボタンから試せます。", false);
+        }
+      });
+    }
   })();
   </script>
 
   <!-- # END -->
 </body>
 </html>
-
