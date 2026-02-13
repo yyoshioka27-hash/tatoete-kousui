@@ -11,10 +11,9 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
 
-    <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
+  <title>たとえて、降水確率。－降水確率を“別の確率”で例えてみた。</title>
 
   <style>
-
     :root{
       --bg1:#ffffff;
       --bg2:#ffffff;
@@ -30,42 +29,33 @@
       --radius2: 14px;
 
       --tap: 44px;
+    }
 
-      /* ===== 天気テーマ ===== */
-.theme-sunny {
-  background: linear-gradient(180deg, #fffbe6, #ffffff);
-}
+    /* ===== 天気テーマ ===== */
+    body.theme-sunny { background: linear-gradient(180deg, #fffbe6, #ffffff); }
+    body.theme-cloudy { background: linear-gradient(180deg, #eef2ff, #ffffff); }
+    body.theme-rainy { background: linear-gradient(180deg, #e0f2fe, #ffffff); }
 
-.theme-cloudy {
-  background: linear-gradient(180deg, #eef2ff, #ffffff);
-}
+    /* ===== 追加：雑学/お笑いの色分け ===== */
+    .item-card{
+      border:1px solid rgba(15,23,42,.12);
+      border-radius:16px;
+      padding:14px;
+      background:#fff;
+    }
 
-.theme-rainy {
-  background: linear-gradient(180deg, #e0f2fe, #ffffff);
-}
+    /* 雑学（薄い青） */
+    .item-card[data-mode="trivia"]{
+      background: rgba(37,99,235,.06);
+      border-color: rgba(37,99,235,.18);
+      box-shadow: inset 6px 0 0 rgba(37,99,235,.18);
+    }
 
-      /* ===== 追加：雑学/お笑いの色分け ===== */
-.item-card{
-  border:1px solid rgba(15,23,42,.12);
-  border-radius:16px;
-  padding:14px;
-  background:#fff;
-}
-
-/* 雑学（薄い青） */
-.item-card[data-mode="trivia"]{
-  background: rgba(37,99,235,.06);
-  border-color: rgba(37,99,235,.18);
-  box-shadow: inset 6px 0 0 rgba(37,99,235,.18);
-}
-
-/* お笑い（薄い緑） */
-.item-card[data-mode="comedy"]{
-  background: rgba(34,197,94,.07);
-  border-color: rgba(34,197,94,.20);
-  box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
-}
-
+    /* お笑い（薄い緑） */
+    .item-card[data-mode="comedy"]{
+      background: rgba(34,197,94,.07);
+      border-color: rgba(34,197,94,.20);
+      box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
     }
 
     body{
@@ -74,8 +64,8 @@
       /* ✅ 絵文字が ?? になりやすい環境対策（Windows優先） */
       font-family: "Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",
                    -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
-      background: linear-gradient(180deg, var(--bg1), var(--bg2));
       color: var(--text);
+      background: linear-gradient(180deg, var(--bg1), var(--bg2)); /* 初期（themeが付くと上書き） */
     }
 
     .container{ max-width: 860px; margin: 0 auto; }
@@ -186,38 +176,38 @@
     .example-mode .modeWrap{
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
+      align-items: stretch;
       gap: 10px;
       margin-top: 10px;
     }
-    .example-mode label{
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      width: fit-content;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .example-mode input[type="radio"]{
-      margin: 0;
-      transform: translateY(1px);
-    }
 
-    /* ✅ FIX: モードのズレ対策（スマホのradioの表示差を吸収） */
+    /* ✅ 強制FIX：例えモード（雑学/お笑い）を必ず左揃えにする */
     .example-mode .modeWrap label{
       width: 100%;
       box-sizing: border-box;
+
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      text-align: left;
+
+      gap: 10px;
+
       padding: 10px 12px;
       border-radius: 14px;
       border: 1px solid rgba(15,23,42,0.10);
       background: rgba(255,255,255,0.80);
       line-height: 1.15;
+      cursor: pointer;
+      white-space: nowrap;
     }
-    .example-mode input[type="radio"]{
+
+    .example-mode .modeWrap input[type="radio"]{
+      margin: 0;
       width: 18px;
       height: 18px;
-      flex: 0 0 18px;
-      transform: none; /* 端末差が出るので固定 */
+      transform: none !important;
+      flex: 0 0 auto;
     }
 
     #refreshArea{ position: relative; overflow: hidden; }
@@ -239,79 +229,32 @@
       #meta_m, #meta_d, #meta_e{ font-size: 15px; }
       .pill{ font-size: 11px; padding: 5px 8px; }
     }
+
     /* =========================
-   ✅ FIX: 例えモード（雑学/お笑い）をPC/スマホ両方で「左揃え」＆「行ズレなし」にする
-   - labelをgrid化して「丸(固定幅) + 文字(残り)」に固定
-   - text-align/justifyを左寄せに固定
-   ========================= */
-
-.example-mode .modeWrap{
-  align-items: stretch;      /* 幅いっぱい使って左揃えを安定させる */
-}
-
-.example-mode .modeWrap label{
-  width: 100%;
-  box-sizing: border-box;
-
-  /* 丸＋文字を「2列固定」にしてズレを根絶 */
-  display: grid;
-  grid-template-columns: 22px 1fr;
-  column-gap: 10px;
-  align-items: center;
-
-  /* 左寄せ固定（スマホで中央寄りになるのを防ぐ） */
-  justify-items: start;
-  text-align: left;
-
-  /* クリックしやすく＆見た目を整える */
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(15,23,42,0.10);
-  background: rgba(255,255,255,0.80);
-  line-height: 1.15;
-}
-
-.example-mode .modeWrap input[type="radio"]{
-  margin: 0;
-  width: 18px;
-  height: 18px;
-  transform: none !important; /* 端末差のある微妙な上下ズレを無効化 */
-  justify-self: start;
-}
-/* =========================
-   ✅ 強制FIX：例えモード（雑学/お笑い）を必ず左揃えにする
-   ========================= */
-.example-mode .modeWrap{
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: stretch !important;   /* 幅いっぱい使う */
-}
-
-.example-mode .modeWrap label{
-  width: 100% !important;
-  box-sizing: border-box !important;
-
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important; /* ←中央寄せを潰す */
-  text-align: left !important;            /* ←文字を左寄せ固定 */
-
-  gap: 10px !important;
-
-  padding: 10px 12px !important;
-  border-radius: 14px !important;
-  border: 1px solid rgba(15,23,42,0.10) !important;
-  background: rgba(255,255,255,0.80) !important;
-}
-
-.example-mode .modeWrap input[type="radio"]{
-  margin: 0 !important;
-  width: 18px !important;
-  height: 18px !important;
-  transform: none !important; /* 上下ズレも抑える */
-  flex: 0 0 auto !important;
-}
-
+      ✅ 追加：ホーム画面に追加の「常設手順カード」
+      （HTML改修なしでも良いが、見た目を揃えるためCSSで統一）
+      ========================= */
+    #a2hsGuide{
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(15,23,42,0.10);
+      background: rgba(255,255,255,0.85);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    #a2hsGuide .title{
+      font-weight: 900;
+      margin-bottom: 6px;
+    }
+    #a2hsGuide .box{
+      margin-bottom: 8px;
+    }
+    #a2hsGuide .hint{
+      margin-top: 8px;
+      color:#64748b;
+      font-size: 12px;
+    }
   </style>
 </head>
 
@@ -321,32 +264,55 @@
     <h1>たとえて、降水確率。
       <div class="subtitle">－降水確率を“別の確率”で例えてみた。</div>
     </h1>
-<!-- ✅ アプリを開くQR（トップ下） -->
-<section id="openAppQrSection" class="card" style="margin-top:10px;">
-  <div style="display:flex; gap:12px; align-items:center;">
-    <div>
-      <div class="small" style="font-weight:800; font-size:14px;">📱 アプリを開くQR</div>
-      <div class="muted" style="margin-top:6px;">読み取るとこのアプリが開きます（配布用）</div>
 
-      <!-- ✅ ここに制限表示（body内なのでOK） -->
-      <div style="margin:8px 0 14px; color:#475569; font-size:12px;">
-        制限：いいね 1日10回まで（同一ネタは1日1回まで）／ネタ投稿 1日10回まで
+    <!-- ✅ アプリを開くQR（トップ下） -->
+    <section id="openAppQrSection" class="card" style="margin-top:10px;">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <div>
+          <div class="small" style="font-weight:800; font-size:14px;">📱 アプリを開くQR</div>
+          <div class="muted" style="margin-top:6px;">読み取るとこのアプリが開きます（配布用）</div>
+
+          <!-- ✅ ここに制限表示（body内なのでOK） -->
+          <div style="margin:8px 0 14px; color:#475569; font-size:12px;">
+            制限：いいね 1日10回まで（同一ネタは1日1回まで）／ネタ投稿 1日10回まで
+          </div>
+        </div>
+
+        <div style="margin-left:auto;">
+          <div id="openAppQr" style="width:150px; height:150px; background:#fff; padding:10px; border-radius:12px;"></div>
+
+          <!-- ✅ ホーム画面に追加（案内/インストール） -->
+          <div style="margin-top:10px; text-align:center;">
+            <button id="btnAddHome" class="btnPrimary" type="button" style="width:150px;">
+              ホーム画面に追加
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div style="margin-left:auto;">
-      <div id="openAppQr" style="width:150px; height:150px; background:#fff; padding:10px; border-radius:12px;"></div>
-      <!-- ✅ ホーム画面に追加（案内/インストール） -->
-　　　<div style="margin-top:10px; text-align:center;">
-　　　　<button id="btnAddHome" class="btnPrimary" type="button" style="width:150px;">
- 　  　 ホーム画面に追加
- 　　　 </button>
-　　　</div>
+      <!-- ✅✅✅ 追加：この画面上に手順を常設表示（iPhone/Android両方） -->
+      <div id="a2hsGuide">
+        <div class="title">📌 ホーム画面に追加する方法</div>
 
-    </div>
-  </div>
-</section>
+        <div class="box">
+          <b>iPhone（Safari）</b><br>
+          1) 下（または上）の <b>共有（□↑）</b> をタップ<br>
+          2) <b>「ホーム画面に追加」</b><br>
+          3) 右上の <b>「追加」</b>
+        </div>
 
+        <div class="box" style="margin-bottom:0;">
+          <b>Android（Chrome推奨）</b><br>
+          1) 右上の <b>︙（メニュー）</b><br>
+          2) <b>「ホーム画面に追加」</b> または <b>「アプリをインストール」</b><br>
+          3) 表示に従って追加
+        </div>
+
+        <div class="hint">
+          ※うまく出ない場合：<b>Safari / Chrome</b> で開いてください（LINE内ブラウザ等だと出ないことがあります）。
+        </div>
+      </div>
+    </section>
 
     <div class="card">
       <div class="small">天気予報を知りたい地点</div>
@@ -502,139 +468,126 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script defer src="script.js?v=99"></script>
 
-  <!-- ✅ Add to Home / Install Modal -->
-<div id="a2hsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;">
-  <div style="max-width:560px; margin:10vh auto; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25);">
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-      <h3 style="margin:0; font-size:18px;">ホーム画面に追加</h3>
-      <button id="a2hsClose" type="button" style="border:none; background:transparent; font-size:20px; cursor:pointer;">×</button>
-    </div>
+  <!-- ✅ Add to Home / Install Modal（機能は残したまま。案内は常設になったので“読まない人向け”） -->
+  <div id="a2hsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;">
+    <div style="max-width:560px; margin:10vh auto; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25);">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <h3 style="margin:0; font-size:18px;">ホーム画面に追加</h3>
+        <button id="a2hsClose" type="button" style="border:none; background:transparent; font-size:20px; cursor:pointer;">×</button>
+      </div>
 
-    <div id="a2hsBody" style="margin-top:10px; line-height:1.7; color:#0f172a;"></div>
+      <div id="a2hsBody" style="margin-top:10px; line-height:1.7; color:#0f172a;"></div>
 
-    <div id="a2hsActions" style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end;">
-      <button id="a2hsInstall" type="button" style="display:none; padding:11px 14px; border-radius:14px; border:0; cursor:pointer;" class="btnPrimary">
-        インストールする
-      </button>
-      <button id="a2hsOk" type="button" style="padding:11px 14px; border-radius:14px; border:1px solid rgba(15,23,42,0.10); background:#fff; cursor:pointer;">
-        OK
-      </button>
+      <div id="a2hsActions" style="margin-top:14px; display:flex; gap:10px; justify-content:flex-end;">
+        <button id="a2hsInstall" type="button" style="display:none; padding:11px 14px; border-radius:14px; border:0; cursor:pointer;" class="btnPrimary">
+          インストールする
+        </button>
+        <button id="a2hsOk" type="button" style="padding:11px 14px; border-radius:14px; border:1px solid rgba(15,23,42,0.10); background:#fff; cursor:pointer;">
+          OK
+        </button>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-(function(){
-  const btn = document.getElementById("btnAddHome");
-  const modal = document.getElementById("a2hsModal");
-  const body = document.getElementById("a2hsBody");
-  const closeBtn = document.getElementById("a2hsClose");
-  const okBtn = document.getElementById("a2hsOk");
-  const installBtn = document.getElementById("a2hsInstall");
+  <script>
+  (function(){
+    const btn = document.getElementById("btnAddHome");
+    const modal = document.getElementById("a2hsModal");
+    const body = document.getElementById("a2hsBody");
+    const closeBtn = document.getElementById("a2hsClose");
+    const okBtn = document.getElementById("a2hsOk");
+    const installBtn = document.getElementById("a2hsInstall");
 
-  if (!btn || !modal || !body || !closeBtn || !okBtn || !installBtn) return;
+    if (!btn || !modal || !body || !closeBtn || !okBtn || !installBtn) return;
 
-  const ua = navigator.userAgent || "";
-  const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isAndroid = /Android/.test(ua);
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/.test(ua);
 
-  const isStandalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    window.navigator.standalone === true;
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
 
-  let deferredPrompt = null;
+    let deferredPrompt = null;
 
-  function openModal(html, canInstall){
-    body.innerHTML = html;
-    modal.style.display = "block";
-    installBtn.style.display = canInstall ? "inline-block" : "none";
-  }
-  function closeModal(){
-    modal.style.display = "none";
-  }
-
-  closeBtn.addEventListener("click", closeModal);
-  okBtn.addEventListener("click", closeModal);
-  modal.addEventListener("click", (e)=>{ if(e.target === modal) closeModal(); });
-
-  // ✅ Android(PWA) インストール可能イベント
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-  });
-
-  // ✅ ボタン押下
-  btn.addEventListener("click", async () => {
-    if (isStandalone) {
-      openModal("すでにホーム画面から起動できる状態です 👍<br>（インストール済み）", false);
-      return;
+    function openModal(html, canInstall){
+      body.innerHTML = html;
+      modal.style.display = "block";
+      installBtn.style.display = canInstall ? "inline-block" : "none";
     }
+    function closeModal(){ modal.style.display = "none"; }
 
-    // Androidでインストール可能ならプロンプトを出す
-    if (deferredPrompt) {
-      openModal("この端末はインストールできます。<br>下の「インストールする」を押してください。", true);
-      return;
-    }
+    closeBtn.addEventListener("click", closeModal);
+    okBtn.addEventListener("click", closeModal);
+    modal.addEventListener("click", (e)=>{ if(e.target === modal) closeModal(); });
 
-    // iOSは仕様で自動表示できないので手順案内
-    if (isIOS) {
+    // ✅ Android(PWA) インストール可能イベント
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+
+    // ✅ ボタン押下（常設手順があるので、ここは“補助”）
+    btn.addEventListener("click", async () => {
+      if (isStandalone) {
+        openModal("すでにホーム画面から起動できる状態です 👍<br>（インストール済み）", false);
+        return;
+      }
+
+      // Androidでインストール可能ならプロンプトを出す
+      if (deferredPrompt) {
+        openModal("この端末はインストールできます。<br>下の「インストールする」を押してください。", true);
+        return;
+      }
+
+      // iOSは仕様で自動表示できないので手順案内
+      if (isIOS) {
+        openModal(
+          "iPhone/iPadでは自動で「ホーム画面に追加」を開けません（仕様）。<br><br>" +
+          "手順：<br>" +
+          "1) 共有（□↑）<br>" +
+          "2) 「ホーム画面に追加」<br>" +
+          "3) 「追加」",
+          false
+        );
+        return;
+      }
+
+      // Androidでも拾えないブラウザ向けに手順案内
+      if (isAndroid) {
+        openModal(
+          "AndroidはChrome推奨です。<br><br>" +
+          "手順：<br>" +
+          "1) 右上「︙」<br>" +
+          "2) 「ホーム画面に追加」または「アプリをインストール」",
+          false
+        );
+        return;
+      }
+
       openModal(
-        "iPhone/iPadでは自動で「ホーム画面に追加」を開けません（仕様）。<br><br>" +
-        "手順：<br>" +
-        "1) 画面下（または上）の共有ボタン（□↑）<br>" +
-        "2) 「ホーム画面に追加」<br>" +
-        "3) 右上の「追加」",
+        "スマホ（iPhone/Android）で開くとホーム画面に追加できます。<br>QRからスマホで開いてお試しください。",
         false
       );
-      return;
-    }
+    });
 
-    // Androidでも拾えないブラウザ向けに手順案内
-    if (isAndroid) {
-      openModal(
-        "AndroidはChrome推奨です。<br><br>" +
-        "手順：<br>" +
-        "1) Chromeでこのページを開く<br>" +
-        "2) 右上「︙」<br>" +
-        "3) 「ホーム画面に追加」または「アプリをインストール」",
-        false
-      );
-      return;
-    }
+    // ✅ モーダル内「インストールする」
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
 
-    openModal(
-      "スマホ（iPhone/Android）で開くとホーム画面に追加できます。<br>QRからスマホで開いてお試しください。",
-      false
-    );
-  });
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      deferredPrompt = null;
 
-  // ✅ モーダル内「インストールする」
-  installBtn.addEventListener("click", async () => {
-    if (!deferredPrompt) return;
+      if (choice && choice.outcome === "accepted") {
+        openModal("インストールを開始しました。ホーム画面にアイコンが追加されます。", false);
+      } else {
+        openModal("キャンセルされました。必要なら、またこのボタンから試せます。", false);
+      }
+    });
+  })();
+  </script>
 
-    deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    deferredPrompt = null;
-
-    if (choice && choice.outcome === "accepted") {
-      openModal("インストールを開始しました。ホーム画面にアイコンが追加されます。", false);
-    } else {
-      openModal("キャンセルされました。必要なら、またこのボタンから試せます。", false);
-    }
-  });
-})();
-</script>
-<!-- # END -->
+  <!-- # END -->
 </body>
-</html> 
-
-
-
-
-
-
-
-
-
-
-
+</html>
