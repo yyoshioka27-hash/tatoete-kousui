@@ -231,10 +231,11 @@
     }
 
     /* =========================
-      ✅ 追加：ホーム画面に追加の「常設手順カード」
-      （HTML改修なしでも良いが、見た目を揃えるためCSSで統一）
+      ✅ ホーム画面に追加の「手順カード」
+      - 初期は非表示（ボタン押下で表示）
       ========================= */
     #a2hsGuide{
+      display:none; /* ✅追加：ボタンを押した時だけ出す */
       margin-top: 12px;
       padding: 12px;
       border-radius: 12px;
@@ -290,7 +291,7 @@
         </div>
       </div>
 
-      <!-- ✅✅✅ 追加：この画面上に手順を常設表示（iPhone/Android両方） -->
+      <!-- ✅✅✅ 追加：ボタン押下で表示される手順 -->
       <div id="a2hsGuide">
         <div class="title">📌 ホーム画面に追加する方法</div>
 
@@ -358,13 +359,8 @@
 
         <div class="actions">
           <button id="del_m" style="display:none;">このネタを削除</button>
-
-          <!-- ✅ 「??」対策：絵文字は数値参照 + JSがclass/onclick付与 -->
           <button id="like_m">&#128077; いいね (<span id="likeCount_m">0</span>)</button>
-
-          <!-- ✅ script.js が参照する「累計」表示（無いとUI更新が中途半端） -->
           <span class="muted" id="likeTotal_m">累計&#128077;0</span>
-
           <span id="badge_m" style="margin-left:6px;"></span>
         </div>
       </div>
@@ -468,7 +464,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script defer src="script.js?v=99"></script>
 
-  <!-- ✅ Add to Home / Install Modal（機能は残したまま。案内は常設になったので“読まない人向け”） -->
+  <!-- ✅ Add to Home / Install Modal（Androidでインストール可能な時だけ使う） -->
   <div id="a2hsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;">
     <div style="max-width:560px; margin:10vh auto; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25);">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
@@ -497,12 +493,9 @@
     const closeBtn = document.getElementById("a2hsClose");
     const okBtn = document.getElementById("a2hsOk");
     const installBtn = document.getElementById("a2hsInstall");
+    const guide = document.getElementById("a2hsGuide");
 
     if (!btn || !modal || !body || !closeBtn || !okBtn || !installBtn) return;
-
-    const ua = navigator.userAgent || "";
-    const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    const isAndroid = /Android/.test(ua);
 
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -517,6 +510,13 @@
     }
     function closeModal(){ modal.style.display = "none"; }
 
+    function toggleGuide(){
+      if (!guide) return;
+      const hidden = (getComputedStyle(guide).display === "none");
+      guide.style.display = hidden ? "block" : "none";
+      if (hidden) guide.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     closeBtn.addEventListener("click", closeModal);
     okBtn.addEventListener("click", closeModal);
     modal.addEventListener("click", (e)=>{ if(e.target === modal) closeModal(); });
@@ -527,48 +527,22 @@
       deferredPrompt = e;
     });
 
-    // ✅ ボタン押下（常設手順があるので、ここは“補助”）
+    // ✅ ボタン押下：
+    // 1) インストール済み → モーダル
+    // 2) Androidでインストール可能 → モーダル（インストールボタン）
+    // 3) それ以外 → この画面上に手順を表示/非表示
     btn.addEventListener("click", async () => {
       if (isStandalone) {
         openModal("すでにホーム画面から起動できる状態です 👍<br>（インストール済み）", false);
         return;
       }
 
-      // Androidでインストール可能ならプロンプトを出す
       if (deferredPrompt) {
         openModal("この端末はインストールできます。<br>下の「インストールする」を押してください。", true);
         return;
       }
 
-      // iOSは仕様で自動表示できないので手順案内
-      if (isIOS) {
-        openModal(
-          "iPhone/iPadでは自動で「ホーム画面に追加」を開けません（仕様）。<br><br>" +
-          "手順：<br>" +
-          "1) 共有（□↑）<br>" +
-          "2) 「ホーム画面に追加」<br>" +
-          "3) 「追加」",
-          false
-        );
-        return;
-      }
-
-      // Androidでも拾えないブラウザ向けに手順案内
-      if (isAndroid) {
-        openModal(
-          "AndroidはChrome推奨です。<br><br>" +
-          "手順：<br>" +
-          "1) 右上「︙」<br>" +
-          "2) 「ホーム画面に追加」または「アプリをインストール」",
-          false
-        );
-        return;
-      }
-
-      openModal(
-        "スマホ（iPhone/Android）で開くとホーム画面に追加できます。<br>QRからスマホで開いてお試しください。",
-        false
-      );
+      toggleGuide();
     });
 
     // ✅ モーダル内「インストールする」
