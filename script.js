@@ -1577,14 +1577,14 @@ function fireworksOnce(){
 
   if (__fwActive){
     __fwStartAt = now;
-    __fwDuration = 5000;
+    __fwDuration = 8000;
     __fwCanvas.style.opacity = "1";
     return;
   }
 
   __fwActive = true;
   __fwStartAt = now;
-  __fwDuration = 5000;
+  __fwDuration = 8000;
   __fwParticles = [];
   __fwCanvas.style.opacity = "1";
 
