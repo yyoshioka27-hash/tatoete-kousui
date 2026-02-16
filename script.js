@@ -1844,7 +1844,7 @@ function wireSubmit(){
       try{ renderMySubmissions(); }catch{}
       try{ await syncMySubmissionsStatus(); }catch{}
 
-      alert("送信しました！（承認待ちに入りました）";
+      alert("送信しました！（承認待ちに入りました）");
     }catch(e){
       alert(`送信失敗：${e?.message || e}`);
     }finally{
