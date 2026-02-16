@@ -1,4 +1,63 @@
 // =========================
+// ✅ 今日の使用者カウント（天気検索成功時に1日1回だけping）
+// =========================
+function getUsageClientId(){
+  try{
+    const k = "usage_client_id_v1";
+    let cid = localStorage.getItem(k);
+    if (!cid) {
+      cid = (crypto?.randomUUID ? crypto.randomUUID() : ("cid_" + Math.random().toString(16).slice(2) + Date.now()));
+      localStorage.setItem(k, cid);
+    }
+    return cid;
+  }catch{
+    return "cid_fallback";
+  }
+}
+
+function todayKeyJST(){
+  // “今日”はJST基準にしたいので、IntlでAsia/Tokyoを使う
+  try{
+    const d = new Date();
+    const s = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit" }).format(d);
+    // sv-SE は YYYY-MM-DD
+    return s;
+  }catch{
+    // 失敗時はローカルで
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const da = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${da}`;
+  }
+}
+
+async function pingUsageOnWeatherSearch(){
+  const day = todayKeyJST();
+  const onceKey = `usage_ping_${day}`;
+  try{
+    if (localStorage.getItem(onceKey) === "1") return;
+
+    const cid = getUsageClientId();
+    const url = `${API_BASE}/api/usage/ping?cid=${encodeURIComponent(cid)}`;
+
+    const res = await fetch(url, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `usage ping failed ${res.status}`);
+
+    // ✅ 1日1回に固定
+    localStorage.setItem(onceKey, "1");
+
+    // おまけ：管理画面の表示をそれっぽく更新したいなら（任意）
+    // console.log("usage today:", data.count);
+
+  }catch(e){
+    console.warn("pingUsageOnWeatherSearch error", e);
+  }
+}
+
+// =========================
 // script.js  (PART 1 / 3)
 // =========================
 
@@ -7,6 +66,52 @@ const BUILD = "2026-02-16_usage_ping_fix_full_v1";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+// =========================
+// ✅ 今日の使用者カウント（1日1回だけ /api/usage/ping を叩く）
+// =========================
+function usageClientId(){
+  try{
+    const k = "usage_client_id_v1";
+    let v = localStorage.getItem(k);
+    if (!v) {
+      v = (crypto?.randomUUID ? crypto.randomUUID() : ("cid_" + Math.random().toString(16).slice(2) + Date.now()));
+      localStorage.setItem(k, v);
+    }
+    return v;
+  }catch{
+    return "cid_fallback";
+  }
+}
+
+function jstDayKey(){
+  try{
+    return new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(new Date()); // YYYY-MM-DD
+  }catch{
+    const d=new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+}
+
+async function pingUsageOncePerDay(tag="wx_ok"){
+  const day = jstDayKey();
+  const onceKey = `usage_ping_${tag}_${day}`;
+  try{
+    if (localStorage.getItem(onceKey) === "1") return;
+
+    const cid = usageClientId();
+    const res = await fetch(`${API_BASE}/api/usage/ping?cid=${encodeURIComponent(cid)}`, { cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+
+    if (res.ok && data?.ok) {
+      localStorage.setItem(onceKey, "1");
+    }
+  }catch(e){
+    console.warn("pingUsageOncePerDay error", e);
+  }
+}
 
 // =========================
 // ✅FIX: render 多重呼び出し防止（固まり対策）
