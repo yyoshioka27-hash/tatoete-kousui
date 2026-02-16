@@ -139,6 +139,44 @@
       .filterInput{ width: 100%; min-width: 0; }
       .filterSelect{ width: 100%; min-width: 0; }
     }
+
+    /* ======================================================
+       ✅ 追加：ADMIN_KEY 目ボタン（表示/非表示）
+       ====================================================== */
+    .pw-wrap{
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      max-width: 420px; /* なくてもOK（見た目整える用） */
+    }
+    .pw-wrap input{
+      width: 100%;
+      padding-right: 46px; /* 右の目ボタン分 */
+      box-sizing: border-box;
+      min-width: 280px; /* 既存inputと同等 */
+    }
+    .pw-toggle{
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 34px;
+      height: 34px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      opacity: .75;
+      padding: 0;
+      box-shadow: none;
+    }
+    .pw-toggle:hover{ opacity: 1; }
+    .pw-toggle svg{
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
   </style>
 
   <!-- ✅ 元ネタ（metaphors.js）を先に読み込む -->
@@ -155,24 +193,25 @@
         <label>API_BASE</label>
         <input id="apiBase" class="mono" />
       </div>
-     <div>
-  <label>ADMIN_KEY</label>
 
-  <div class="pw-wrap">
-    <input id="adminKey" type="password" class="mono" placeholder="例：2355" autocomplete="off" />
-    <button type="button" class="pw-toggle" data-toggle="adminKey" aria-label="合言葉を表示" aria-pressed="false">
-      <!-- eye -->
-      <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 5c5.5 0 9.5 4.5 10.5 6.2a1.6 1.6 0 0 1 0 1.6C21.5 14.5 17.5 19 12 19S2.5 14.5 1.5 12.8a1.6 1.6 0 0 1 0-1.6C2.5 9.5 6.5 5 12 5zm0 2C7.8 7 4.5 10.6 3.4 12c1.1 1.4 4.4 5 8.6 5s7.5-3.6 8.6-5C19.5 10.6 16.2 7 12 7zm0 2.2A2.8 2.8 0 1 1 9.2 12 2.8 2.8 0 0 1 12 9.2zm0 1.8A1 1 0 1 0 13 12a1 1 0 0 0-1-1z"/>
-      </svg>
-      <!-- eye-off -->
-      <svg class="icon-eyeoff" viewBox="0 0 24 24" aria-hidden="true" style="display:none">
-        <path d="M3 5.3 4.3 4 20 19.7 18.7 21l-3.1-3.1c-1.1.5-2.3.8-3.6.8-5.5 0-9.5-4.5-10.5-6.2a1.6 1.6 0 0 1 0-1.6c.8-1.3 2.8-3.7 5.9-5.1L3 5.3zm6.2 1.7c.9-.3 1.8-.5 2.8-.5 5.5 0 9.5 4.5 10.5 6.2a1.6 1.6 0 0 1 0 1.6c-.5.9-1.6 2.3-3.2 3.5l-2.1-2.1a4 4 0 0 0-5.1-5.1L9.2 7zM3.4 12c1.1 1.4 4.4 5 8.6 5 .7 0 1.3-.1 1.9-.2l-1.7-1.7a2.8 2.8 0 0 1-3.3-3.3L7 9.9C5.2 11 4 12.3 3.4 12z"/>
-      </svg>
-    </button>
-  </div>
-</div>
->
+      <!-- ✅ 修正：ADMIN_KEY を password + 目ボタン切替にする -->
+      <div>
+        <label>ADMIN_KEY</label>
+
+        <div class="pw-wrap">
+          <input id="adminKey" type="password" class="mono" placeholder="例：2355" autocomplete="off" />
+          <button type="button" class="pw-toggle" data-toggle="adminKey" aria-label="合言葉を表示" aria-pressed="false">
+            <!-- eye -->
+            <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5c5.5 0 9.5 4.5 10.5 6.2a1.6 1.6 0 0 1 0 1.6C21.5 14.5 17.5 19 12 19S2.5 14.5 1.5 12.8a1.6 1.6 0 0 1 0-1.6C2.5 9.5 6.5 5 12 5zm0 2C7.8 7 4.5 10.6 3.4 12c1.1 1.4 4.4 5 8.6 5s7.5-3.6 8.6-5C19.5 10.6 16.2 7 12 7zm0 2.2A2.8 2.8 0 1 1 9.2 12 2.8 2.8 0 0 1 12 9.2zm0 1.8A1 1 0 1 0 13 12a1 1 0 0 0-1-1z"/>
+            </svg>
+            <!-- eye-off -->
+            <svg class="icon-eyeoff" viewBox="0 0 24 24" aria-hidden="true" style="display:none">
+              <path d="M3 5.3 4.3 4 20 19.7 18.7 21l-3.1-3.1c-1.1.5-2.3.8-3.6.8-5.5 0-9.5-4.5-10.5-6.2a1.6 1.6 0 0 1 0-1.6c.8-1.3 2.8-3.7 5.9-5.1L3 5.3zm6.2 1.7c.9-.3 1.8-.5 2.8-.5 5.5 0 9.5 4.5 10.5 6.2a1.6 1.6 0 0 1 0 1.6c-.5.9-1.6 2.3-3.2 3.5l-2.1-2.1a4 4 0 0 0-5.1-5.1L9.2 7zM3.4 12c1.1 1.4 4.4 5 8.6 5 .7 0 1.3-.1 1.9-.2l-1.7-1.7a2.8 2.8 0 0 1-3.3-3.3L7 9.9C5.2 11 4 12.3 3.4 12z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <div class="row" style="gap:8px; align-items:flex-end;">
         <button id="btnSave" class="btnPrimary">保存</button>
@@ -1623,6 +1662,34 @@
         await deletePublicItems([id]);
       }
     }
+  });
+
+  // ======================================================
+  // ✅ 追加：ADMIN_KEY 目ボタンで表示/非表示（admin.html内で完結）
+  // ======================================================
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pw-toggle");
+    if (!btn) return;
+
+    const targetId = btn.getAttribute("data-toggle");
+    if (!targetId) return;
+
+    const input = document.getElementById(targetId);
+    if (!input) return;
+
+    const eye = btn.querySelector(".icon-eye");
+    const off = btn.querySelector(".icon-eyeoff");
+
+    const show = (input.type === "password");
+    input.type = show ? "text" : "password";
+
+    if (eye && off){
+      eye.style.display = show ? "none" : "";
+      off.style.display = show ? "" : "none";
+    }
+
+    btn.setAttribute("aria-pressed", String(show));
+    btn.setAttribute("aria-label", show ? "合言葉を非表示" : "合言葉を表示");
   });
 
   // 初期化
