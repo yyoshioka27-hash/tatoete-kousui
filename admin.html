@@ -166,7 +166,8 @@
         <button id="btnRefresh">更新（表示中タブ）</button>
         <button id="btnRefreshAll">更新（全タブ）</button>
         <button id="btnImportSeed">初期ネタを取り込み</button>
-        <button id="btnReindex" class="btnDanger">復旧（reindex）</button>
+        <!-- ✅ FIX: ID重複を解消（上部の復旧ボタンは unique にする） -->
+        <button id="btnReindexTop" class="btnDanger">復旧（reindex）</button>
       </div>
 
       <div class="right row" style="gap:8px;">
@@ -212,7 +213,7 @@
           <option value="bucket">並び替え：%順</option>
         </select>
         <button id="btnClearQ" class="miniBtn">× クリア</button>
-        <!-- ✅ 追加：復旧ボタン（public index 再構築） -->
+        <!-- ✅ 下部の復旧ボタンはそのまま（別IDにしたのでOK） -->
         <button id="btnReindex" class="miniBtn">復旧（reindex）</button>
       </div>
 
@@ -355,7 +356,8 @@
   const elSort = $("sortKey");
   const btnClearQ = $("btnClearQ");
 
-  // ✅ 追加：reindexボタン
+  // ✅ FIX: 復旧ボタンを2つ拾う（Top/Toolbar）
+  const btnReindexTop = $("btnReindexTop");
   const btnReindex = $("btnReindex");
 
   let activeTab = "pending"; // pending | public | all
@@ -400,13 +402,14 @@
     __busy = !!on;
     pillBusy.style.display = __busy ? "inline-flex" : "none";
     const dis = __busy;
+
     [
       btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed,
       tabPending, tabPublic, tabAll,
       btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
       elQ, elSort, btnClearQ,
-      btnReindex
-    ].forEach(b => { try{ b.disabled = dis; }catch{} });
+      btnReindexTop, btnReindex
+    ].forEach(b => { try{ if (b) b.disabled = dis; }catch{} });
   }
 
   function abortInFlight(){
@@ -422,7 +425,7 @@
                       : "rgba(15,23,42,.20)";
   }
 
-  // ✅ ページ切替後、一覧の先頭へスクロール（1回だけ定義）
+  // ✅ ページ切替後、一覧の先頭へスクロール
   function scrollToListTop(){
     try{
       const topEl = document.getElementById("list");
@@ -477,7 +480,7 @@
     return data;
   }
 
-  // ✅ 標準：pathsのフォールバック
+  // ✅ pathsのフォールバック
   async function callAdminWithFallback(paths, opts){
     let lastErr = null;
     for (const p of paths){
@@ -505,32 +508,6 @@
   async function callAdminFast(paths, opts){
     const arr = Array.isArray(paths) ? paths : [paths];
     return await callAdminWithFallback(arr, opts);
-  }
-
-  // ======================================================
-  // ✅ 追加：paths × payloads の“総当たり”で成功するまで試す
-  // ======================================================
-  async function callAdminWithFallbackAndPayload(paths, payloads, optsBase){
-    let lastErr = null;
-    const tried = [];
-    for (const p of paths){
-      for (const body of payloads){
-        try{
-          const data = await fetchOK(p, { ...optsBase, body });
-          console.log("[API OK]", p, body);
-          return data;
-        } catch(e){
-          lastErr = e;
-          tried.push({ p, status: e?.status, msg: e?.message });
-          if (e?.status === 404){
-            break;
-          }
-          continue;
-        }
-      }
-    }
-    console.error("[API FAILED] tried:", tried.map(x => x.p));
-    throw lastErr || new Error("API failed");
   }
 
   // ✅ API候補
@@ -599,7 +576,7 @@
       "/api/admin/seed",
     ],
 
-    // ✅ 追加：reindex（worker.js の /api/admin/reindex_public）
+    // ✅ reindex（worker.js の /api/admin/reindex_public）
     reindex: [
       "/api/admin/reindex_public",
     ],
@@ -826,7 +803,6 @@
     const all = getVisibleItemsAll();
     const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
 
-    // ページ範囲を安全に丸める
     if (page < 1) page = 1;
     if (page > totalPages) page = totalPages;
 
@@ -1204,7 +1180,7 @@
     }
   }
 
-  // ✅ 追加：復旧（reindex_public）
+  // ✅ 復旧（reindex_public）
   async function doReindexPublic(){
     abortInFlight();
     __ctrl = new AbortController();
@@ -1212,16 +1188,13 @@
     const signal = __ctrl.signal;
 
     try{
-      // worker.js 側は {mode,bucket,max} を受ける。全部復旧は all/null でOK。
       const body = { mode: "all", bucket: "all", max: 20000 };
       const r = await callAdminWithFallback(API.reindex, { method:"POST", admin:true, body, signal });
 
       const scanned = Number(r?.scanned ?? 0);
       const wrote   = Number(r?.wrote ?? 0);
 
-      // 復旧後、表示も更新
       await refreshAllTabs();
-
       alert(`復旧（reindex）完了\nscanned: ${scanned}\nwrote: ${wrote}`);
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1248,10 +1221,7 @@
       const uniq = Array.from(new Set(ids)).filter(Boolean);
       const body = { ids: uniq };
 
-      await callAdminFast(
-        API.approve,
-        { method:"POST", admin:true, body, signal }
-      );
+      await callAdminFast(API.approve, { method:"POST", admin:true, body, signal });
 
       await Promise.all([loadPending(signal), loadPublic(signal)]);
       if (activeTab === "all") await loadAll(signal);
@@ -1290,12 +1260,7 @@
 
       for (const body of payloads){
         try{
-          await callAdminWithFallback(API.del, {
-            method: "POST",
-            admin: true,
-            body,
-            signal
-          });
+          await callAdminWithFallback(API.del, { method: "POST", admin: true, body, signal });
           deleted = true;
           break;
         } catch(e){
@@ -1355,12 +1320,7 @@
 
       for (const body of payloads){
         try{
-          await callAdminWithFallback(API.del, {
-            method: "POST",
-            admin: true,
-            body,
-            signal
-          });
+          await callAdminWithFallback(API.del, { method: "POST", admin: true, body, signal });
           deleted = true;
           break;
         } catch(e){
@@ -1384,12 +1344,7 @@
 
     try{
       try{
-        await callAdminWithFallback(API.reject, {
-          method:"POST",
-          admin:true,
-          body:{ ids },
-          signal
-        });
+        await callAdminWithFallback(API.reject, { method:"POST", admin:true, body:{ ids }, signal });
       } catch(e){
         // rejectが無くてもOK
       }
@@ -1460,12 +1415,7 @@
 
       for (let i = 0; i < items.length; i += BATCH){
         const chunk = items.slice(i, i + BATCH);
-        await callAdminWithFallback(API.importSeed, {
-          method:"POST",
-          admin:true,
-          body:{ items: chunk },
-          signal
-        });
+        await callAdminWithFallback(API.importSeed, { method:"POST", admin:true, body:{ items: chunk }, signal });
         imported += chunk.length;
       }
 
@@ -1494,11 +1444,16 @@
   btnRefreshAll.addEventListener("click", refreshAllTabs);
   btnImportSeed.addEventListener("click", importSeed);
 
-  // ✅ 追加：復旧ボタン
-  btnReindex.addEventListener("click", async () => {
-    if (!confirm("復旧（reindex）を実行しますか？\npublicデータから idx:public:* を再構築します。")) return;
-    await doReindexPublic();
-  });
+  // ✅ FIX: 復旧ボタンは両方とも同じ動作
+  function bindReindex(btn){
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      if (!confirm("復旧（reindex）を実行しますか？\npublicデータから idx:public:* を再構築します。")) return;
+      await doReindexPublic();
+    });
+  }
+  bindReindex(btnReindexTop);
+  bindReindex(btnReindex);
 
   tabPending.addEventListener("click", () => setActiveTab("pending"));
   tabPublic.addEventListener("click",  () => setActiveTab("public"));
@@ -1549,21 +1504,21 @@
   });
 
   btnBulkApprove.addEventListener("click", async () => {
-    const ids = getSelectedIds();
+    const ids = Array.from(selectedIds);
     if (!ids.length) return alert("選択がありません");
     if (!confirm(`選択 ${ids.length}件 を承認しますか？`)) return;
     await approveIds(ids);
   });
 
   btnBulkReject.addEventListener("click", async () => {
-    const ids = getSelectedIds();
+    const ids = Array.from(selectedIds);
     if (!ids.length) return alert("選択がありません");
     if (!confirm(`選択 ${ids.length}件 を却下して削除しますか？（元に戻せません）`)) return;
     await rejectAndDeletePending(ids);
   });
 
   btnBulkDeletePublic.addEventListener("click", async () => {
-    const ids = getSelectedIds();
+    const ids = Array.from(selectedIds);
     if (!ids.length) return alert("選択がありません");
     if (!confirm(`公開の選択 ${ids.length}件 を削除しますか？（元に戻せません）`)) return;
     await deletePublicItems(ids);
