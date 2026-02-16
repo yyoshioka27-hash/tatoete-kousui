@@ -173,6 +173,8 @@
       <div class="right row" style="gap:8px;">
         <span class="pill" id="pillHealth">health: 未確認</span>
         <span class="pill" id="pillAdmin">admin: 未確認</span>
+        <!-- ✅ 追加：一日の使用者数（DAU）表示 -->
+        <span class="pill" id="pillDAU">今日の使用者数: -</span>
         <span class="pill" id="pillBusy" style="display:none;">通信中…</span>
         <span class="pill" id="pillReindex" style="display:none;">復旧: 未判定</span>
       </div>
@@ -327,6 +329,7 @@
 
   const pillHealth = $("pillHealth");
   const pillAdmin  = $("pillAdmin");
+  const pillDAU    = $("pillDAU"); // ✅ 追加：DAU表示
   const pillBusy   = $("pillBusy");
 
   const countsEl   = $("counts");
@@ -419,6 +422,7 @@
   }
 
   function setPill(el, text, ok=null){
+    if(!el) return;
     el.textContent = text;
     el.style.borderColor = ok===true ? "rgba(22,163,74,.45)"
                       : ok===false ? "rgba(239,68,68,.45)"
@@ -579,6 +583,13 @@
     // ✅ reindex（worker.js の /api/admin/reindex_public）
     reindex: [
       "/api/admin/reindex_public",
+    ],
+
+    // ✅ 追加：使用者数（DAU）統計（Workers 側が未実装でもOK）
+    stats: [
+      "/api/admin/stats",
+      "/api/admin/usage",
+      "/api/admin/dau",
     ],
   };
 
@@ -1172,8 +1183,26 @@
         else if (e?.status === 404) setPill(pillAdmin, "admin: NG（APIなし）", false);
         else setPill(pillAdmin, `admin: NG（${e.message}）`, false);
       }
+
+      // ✅ 追加：DAU表示（stats が未実装でも壊れない）
+      try{
+        const s = await callAdminWithFallback(API.stats, { admin:true, signal });
+        const today = Number(s?.dauToday ?? s?.today ?? s?.dau ?? NaN);
+        const yday  = Number(s?.dauYesterday ?? s?.yesterday ?? NaN);
+
+        if (Number.isFinite(today)){
+          const tail = Number.isFinite(yday) ? ` / 昨日:${yday}` : "";
+          setPill(pillDAU, `今日の使用者数: ${today}${tail}`, true);
+        } else {
+          setPill(pillDAU, "今日の使用者数: -（stats形式不明）", null);
+        }
+      } catch(e){
+        setPill(pillDAU, "今日の使用者数: -（stats未実装）", null);
+      }
+
     } catch(e){
       setPill(pillHealth, `health: NG（${e.message}）`, false);
+      setPill(pillDAU, "今日の使用者数: -", null);
     } finally {
       setBusy(false);
       __ctrl = null;
@@ -1563,6 +1592,7 @@
   loadViewSettings();
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
+  setPill(pillDAU,    "今日の使用者数: -", null);
 
   hydrateFromCache();
   render();
