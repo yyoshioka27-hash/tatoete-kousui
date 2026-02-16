@@ -155,10 +155,24 @@
         <label>API_BASE</label>
         <input id="apiBase" class="mono" />
       </div>
-      <div>
-        <label>ADMIN_KEY</label>
-        <input id="adminKey" class="mono" placeholder="例：2355" />
-      </div>
+     <div>
+  <label>ADMIN_KEY</label>
+
+  <div class="pw-wrap">
+    <input id="adminKey" type="password" class="mono" placeholder="例：2355" autocomplete="off" />
+    <button type="button" class="pw-toggle" data-toggle="adminKey" aria-label="合言葉を表示" aria-pressed="false">
+      <!-- eye -->
+      <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 5c5.5 0 9.5 4.5 10.5 6.2a1.6 1.6 0 0 1 0 1.6C21.5 14.5 17.5 19 12 19S2.5 14.5 1.5 12.8a1.6 1.6 0 0 1 0-1.6C2.5 9.5 6.5 5 12 5zm0 2C7.8 7 4.5 10.6 3.4 12c1.1 1.4 4.4 5 8.6 5s7.5-3.6 8.6-5C19.5 10.6 16.2 7 12 7zm0 2.2A2.8 2.8 0 1 1 9.2 12 2.8 2.8 0 0 1 12 9.2zm0 1.8A1 1 0 1 0 13 12a1 1 0 0 0-1-1z"/>
+      </svg>
+      <!-- eye-off -->
+      <svg class="icon-eyeoff" viewBox="0 0 24 24" aria-hidden="true" style="display:none">
+        <path d="M3 5.3 4.3 4 20 19.7 18.7 21l-3.1-3.1c-1.1.5-2.3.8-3.6.8-5.5 0-9.5-4.5-10.5-6.2a1.6 1.6 0 0 1 0-1.6c.8-1.3 2.8-3.7 5.9-5.1L3 5.3zm6.2 1.7c.9-.3 1.8-.5 2.8-.5 5.5 0 9.5 4.5 10.5 6.2a1.6 1.6 0 0 1 0 1.6c-.5.9-1.6 2.3-3.2 3.5l-2.1-2.1a4 4 0 0 0-5.1-5.1L9.2 7zM3.4 12c1.1 1.4 4.4 5 8.6 5 .7 0 1.3-.1 1.9-.2l-1.7-1.7a2.8 2.8 0 0 1-3.3-3.3L7 9.9C5.2 11 4 12.3 3.4 12z"/>
+      </svg>
+    </button>
+  </div>
+</div>
+>
 
       <div class="row" style="gap:8px; align-items:flex-end;">
         <button id="btnSave" class="btnPrimary">保存</button>
