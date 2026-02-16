@@ -151,10 +151,22 @@ function likeFxPlusOne(btnEl){
   if (document.getElementById("penPin")) return;
 
   const pin = document.createElement("input");
-  pin.id = "penPin";
-  pin.type = "password";
+    pin.id = "penPin";
+
+  // ✅ iPhoneで日本語IMEを殺しやすいので password は使わない
+  //    見た目は伏せ字にする（iOS Safari/PWAで安定）
+  pin.type = "text";
+  pin.style.webkitTextSecurity = "disc"; // 伏せ字（Safari/iOS向け）
+  pin.setAttribute("inputmode", "text");
+  pin.setAttribute("lang", "ja");
+
   pin.autocomplete = "off";
+  pin.autocapitalize = "none";
+  pin.autocorrect = "off";
+  pin.spellcheck = false;
+
   pin.placeholder = "合言葉（初回登録/別端末ログイン用）";
+
   pin.style.width = "100%";
   pin.style.boxSizing = "border-box";
   pin.style.marginTop = "8px";
