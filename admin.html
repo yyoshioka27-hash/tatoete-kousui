@@ -235,7 +235,8 @@
       ※ ここは Workers 側のAPIが揺れても動くように、複数パスを自動で試します（404フォールバック）<br/>
       ※ 「却下」は最終的に <span class="mono">pending</span> から確実に消える（rejectが無ければdelete(pending)へ）。<br/>
       ※ 「公開の削除」は <span class="mono">public</span> から確実に消える（delete(public) を複数payloadで試行）。<br/>
-      ※ 「復旧（reindex）」は <span class="mono">idx:public:*</span> を public データから再構築します（/api/public が空になる事故の復旧）。
+      ※ 「復旧（reindex）」は <span class="mono">idx:public:*</span> を public データから再構築します（/api/public が空になる事故の復旧）。<br/>
+      ※ ✅「今日の使用者数」は health/更新ボタン実行時に自動更新し、さらに 60秒ごとに自動更新します（stats未実装でも壊れません）。
     </div>
 
     <div class="list" id="list" data-top-anchor="1"></div>
@@ -261,6 +262,9 @@
   // ✅ 追加(2)：キャッシュ（差分追加）設定
   // ======================================================
   const ADMIN_CACHE_VER = "adminCache_v1";
+
+  // ✅ 追加：DAU 自動更新間隔（ms）
+  const DAU_POLL_MS = 60 * 1000;
 
   const $ = (id) => document.getElementById(id);
 
@@ -388,6 +392,10 @@
   // =========================
   let __busy = false;
   let __ctrl = null;
+
+  // ✅ 追加：DAU 自動更新タイマーID
+  let __dauTimer = null;
+  let __dauInFlight = false;
 
   function apiBase(){
     let b = String(elApiBase.value || "").trim().replace(/\/+$/,"");
@@ -1091,6 +1099,48 @@
     render();
   }
 
+  // ======================================================
+  // ✅ DAU（今日の使用者数）更新：health以外でも更新する
+  // ======================================================
+  async function refreshDAU({ signal=null, silent=false } = {}){
+    if (__dauInFlight) return;
+    __dauInFlight = true;
+
+    try{
+      // stats は admin 必須（鍵が空ならスキップ）
+      if (!adminKey()){
+        if (!silent) setPill(pillDAU, "今日の使用者数: -（ADMIN_KEY未入力）", null);
+        return;
+      }
+      const s = await callAdminWithFallback(API.stats, { admin:true, signal });
+      const today = Number(s?.dauToday ?? s?.today ?? s?.dau ?? NaN);
+      const yday  = Number(s?.dauYesterday ?? s?.yesterday ?? NaN);
+
+      if (Number.isFinite(today)){
+        const tail = Number.isFinite(yday) ? ` / 昨日:${yday}` : "";
+        setPill(pillDAU, `今日の使用者数: ${today}${tail}`, true);
+      } else {
+        setPill(pillDAU, "今日の使用者数: -（stats形式不明）", null);
+      }
+    } catch(e){
+      // stats が未実装でも壊さない
+      if (!silent) setPill(pillDAU, "今日の使用者数: -（stats未実装）", null);
+    } finally {
+      __dauInFlight = false;
+    }
+  }
+
+  function startDAUPoll(){
+    stopDAUPoll();
+    __dauTimer = setInterval(() => {
+      refreshDAU({ silent:true });
+    }, DAU_POLL_MS);
+  }
+  function stopDAUPoll(){
+    try{ if (__dauTimer) clearInterval(__dauTimer); }catch(e){}
+    __dauTimer = null;
+  }
+
   async function refreshCurrentTab(){
     applyCacheToActiveTabInstant();
 
@@ -1117,6 +1167,9 @@
         rebuildAllFromKV(mergedKV);
         saveCache("allkv", itemsAllKV);
       }
+
+      // ✅ 追加：更新ボタンでもDAU更新
+      await refreshDAU({ signal, silent:true });
 
       syncCacheAll();
       resetPager();
@@ -1152,6 +1205,9 @@
       const mergedKV = mergeById(oldA, itemsAllKV);
       rebuildAllFromKV(mergedKV);
 
+      // ✅ 追加：全更新でもDAU更新
+      await refreshDAU({ signal, silent:true });
+
       syncCacheAll();
       resetPager();
       render();
@@ -1185,20 +1241,7 @@
       }
 
       // ✅ 追加：DAU表示（stats が未実装でも壊れない）
-      try{
-        const s = await callAdminWithFallback(API.stats, { admin:true, signal });
-        const today = Number(s?.dauToday ?? s?.today ?? s?.dau ?? NaN);
-        const yday  = Number(s?.dauYesterday ?? s?.yesterday ?? NaN);
-
-        if (Number.isFinite(today)){
-          const tail = Number.isFinite(yday) ? ` / 昨日:${yday}` : "";
-          setPill(pillDAU, `今日の使用者数: ${today}${tail}`, true);
-        } else {
-          setPill(pillDAU, "今日の使用者数: -（stats形式不明）", null);
-        }
-      } catch(e){
-        setPill(pillDAU, "今日の使用者数: -（stats未実装）", null);
-      }
+      await refreshDAU({ signal, silent:false });
 
     } catch(e){
       setPill(pillHealth, `health: NG（${e.message}）`, false);
@@ -1259,6 +1302,10 @@
       syncCacheAll();
       resetPager();
       render();
+
+      // ✅ 追加：操作後もDAU更新
+      await refreshDAU({ signal, silent:true });
+
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
       alert(`承認に失敗: ${e.message}`);
@@ -1319,6 +1366,10 @@
       syncCacheAll();
       resetPager();
       render();
+
+      // ✅ 追加：操作後もDAU更新
+      await refreshDAU({ signal, silent:true });
+
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
       alert(`公開ネタの削除に失敗: ${e.message}`);
@@ -1392,6 +1443,10 @@
       syncCacheAll();
       resetPager();
       render();
+
+      // ✅ 追加：操作後もDAU更新
+      await refreshDAU({ signal, silent:true });
+
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
       alert(`却下(削除)に失敗: ${e.message}`);
@@ -1452,6 +1507,10 @@
       syncCacheAll();
       resetPager();
       render();
+
+      // ✅ 追加：取り込み後もDAU更新
+      await refreshDAU({ signal, silent:true });
+
       alert(`初期ネタを取り込みました（${imported}件）`);
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1463,9 +1522,12 @@
   }
 
   // Events
-  btnSave.addEventListener("click", () => {
+  btnSave.addEventListener("click", async () => {
     saveSettings();
     alert("保存しました（このブラウザに記憶）");
+
+    // ✅ 保存直後に health/DAU を取り直す（入力ミス即検知）
+    try{ await doHealth(); }catch(e){}
   });
 
   btnHealth.addEventListener("click", doHealth);
@@ -1596,6 +1658,18 @@
 
   hydrateFromCache();
   render();
+
+  // ✅ 追加：起動時に health/DAU を一度取りに行く（失敗しても壊れない）
+  try{ doHealth(); }catch(e){}
+
+  // ✅ 追加：DAU 自動更新開始
+  startDAUPoll();
+
+  // ✅ 念のため：ページ離脱時に停止
+  window.addEventListener("beforeunload", () => {
+    stopDAUPoll();
+    abortInFlight();
+  });
 
 })();
 </script>
