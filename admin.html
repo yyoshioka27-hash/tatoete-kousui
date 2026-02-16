@@ -1,1679 +1,1461 @@
-<!-- admin.html -->
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#ffffff" />
-  <title>管理（承認待ち／一般公開）</title>
-
-  <style>
-    :root{
-      --bg:#ffffff;
-      --text:#0f172a;
-      --sub:#64748b;
-      --line:rgba(15,23,42,.12);
-      --card:#ffffff;
-      --shadow:0 10px 24px rgba(2,6,23,.08);
-      --blue:#2563eb;
-      --red:#ef4444;
-      --green:#16a34a;
-      --btn:#0f172a;
-      --btnText:#fff;
-      --mutedBg:rgba(15,23,42,.04);
-      --radius:16px;
-    }
-    body{ margin:0; padding:18px; font-family:-apple-system,system-ui,"Segoe UI",Roboto,"Noto Sans JP",sans-serif; background:var(--bg); color:var(--text); }
-    .container{ max-width:980px; margin:0 auto; }
-    h1{ margin:6px 0 16px; font-size:24px; letter-spacing:-.2px; }
-    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; margin:12px 0; }
-    .muted{ color:var(--sub); font-size:12px; }
-    label{ font-size:12px; color:var(--sub); display:block; margin-bottom:6px; }
-    input{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); min-width:280px; font-size:14px; background:#fff; outline:none; }
-    input:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
-    select{
-      padding:10px 12px;
-      border-radius:12px;
-      border:1px solid var(--line);
-      font-size:14px;
-      background:#fff;
-      outline:none;
-    }
-    select:focus{ border-color: rgba(37,99,235,0.55); box-shadow: 0 0 0 4px rgba(37,99,235,0.12); }
-
-    button{ padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:14px; user-select:none; }
-    button:disabled{ opacity:.55; cursor:not-allowed; }
-    .btnPrimary{ background:var(--blue); color:#fff; border-color:rgba(37,99,235,0.55); font-weight:800; }
-    .btnDanger{ background:var(--red); color:#fff; border-color:rgba(239,68,68,.6); font-weight:800; }
-    .pill{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:var(--mutedBg); font-size:12px; }
-    .tabs{ display:flex; gap:10px; flex-wrap:wrap; }
-    .tab{ padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:#fff; font-weight:800; }
-    .tab.active{ background:var(--btn); color:var(--btnText); border-color:rgba(15,23,42,.35); }
-    .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px 0 0; border-top:1px solid rgba(15,23,42,.08); margin-top:10px; }
-    .list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
-
-    .item{ border:1px solid rgba(15,23,42,.10); border-radius:14px; padding:12px; background:rgba(255,255,255,.9); }
-
-    /* ✅ FIX：上段をGridにして「左=可変 / 右=固定」へ */
-    .itemTop{
-      display:grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap:10px;
-      align-items:start;
-    }
-
-    .itemText{ font-size:15px; line-height:1.55; font-weight:700; margin:8px 0; white-space:pre-wrap; }
-    .itemMeta{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-      min-width:0;
-    }
-    .badge{ display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; border:1px solid rgba(15,23,42,.12); background:rgba(255,255,255,.75); font-size:12px; color:var(--sub); font-weight:800; }
-    .badgePublic{ border-color: rgba(22,163,74,.25); background: rgba(22,163,74,.07); color: #166534; }
-    .badgePending{ border-color: rgba(239,68,68,.25); background: rgba(239,68,68,.07); color: #991b1b; }
-
-    .actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-left:auto; justify-content:flex-end; }
-    /* ✅ item行専用：右上に張り付け（Gridの右列に固定） */
-    .itemActions{
-      margin-left:0;
-      justify-content:flex-end;
-      align-self:start;
-      flex-wrap:nowrap;
-      white-space:nowrap;
-    }
-
-    .chk{ transform:translateY(1px); }
-    .right{ margin-left:auto; }
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
-    .smallBtn{ padding:8px 10px; border-radius:10px; font-size:13px; }
-    .btnOk{ background:var(--green); color:#fff; border-color: rgba(22,163,74,.6); font-weight:800; }
-    details > summary{ cursor:pointer; user-select:none; color:var(--sub); font-size:12px; }
-
-    /* ✅ 本文先頭の「雑学70%：」表示 */
-    .pctLabel{
-      font-weight: 900;
-      margin-right: 6px;
-    }
-
-    /* ✅ 追加(1)：雑学/お笑いの薄色塗り */
-    .item[data-mode="trivia"]{
-      background: rgba(37,99,235,.06);
-      border-color: rgba(37,99,235,.18);
-      box-shadow: inset 6px 0 0 rgba(37,99,235,.18);
-    }
-    .item[data-mode="comedy"]{
-      background: rgba(34,197,94,.07);
-      border-color: rgba(34,197,94,.20);
-      box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
-    }
-
-    /* ✅ 追加（検索＆ソート UI） */
-    .filters{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:flex-end;
-    }
-    .filterInput{
-      min-width: 220px;
-      width: 260px;
-    }
-    .filterSelect{
-      min-width: 160px;
-    }
-    .miniBtn{
-      padding:8px 10px;
-      border-radius:10px;
-      font-size:13px;
-    }
-
-    /* ✅ スマホ */
-    @media (max-width: 520px){
-      .itemTop{ grid-template-columns: 1fr; }
-      .itemActions{ justify-content:flex-start; flex-wrap:wrap; white-space:normal; }
-      .filters{ justify-content:flex-start; }
-      .filterInput{ width: 100%; min-width: 0; }
-      .filterSelect{ width: 100%; min-width: 0; }
-    }
-  </style>
-
-  <!-- ✅ 元ネタ（metaphors.js）を先に読み込む -->
-  <script src="./metaphors.js"></script>
-</head>
-
-<body>
-<div class="container">
-  <h1>管理（承認待ち／一般公開）</h1>
-
-  <div class="card">
-    <div class="row">
-      <div>
-        <label>API_BASE</label>
-        <input id="apiBase" class="mono" />
-      </div>
-      <div>
-        <label>ADMIN_KEY</label>
-        <input id="adminKey" class="mono" placeholder="例：2355" />
-      </div>
-
-      <div class="row" style="gap:8px; align-items:flex-end;">
-        <button id="btnSave" class="btnPrimary">保存</button>
-        <button id="btnHealth">health</button>
-        <button id="btnRefresh">更新（表示中タブ）</button>
-        <button id="btnRefreshAll">更新（全タブ）</button>
-        <button id="btnImportSeed">初期ネタを取り込み</button>
-        <!-- ✅ FIX: ID重複を解消（上部の復旧ボタンは unique にする） -->
-        <button id="btnReindexTop" class="btnDanger">復旧（reindex）</button>
-      </div>
-
-      <div class="right row" style="gap:8px;">
-        <span class="pill" id="pillHealth">health: 未確認</span>
-        <span class="pill" id="pillAdmin">admin: 未確認</span>
-        <!-- ✅ 追加：一日の使用者数（DAU）表示 -->
-        <span class="pill" id="pillDAU">今日の使用者数: -</span>
-        <span class="pill" id="pillBusy" style="display:none;">通信中…</span>
-        <span class="pill" id="pillReindex" style="display:none;">復旧: 未判定</span>
-      </div>
-    </div>
-
-    <div class="muted" style="margin-top:10px;">
-      ※ API_BASE は Workers のURL（例：<span class="mono">https://xxxx.workers.dev</span>）<br/>
-      ※ 管理操作は <span class="mono">x-admin-key</span> ヘッダで送ります。鍵が違うと 403。
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between;">
-      <div class="tabs">
-        <button id="tabPending" class="tab active">承認待ち</button>
-        <button id="tabPublic" class="tab">一般公開</button>
-        <button id="tabAll" class="tab">全ネタ（public+pending+元ネタ）</button>
-      </div>
-      <div class="muted" id="counts">承認待ち: 0件 / 公開: 0件 / 全: 0件</div>
-    </div>
-
-    <div class="toolbar">
-      <div class="row" style="gap:12px;">
-        <label style="margin:0; display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="chkAll" class="chk" />
-          全選択
-        </label>
-        <span class="pill" id="selCount">選択: 0件</span>
-        <span class="pill" id="viewCount">表示: 0件</span>
-      </div>
-
-      <!-- ✅ 検索＆ソート -->
-      <div class="filters">
-        <input id="q" class="filterInput" placeholder="検索（本文 / pen / ID / 雑学70% など）" />
-        <select id="sortKey" class="filterSelect">
-          <option value="new">並び替え：新着順</option>
-          <option value="likes">並び替え：likes順</option>
-          <option value="bucket">並び替え：%順</option>
-        </select>
-        <button id="btnClearQ" class="miniBtn">× クリア</button>
-        <!-- ✅ 下部の復旧ボタンはそのまま（別IDにしたのでOK） -->
-        <button id="btnReindex" class="miniBtn">復旧（reindex）</button>
-      </div>
-
-      <!-- ✅ pending用：承認/却下 -->
-      <div class="actions" id="bulkActionsPending">
-        <button id="btnBulkApprove" class="btnOk">一括承認</button>
-        <button id="btnBulkReject" class="btnDanger">一括却下（削除）</button>
-      </div>
-
-      <!-- ✅ public用：一括削除 -->
-      <div class="actions" id="bulkActionsPublic" style="display:none;">
-        <button id="btnBulkDeletePublic" class="btnDanger">一括削除（公開）</button>
-      </div>
-    </div>
-
-    <div class="muted" style="margin-top:10px;">
-      ※ ここは Workers 側のAPIが揺れても動くように、複数パスを自動で試します（404フォールバック）<br/>
-      ※ 「却下」は最終的に <span class="mono">pending</span> から確実に消える（rejectが無ければdelete(pending)へ）。<br/>
-      ※ 「公開の削除」は <span class="mono">public</span> から確実に消える（delete(public) を複数payloadで試行）。<br/>
-      ※ 「復旧（reindex）」は <span class="mono">idx:public:*</span> を public データから再構築します（/api/public が空になる事故の復旧）。<br/>
-      ※ ✅「今日の使用者数」は health/更新ボタン実行時に自動更新し、さらに 60秒ごとに自動更新します（stats未実装でも壊れません）。
-    </div>
-
-    <div class="list" id="list" data-top-anchor="1"></div>
-    <div class="row" id="pager" style="justify-content:center; margin-top:10px;"></div>
-  </div>
-
-  <div class="muted" style="text-align:center; margin:14px 0 8px;">
-    admin.html（承認/却下/削除：堅牢版） / # END
-  </div>
-</div>
-
-<script>
-(() => {
-  const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
-  const LS_API = "tatoete_admin_api_base";
-  const LS_KEY = "tatoete_admin_key";
-
-  // ✅ 追加：検索＆ソート状態を保存
-  const LS_Q = "tatoete_admin_q";
-  const LS_SORT = "tatoete_admin_sort";
-
-  // ======================================================
-  // ✅ 追加(2)：キャッシュ（差分追加）設定
-  // ======================================================
-  const ADMIN_CACHE_VER = "adminCache_v1";
-
-  // ✅ 追加：DAU 自動更新間隔（ms）
-  const DAU_POLL_MS = 60 * 1000;
-
-  const $ = (id) => document.getElementById(id);
-
-  const elApiBase = $("apiBase");
-  const elAdminKey = $("adminKey");
-
-  function _cacheKey(tabKey){
-    const base = (String(elApiBase?.value || "").trim() || DEFAULT_API_BASE).replace(/\/+$/,"");
-    return `${ADMIN_CACHE_VER}:${base}:${tabKey}`;
-  }
-  function loadCache(tabKey){
-    try{
-      const raw = localStorage.getItem(_cacheKey(tabKey));
-      if(!raw) return null;
-      const obj = JSON.parse(raw);
-      if(!obj || !Array.isArray(obj.items)) return null;
-      return obj; // { items:[], savedAt:number }
-    }catch(e){
-      return null;
-    }
-  }
-  function saveCache(tabKey, items){
-    try{
-      localStorage.setItem(_cacheKey(tabKey), JSON.stringify({
-        items: Array.isArray(items) ? items : [],
-        savedAt: Date.now()
-      }));
-    }catch(e){}
-  }
-
-  // 差分マージ
-  function mergeById(oldItems, freshItems){
-    const map = new Map();
-    for(const it of (oldItems || [])){
-      if(!it) continue;
-      const id = it.id || it.key || it._id;
-      if(!id) continue;
-      map.set(id, it);
-    }
-    for(const it of (freshItems || [])){
-      if(!it) continue;
-      const id = it.id || it.key || it._id;
-      if(!id) continue;
-      map.set(id, it);
-    }
-
-    const out = [];
-    const seen = new Set();
-
-    for(const it of (freshItems || [])){
-      const id = it && (it.id || it.key || it._id);
-      if(id && map.has(id) && !seen.has(id)){
-        out.push(map.get(id));
-        seen.add(id);
-      }
-    }
-    for(const it of (oldItems || [])){
-      const id = it && (it.id || it.key || it._id);
-      if(id && map.has(id) && !seen.has(id)){
-        out.push(map.get(id));
-        seen.add(id);
-      }
-    }
-    return out;
-  }
-
-  const pillHealth = $("pillHealth");
-  const pillAdmin  = $("pillAdmin");
-  const pillDAU    = $("pillDAU"); // ✅ 追加：DAU表示
-  const pillBusy   = $("pillBusy");
-
-  const countsEl   = $("counts");
-  const listEl     = $("list");
-
-  const tabPending = $("tabPending");
-  const tabPublic  = $("tabPublic");
-  const tabAll     = $("tabAll");
-
-  const chkAll     = $("chkAll");
-  const selCount   = $("selCount");
-  const viewCount  = $("viewCount");
-
-  const btnSave    = $("btnSave");
-  const btnHealth  = $("btnHealth");
-  const btnRefresh = $("btnRefresh");
-  const btnRefreshAll = $("btnRefreshAll");
-  const btnImportSeed = $("btnImportSeed");
-
-  const bulkActionsPending = $("bulkActionsPending");
-  const bulkActionsPublic  = $("bulkActionsPublic");
-  const btnBulkApprove = $("btnBulkApprove");
-  const btnBulkReject  = $("btnBulkReject");
-  const btnBulkDeletePublic = $("btnBulkDeletePublic");
-
-  const elQ = $("q");
-  const elSort = $("sortKey");
-  const btnClearQ = $("btnClearQ");
-
-  // ✅ FIX: 復旧ボタンを2つ拾う（Top/Toolbar）
-  const btnReindexTop = $("btnReindexTop");
-  const btnReindex = $("btnReindex");
-
-  let activeTab = "pending"; // pending | public | all
-  let itemsPending = [];
-  let itemsPublic  = [];
-  let itemsAll     = [];
-  let itemsAllKV   = []; // ✅ allタブ用：KV由来のみ
-  let selectedIds = new Set();
-
-  // ======================================================
-  // ✅ Pagination：20件ずつ「前へ / 次へ」
-  // ======================================================
-  const PAGE_SIZE = 20;     // 1ページの件数
-  let page = 1;             // 1-based
-  const pagerEl = $("pager");
-  function resetPager(){ page = 1; }
-
-  let itemsSeedLocal = [];
-
-  let q = "";
-  let sortKey = "new";
-
-  // =========================
-  // in-flight制御
-  // =========================
-  let __busy = false;
-  let __ctrl = null;
-
-  // ✅ 追加：DAU 自動更新タイマーID
-  let __dauTimer = null;
-  let __dauInFlight = false;
-
-  function apiBase(){
-    let b = String(elApiBase.value || "").trim().replace(/\/+$/,"");
-    // ✅ 入力ミス救済：末尾に /api が付いていたら外す
-    b = b.replace(/\/api$/i, "");
-    b = b.replace(/\/api\/$/i, "");
-    return b;
-  }
-
-  function adminKey(){
-    return String(elAdminKey.value || "").trim();
-  }
-
-  function setBusy(on){
-    __busy = !!on;
-    pillBusy.style.display = __busy ? "inline-flex" : "none";
-    const dis = __busy;
-
-    [
-      btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed,
-      tabPending, tabPublic, tabAll,
-      btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
-      elQ, elSort, btnClearQ,
-      btnReindexTop, btnReindex
-    ].forEach(b => { try{ if (b) b.disabled = dis; }catch{} });
-  }
-
-  function abortInFlight(){
-    try{ if (__ctrl) __ctrl.abort(); }catch{}
-    __ctrl = null;
-    setBusy(false);
-  }
-
-  function setPill(el, text, ok=null){
-    if(!el) return;
-    el.textContent = text;
-    el.style.borderColor = ok===true ? "rgba(22,163,74,.45)"
-                      : ok===false ? "rgba(239,68,68,.45)"
-                      : "rgba(15,23,42,.20)";
-  }
-
-  // ✅ ページ切替後、一覧の先頭へスクロール
-  function scrollToListTop(){
-    try{
-      const topEl = document.getElementById("list");
-      if (!topEl) return;
-      const y = topEl.getBoundingClientRect().top + window.pageYOffset - 10;
-      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
-    }catch(e){}
-  }
-
-  // =========================
-  // fetch(JSON) + 404フォールバック
-  // =========================
-  async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null } = {}){
-    const base = apiBase();
-    if (!base) throw new Error("API_BASE が空です");
-
-    const url = base + path;
-    const headers = { "Content-Type":"application/json" };
-
-    if (admin){
-      const k = adminKey();
-      if (!k) throw new Error("ADMIN_KEY が空です");
-      headers["x-admin-key"] = k;
-    }
-
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : null,
-      signal
-    });
-
-    const data = await res.json().catch(()=>null);
-    return { res, data };
-  }
-
-  async function fetchOK(path, opts){
-    const { res, data } = await rawFetchJSON(path, opts);
-    if (res.status === 404) {
-      const e = new Error("HTTP 404");
-      e.status = 404;
-      e.data = data;
-      throw e;
-    }
-    if (!res.ok || !data?.ok){
-      const msg = data?.error || `HTTP ${res.status}`;
-      const e = new Error(msg);
-      e.status = res.status;
-      e.data = data;
-      throw e;
-    }
-    return data;
-  }
-
-  // ✅ pathsのフォールバック
-  async function callAdminWithFallback(paths, opts){
-    let lastErr = null;
-    for (const p of paths){
-      try{
-        const data = await fetchOK(p, opts);
-        console.log("[API OK]", p);
-        return data;
-      } catch(e){
-        lastErr = e;
-        if (e?.status === 404){
-          console.warn("[API 404]", p);
-          continue;
-        }
-        console.error("[API NG]", p, e);
-        throw e;
-      }
-    }
-    console.error("[API NOT FOUND] tried:", paths);
-    throw lastErr || new Error("API not found");
-  }
-
-  // ======================================================
-  // ✅ 互換：古い呼び出し(callAdminFast)を生かす
-  // ======================================================
-  async function callAdminFast(paths, opts){
-    const arr = Array.isArray(paths) ? paths : [paths];
-    return await callAdminWithFallback(arr, opts);
-  }
-
-  // ✅ API候補
-  const API = {
-    health: ["/api/health"],
-
-    pending: [
-      "/api/admin/pending",
-      "/api/admin/pending/list",
-      "/api/pending",
-      "/api/admin/list_pending",
-      "/api/list_pending",
-    ],
-
-    list: [
-      "/api/admin/list",
-      "/api/admin/public",
-      "/api/list",
-      "/api/public",
-      "/api/admin/list_public",
-      "/api/list_public",
-    ],
-
-    all: [
-      "/api/admin/all?scope=both",
-      "/api/admin/all",
-      "/api/all?scope=both",
-      "/api/all",
-    ],
-
-    approve: [
-      "/api/admin/approve",
-      "/api/approve",
-    ],
-
-    reject: [
-      "/api/reject",
-      "/api/reject_pending",
-      "/api/rejectPending",
-      "/api/admin/reject",
-      "/api/admin/reject_pending",
-      "/api/admin/rejectPending",
-    ],
-
-    del: [
-      "/api/delete",
-      "/api/delete_pending",
-      "/api/deletePending",
-      "/api/remove",
-
-      "/api/admin/delete",
-      "/api/admin/delete_pending",
-      "/api/admin/deletePending",
-      "/api/admin/remove",
-    ],
-
-    importSeed: [
-      "/api/import_seed",
-      "/api/importSeed",
-      "/api/seed/import",
-      "/api/seed",
-
-      "/api/admin/import_seed",
-      "/api/admin/importSeed",
-      "/api/admin/seed/import",
-      "/api/admin/seed",
-    ],
-
-    // ✅ reindex（worker.js の /api/admin/reindex_public）
-    reindex: [
-      "/api/admin/reindex_public",
-    ],
-
-    // ✅ 追加：使用者数（DAU）統計（Workers 側が未実装でもOK）
-    stats: [
-      "/api/admin/stats",
-      "/api/admin/usage",
-      "/api/admin/dau",
-    ],
+// worker.js
+// ✅ build marker（反映確認用）
+const BUILD = "2026-02-16_usagecount__PATCH01_rate_limit";
+
+// =======================================================
+// ✅ CORS helper（プリフライト確実に通す）
+// =======================================================
+function corsHeaders(request){
+  const req = request.headers.get("Access-Control-Request-Headers");
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    // ✅ ブラウザが要求してきたヘッダをそのまま許可（最強）
+    "Access-Control-Allow-Headers": req || "Content-Type, x-admin-key, priority",
+    "Access-Control-Max-Age": "86400",
+  };
+}
+
+// =======================================================
+// 共通レスポンス / ユーティリティ
+// =======================================================
+function json(data, status = 200, extraHeaders = {}, request = null) {
+  const payload = (data === undefined) ? { ok: true } : data;
+
+  // ✅ request があれば、要求ヘッダを反映したCORSを返す（エラー/404でもCORSが付く）
+  const ch = request ? corsHeaders(request) : {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, priority",
+    "Access-Control-Max-Age": "86400",
   };
 
-  // =========================
-  // 表示整形
-  // =========================
-  function escapeHtml(s){
-    return String(s ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
-  function escapeAttr(s){
-    return escapeHtml(s).replaceAll("`","&#096;");
-  }
-  function safeText(v){ return (v == null) ? "" : String(v); }
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ...ch,
+      ...extraHeaders,
+    },
+  });
+}
 
-  function formatTs(ts){
-    const n = Number(ts);
-    if (!Number.isFinite(n) || n <= 0) return "";
-    const d = new Date(n);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,"0");
-    const dd = String(d.getDate()).padStart(2,"0");
-    const hh = String(d.getHours()).padStart(2,"0");
-    const mi = String(d.getMinutes()).padStart(2,"0");
-    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+function bad(status, msg, extra = {}, request = null) {
+  return json({ ok: false, error: msg, ...extra }, status, {}, request);
+}
+
+function isAdmin(request, env) {
+  const key = request.headers.get("x-admin-key") || "";
+  return !!env.ADMIN_KEY && key === env.ADMIN_KEY;
+}
+
+function now() { return Date.now(); }
+
+function todayJST() {
+  const d = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+function normMode(v) {
+  const s = String(v || "").trim();
+  return (s === "fun") ? "fun" : "trivia";
+}
+
+function normBucket(v) {
+  const n = Math.max(0, Math.min(100, Number(v)));
+  return Math.round(n / 10) * 10;
+}
+
+function trimText(v, max = 300) {
+  const s = String(v || "").replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+function fingerPrint(request) {
+  const ip =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for") ||
+    "";
+  const ua = request.headers.get("user-agent") || "";
+  return (ip || ua || "anon").slice(0, 200);
+}
+
+function uuid() { return crypto.randomUUID(); }
+
+// =======================================================
+// ✅ A案：安定ID（mode + text のみで生成 / bucketに依存しない）
+// =======================================================
+function fnv1a32(str){
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++){
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+function canonicalId(mode, text){
+  const m = normMode(mode);
+  const t = trimText(text, 300);
+  return `t_${m}_${fnv1a32(`${m}|${t}`)}`;
+}
+
+// =======================================================
+// ✅ クライアント仮ID → 安定ID の別名（alias）救済
+// =======================================================
+function aliasKey(clientId){
+  return `alias:${String(clientId || "").trim()}`;
+}
+async function putAlias(kv, clientId, stableId){
+  const c = String(clientId || "").trim();
+  const s = String(stableId || "").trim();
+  if (!c || !s) return;
+  await kv.put(aliasKey(c), s, { expirationTtl: 60 * 60 * 24 * 30 });
+}
+async function resolveAlias(kv, maybeId){
+  const id = String(maybeId || "").trim();
+  if (!id) return "";
+  const ali = await kv.get(aliasKey(id));
+  return ali ? String(ali).trim() : "";
+}
+
+// =======================================================
+// ✅ 殿堂入り（閾値）
+// =======================================================
+function getHofThreshold(env) {
+  const v = Number(env.HOF_THRESHOLD || "20");
+  if (!Number.isFinite(v) || v < 1) return 20;
+  return Math.floor(v);
+}
+function isHof(totalLikes, env) {
+  return Number(totalLikes || 0) >= getHofThreshold(env);
+}
+
+// =======================================================
+// KV選択（binding名が何でも動くように）
+// =======================================================
+function pickKV(env) {
+  return env.PUBLIC_KV || env.KV || env.DB || env.DATA || env.STORE || env.KV_STORE || null;
+}
+
+async function kvGetJSON(kv, key) {
+  const s = await kv.get(key);
+  if (!s) return null;
+  try { return JSON.parse(s); } catch { return null; }
+}
+async function kvPutJSON(kv, key, obj) {
+  await kv.put(key, JSON.stringify(obj));
+}
+async function kvDel(kv, key) {
+  await kv.delete(key);
+}
+
+// =======================================================
+// Rate limit（1日あたり）
+// =======================================================
+async function incrLimit(kv, type, fp, maxPerDay) {
+  const day = todayJST();
+  const key = `lim:${type}:${day}:${fp}`;
+  const cur = Number(await kv.get(key) || "0");
+  if (cur >= maxPerDay) return { ok: false, cur };
+  const next = cur + 1;
+  await kv.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 2 });
+  return { ok: true, cur: next };
+}
+
+// =======================================================
+// ✅ ペンネーム登録（救済なし）
+// =======================================================
+function normPenName(v) {
+  const s = trimText(v, 40);
+  if (!s) return null;
+  return s;
+}
+function penKey(name) {
+  return `pen:${String(name).trim().toLowerCase()}`;
+}
+function toHex(buf) {
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+async function sha256Hex(str) {
+  const enc = new TextEncoder();
+  const buf = await crypto.subtle.digest("SHA-256", enc.encode(str));
+  return toHex(buf);
+}
+async function verifyOrRegisterPen(kv, env, penName, penPin) {
+  const name = normPenName(penName);
+  if (!name) return { ok: true, penName: null };
+
+  const pin = trimText(penPin, 64);
+  if (!pin) {
+    return { ok: false, code: "penpin_required", status: 400, msg: "penpin_required" };
   }
 
-  function normalizeScope(x, fallback){
-    const s = (x?.scope ?? x?._scope ?? x?.status ?? fallback ?? "").toString().toLowerCase().trim();
-    if (s === "public" || s === "pending") return s;
-    return fallback || "";
-  }
+  const key = penKey(name);
+  const existing = await kvGetJSON(kv, key);
 
-  function normalizeItems(arr, fallbackScope){
-    return (Array.isArray(arr) ? arr : []).map(x => {
-      const scope = normalizeScope(x, fallbackScope || "");
-      return {
-        id: safeText(x.id ?? x.key ?? x._id ?? ""),
-        text: safeText(x.text ?? x.metaphor ?? x.value ?? ""),
-        bucket: (x.bucket ?? x.b ?? null),
-        mode: safeText(x.mode ?? x.m ?? ""),
-        likes: (x.likes ?? x.like ?? x.totalLikes ?? 0),
-        penName: safeText(x.penName ?? x.pen ?? x.author ?? ""),
-        createdAt: (x.createdAt ?? x.ts ?? x.time ?? x.approvedAt ?? 0),
-        scope
-      };
-    }).filter(x => x.id);
-  }
+  const salt = (env.PEN_SALT ? String(env.PEN_SALT) : "tatoete_kousui_salt_v1");
+  const hash = await sha256Hex(`${salt}|${name.toLowerCase()}|${pin}`);
 
-  // mode/bucket ラベル
-  function normModeLabel(mode){
-    const m = String(mode ?? "").trim().toLowerCase();
-    return (m === "fun") ? "お笑い" : "雑学";
-  }
-  function normBucketLabel(bucket){
-    const n = Number(bucket);
-    return Number.isFinite(n) ? `${n}%` : "";
-  }
-  function modeBucketLabel(item){
-    const a = normModeLabel(item?.mode);
-    const b = normBucketLabel(item?.bucket);
-    return b ? `${a}${b}` : `${a}`;
-  }
+  if (!existing) {
+    const rec = { name, hash, createdAt: now() };
+    await kvPutJSON(kv, key, rec);
 
-  // seed 表示用
-  function hash32(str){
-    let h = 2166136261;
-    for (let i = 0; i < str.length; i++){
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
+    const re = await kvGetJSON(kv, key);
+    if (!re || re.hash !== hash) {
+      return { ok: false, code: "penname_taken", status: 409, msg: "penname_taken" };
     }
-    return (h >>> 0).toString(16);
+    return { ok: true, penName: re.name };
   }
 
-  function loadSeedLocalFromMetaphorsJS(){
-    const trivia = window.NETA_TRIVIA;
-    const fun    = window.NETA;
+  if (existing.hash !== hash) {
+    return { ok: false, code: "penpin_invalid", status: 403, msg: "penpin_invalid" };
+  }
 
-    const out = [];
-    function pushFromDict(dict, modeLabel){
-      if (!dict || typeof dict !== "object") return;
-      for (const k of Object.keys(dict)){
-        const bucket = Number(k);
-        if (!Number.isFinite(bucket)) continue;
-        const arr = dict[k];
-        if (!Array.isArray(arr)) continue;
-        for (const t of arr){
-          const text = String(t ?? "").trim();
-          if (!text) continue;
-          out.push({ mode: modeLabel, bucket, text });
-        }
-      }
-    }
-    pushFromDict(trivia, "trivia");
-    pushFromDict(fun, "fun");
+  return { ok: true, penName: existing.name };
+}
 
-    itemsSeedLocal = out.map(x => ({
-      id: "seedjs_" + hash32(`${x.mode}|${x.bucket}|${x.text}`),
+// =======================================================
+// メタ保存（ランキング表示用）
+// =======================================================
+async function ensureMeta(kv, { id, text, penName, mode, bucket, source }) {
+  const metaKey = `meta:${id}`;
+  const existing = await kvGetJSON(kv, metaKey);
+  if (existing && existing.text) return existing;
+
+  const meta = {
+    id,
+    text: trimText(text, 300),
+    penName: penName ? trimText(penName, 40) : null,
+    mode: normMode(mode),
+    bucket: normBucket(bucket),
+    source: source ? String(source).slice(0, 20) : null,
+    createdAt: now(),
+    approvedAt: null,
+  };
+  await kvPutJSON(kv, metaKey, meta);
+  return meta;
+}
+
+// =======================================================
+// ✅ public一覧インデックス（kv.listを使わないため）
+// =======================================================
+function publicIndexKey(mode, bucket){
+  return `idx:public:${normMode(mode)}:${normBucket(bucket)}`;
+}
+
+// 先頭追加（重複は除去）・最大件数で切る
+async function indexUnshiftId(kv, key, id, maxKeep = 5000){
+  let arr = await kvGetJSON(kv, key);
+  if (!Array.isArray(arr)) arr = [];
+
+  const sid = String(id || "");
+  if (!sid) return arr;
+
+  arr = arr.filter(x => String(x) !== sid);
+  arr.unshift(sid);
+
+  if (arr.length > maxKeep) arr = arr.slice(0, maxKeep);
+  await kvPutJSON(kv, key, arr);
+  return arr;
+}
+
+// ID削除
+async function indexRemoveIds(kv, key, ids){
+  let arr = await kvGetJSON(kv, key);
+  if (!Array.isArray(arr)) arr = [];
+  const set = new Set((ids || []).map(x => String(x)));
+  arr = arr.filter(x => !set.has(String(x)));
+  await kvPutJSON(kv, key, arr);
+  return arr;
+}
+
+// =======================================================
+// public/pending 保存
+// =======================================================
+async function putPending(kv, item) {
+  await kvPutJSON(kv, `pending:${item.id}`, item);
+  await ensureMeta(kv, item);
+}
+
+async function putPublic(kv, item) {
+  await kvPutJSON(kv, `public:${item.id}`, item);
+
+  const metaKey = `meta:${item.id}`;
+  const meta = {
+    id: item.id,
+    text: trimText(item.text, 300),
+    penName: item.penName ? trimText(item.penName, 40) : null,
+    mode: normMode(item.mode),
+    bucket: normBucket(item.bucket),
+    source: item.source ? String(item.source).slice(0, 20) : "public",
+    createdAt: item.createdAt || now(),
+    approvedAt: now(),
+  };
+  await kvPutJSON(kv, metaKey, meta);
+
+  // ✅ public一覧インデックスへ追加（kv.list不要化）
+  await indexUnshiftId(kv, publicIndexKey(item.mode, item.bucket), item.id, 5000);
+}
+
+// =======================================================
+// Likes（今日分） & 累計
+// =======================================================
+async function incLike(kv, id) {
+  const day = todayJST();
+  const key = `likes:${day}:${id}`;
+  const cur = Number(await kv.get(key) || "0");
+  const next = cur + 1;
+  await kv.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 14 });
+  return next;
+}
+
+async function incLikeTotal(kv, id) {
+  const key = `likes_total:${id}`;
+  const cur = Number(await kv.get(key) || "0");
+  const next = cur + 1;
+  await kv.put(key, String(next));
+  return next;
+}
+async function getLikeTotal(kv, id) {
+  return Number(await kv.get(`likes_total:${id}`) || "0");
+}
+
+// =======================================================
+// Reports（今日分）
+// =======================================================
+async function incReport(kv, id) {
+  const day = todayJST();
+  const key = `reports:${day}:${id}`;
+  const cur = Number(await kv.get(key) || "0");
+  const next = cur + 1;
+  await kv.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 14 });
+  return next;
+}
+
+// =======================================================
+// ✅ ランキングの「事前集計」キー（いいね時に更新）
+// =======================================================
+function rankKeyToday(day, mode, bucket){
+  return `rank_today:${day}:${normMode(mode)}:${normBucket(bucket)}`;
+}
+function rankKeyTotal(mode, bucket){
+  return `rank_total:${normMode(mode)}:${normBucket(bucket)}`;
+}
+
+async function upsertRankList(kv, key, entry, limit = 50){
+  let list = await kvGetJSON(kv, key);
+  if (!Array.isArray(list)) list = [];
+
+  const id = String(entry.id || "");
+  const idx = list.findIndex(x => String(x?.id) === id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...entry };
+  else list.push(entry);
+
+  list.sort((a, b) => Number(b.likes ?? b.totalLikes ?? 0) - Number(a.likes ?? a.totalLikes ?? 0));
+  if (list.length > limit) list = list.slice(0, limit);
+
+  await kvPutJSON(kv, key, list);
+  return list;
+}
+
+// ✅ ランキング（今日）
+async function getRankingToday(kv, { mode, bucket, limit }) {
+  const lim = Math.max(1, Math.min(50, Number(limit || 3)));
+  const day = todayJST();
+
+  const key = rankKeyToday(day, mode, bucket);
+  const list = await kvGetJSON(kv, key);
+  if (!Array.isArray(list)) return [];
+
+  return list.slice(0, lim).map(x => ({
+    id: x.id,
+    text: x.text,
+    penName: x.penName || null,
+    source: x.source || null,
+    likes: Number(x.likes || 0),
+  }));
+}
+
+// ✅ ランキング（累計）
+async function getRankingTotal(kv, { mode, bucket, limit }, env) {
+  const lim = Math.max(1, Math.min(200, Number(limit || 10)));
+
+  const key = rankKeyTotal(mode, bucket);
+  const list = await kvGetJSON(kv, key);
+  if (!Array.isArray(list)) return [];
+
+  return list.slice(0, lim).map(x => {
+    const totalLikes = Number(x.totalLikes || 0);
+    return {
+      id: x.id,
       text: x.text,
-      bucket: x.bucket,
-      mode: x.mode,
-      likes: 0,
-      penName: "元ネタ(metaphors.js)",
-      createdAt: 0,
-      scope: "seed-local"
-    }));
-  }
-
-  function rebuildAllFromKV(kvItems){
-    loadSeedLocalFromMetaphorsJS();
-    const kvIds = new Set((kvItems || []).map(x => x.id));
-    const seed = itemsSeedLocal.filter(x => !kvIds.has(x.id));
-    itemsAllKV = Array.isArray(kvItems) ? kvItems : [];
-    itemsAll = itemsAllKV.concat(seed);
-  }
-
-  function hydrateFromCache(){
-    const cP = loadCache("pending");
-    const cU = loadCache("public");
-    const cA = loadCache("allkv");
-
-    if (cP?.items) itemsPending = cP.items;
-    if (cU?.items) itemsPublic  = cU.items;
-    if (cA?.items) rebuildAllFromKV(cA.items);
-  }
-
-  function syncCacheAll(){
-    saveCache("pending", itemsPending);
-    saveCache("public", itemsPublic);
-    saveCache("allkv", itemsAllKV);
-  }
-
-  // 検索＆ソート
-  function normalizeQuery(str){
-    return String(str || "").trim().replace(/\s+/g, " ");
-  }
-  function queryTokens(str){
-    const s = normalizeQuery(str);
-    if (!s) return [];
-    return s.split(" ").map(t => t.trim()).filter(Boolean);
-  }
-  function itemHaystack(item){
-    const id = safeText(item?.id);
-    const text = safeText(item?.text);
-    const pen = safeText(item?.penName);
-    const label = modeBucketLabel(item);
-    const scope = safeText(item?.scope);
-    return `${id} ${pen} ${label} ${scope} ${text}`.toLowerCase();
-  }
-  function filterItems(items){
-    const tokens = queryTokens(q);
-    if (!tokens.length) return items;
-    const toks = tokens.map(t => t.toLowerCase());
-    return items.filter(it => {
-      const h = itemHaystack(it);
-      return toks.every(t => h.includes(t));
-    });
-  }
-
-  function sortItemsCore(items){
-    const arr = items.slice();
-    const getLikes = (x) => {
-      const n = Number(x?.likes);
-      return Number.isFinite(n) ? n : 0;
+      penName: x.penName || null,
+      source: x.source || null,
+      totalLikes,
+      hof: isHof(totalLikes, env),
     };
-    const getTs = (x) => {
-      const n = Number(x?.createdAt);
-      return Number.isFinite(n) ? n : 0;
+  });
+}
+
+// 殿堂入り一覧
+async function getHallOfFame(kv, { mode, bucket, limit }, env) {
+  const threshold = getHofThreshold(env);
+  const items = await getRankingTotal(
+    kv,
+    { mode, bucket, limit: Math.max(50, Number(limit || 200)) },
+    env
+  );
+  const hof = items.filter(x => Number(x.totalLikes || 0) >= threshold);
+  const lim = Math.max(1, Math.min(500, Number(limit || 200)));
+  return hof.slice(0, lim);
+}
+
+// =======================================================
+// admin 共通
+// =======================================================
+async function adminListPending(kv) {
+  const out = [];
+  let cursor = undefined;
+
+  for (let loop = 0; loop < 50; loop++) {
+    const listed = await kv.list({ prefix: "pending:", cursor, limit: 1000 });
+    for (const k of listed.keys) {
+      const it = await kvGetJSON(kv, k.name);
+      if (!it) continue;
+      out.push(it);
+    }
+    cursor = listed.cursor;
+    if (!cursor) break;
+  }
+
+  out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return out;
+}
+
+async function adminListPublic(kv, { mode = null, bucket = null, limit = 5000 } = {}) {
+  const out = [];
+  let cursor = undefined;
+
+  for (let loop = 0; loop < 50; loop++) {
+    const listed = await kv.list({ prefix: "public:", cursor, limit: 1000 });
+    for (const k of listed.keys) {
+      const it = await kvGetJSON(kv, k.name);
+      if (!it) continue;
+
+      if (mode && normMode(it.mode) !== mode) continue;
+      if (bucket != null && normBucket(it.bucket) !== bucket) continue;
+
+      out.push(it);
+      if (out.length >= limit) break;
+    }
+    if (out.length >= limit) break;
+
+    cursor = listed.cursor;
+    if (!cursor) break;
+  }
+
+  out.sort((a, b) => (b.approvedAt || b.createdAt || 0) - (a.approvedAt || a.createdAt || 0));
+  return out;
+}
+
+async function adminApproveOne(kv, id) {
+  const pendingKey = `pending:${id}`;
+  const pending = await kvGetJSON(kv, pendingKey);
+
+  if (!pending) {
+    const pub = await kvGetJSON(kv, `public:${id}`);
+    if (pub) {
+      return { ok: true, id, note: "already_public" };
+    }
+
+    const meta = await kvGetJSON(kv, `meta:${id}`);
+
+    return {
+      ok: false,
+      status: 404,
+      error: "pending not found",
+      id,
+      diag: {
+        hasPublic: !!pub,
+        hasMeta: !!meta,
+        pendingKey
+      }
     };
-    const getBucket = (x) => {
-      const n = Number(x?.bucket);
-      return Number.isFinite(n) ? n : 9999;
-    };
-
-    if (sortKey === "likes"){
-      arr.sort((a,b) => {
-        const dl = getLikes(b) - getLikes(a);
-        if (dl !== 0) return dl;
-        return getTs(b) - getTs(a);
-      });
-    } else if (sortKey === "bucket"){
-      arr.sort((a,b) => {
-        const db = getBucket(a) - getBucket(b);
-        if (db !== 0) return db;
-        return getTs(b) - getTs(a);
-      });
-    } else {
-      arr.sort((a,b) => getTs(b) - getTs(a));
-    }
-    return arr;
   }
 
-  function sortItems(items){
-    if (activeTab === "all"){
-      const seed = items.filter(x => x.scope === "seed-local");
-      const non  = items.filter(x => x.scope !== "seed-local");
-      return sortItemsCore(non).concat(sortItemsCore(seed));
-    }
-    return sortItemsCore(items);
+  const item = { ...pending, source: "public", approvedAt: now() };
+  await putPublic(kv, item);
+  await kvDel(kv, pendingKey);
+
+  return { ok: true, id };
+}
+
+async function adminRejectOne(kv, id) {
+  await kvDel(kv, `pending:${id}`);
+
+  const legacy = await kvGetJSON(kv, "pending");
+  if (Array.isArray(legacy)) {
+    const next = legacy.filter(x => String(x?.id) !== String(id));
+    await kvPutJSON(kv, "pending", next);
   }
 
-  function getActiveItemsRaw(){
-    if (activeTab === "pending") return itemsPending;
-    if (activeTab === "public")  return itemsPublic;
-    return itemsAll;
-  }
+  return { ok: true, id };
+}
 
-  // ✅ フィルタ＆ソート後の「全件」
-  function getVisibleItemsAll(){
-    const raw = getActiveItemsRaw();
-    const filtered = filterItems(raw);
-    const sorted = sortItems(filtered);
-    return sorted;
-  }
+// =======================================================
+// admin: 削除（public/pending両対応 + お掃除オプション）
+// ✅ PATCH: public削除時にインデックスも掃除できるようにする
+// =======================================================
+function normScope(v) {
+  const s = String(v || "both").trim().toLowerCase();
+  if (s === "public" || s === "pending") return s;
+  return "both";
+}
 
-  // ✅ ページング後の「このページの items」
-  function getVisibleItems(){
-    const all = getVisibleItemsAll();
-    const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+async function adminDeleteIds(kv, ids, scope, opt = {}) {
+  const wipeMeta = !!opt.wipeMeta;
+  const wipeTotals = !!opt.wipeTotals;
+  const deleted = { public: 0, pending: 0, meta: 0, totals: 0, index: 0 };
+  const doneIds = [];
 
-    if (page < 1) page = 1;
-    if (page > totalPages) page = totalPages;
+  for (const id0 of ids) {
+    const id = String(id0 || "").trim();
+    if (!id) continue;
 
-    const start = (page - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    return all.slice(start, end);
-  }
+    let touched = false;
 
-  // タブ/描画
-  function updateCounts(){
-    countsEl.textContent = `承認待ち: ${itemsPending.length}件 / 公開: ${itemsPublic.length}件 / 全: ${itemsAll.length}件`;
-  }
+    // ✅ public削除 → インデックス掃除のため meta を見る（あれば）
+    let meta = null;
+    if (scope === "public" || scope === "both") {
+      meta = await kvGetJSON(kv, `meta:${id}`);
 
-  function updateSelectionUI(){
-    selCount.textContent = `選択: ${selectedIds.size}件`;
+      const existed = !!(await kv.get(`public:${id}`));
+      await kvDel(kv, `public:${id}`);
+      if (existed) { deleted.public++; touched = true; }
 
-    const all = getVisibleItemsAll();
-    const visible = getVisibleItems();
-    const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
-    const start = all.length ? (page - 1) * PAGE_SIZE + 1 : 0;
-    const end = Math.min(page * PAGE_SIZE, all.length);
-    viewCount.textContent = `表示: ${visible.length}件（${start}-${end}） / 全: ${all.length}件 / ${totalPages}p`;
-
-    const selectableIds = (activeTab === "all")
-      ? visible.filter(x => x.scope !== "seed-local").map(x => x.id)
-      : visible.map(x => x.id);
-
-    if (selectableIds.length === 0){
-      chkAll.checked = false;
-      chkAll.indeterminate = (selectedIds.size > 0);
-    } else {
-      const allSelected = selectableIds.every(id => selectedIds.has(id));
-      const anySelected = selectableIds.some(id => selectedIds.has(id));
-      chkAll.checked = allSelected;
-      chkAll.indeterminate = (!allSelected && anySelected);
+      // metaがあれば idx:public:* からも削除
+      const m = meta?.mode ? normMode(meta.mode) : null;
+      const b = (meta?.bucket != null) ? normBucket(meta.bucket) : null;
+      if (m && b != null) {
+        await indexRemoveIds(kv, publicIndexKey(m, b), [id]);
+        deleted.index++;
+      }
     }
 
-    bulkActionsPending.style.display = (activeTab === "pending") ? "" : "none";
-    bulkActionsPublic.style.display  = (activeTab === "public")  ? "" : "none";
-  }
-
-  function setActiveTab(tab){
-    activeTab = tab;
-    tabPending.classList.toggle("active", tab==="pending");
-    tabPublic.classList.toggle("active",  tab==="public");
-    tabAll.classList.toggle("active",     tab==="all");
-    selectedIds = new Set();
-    resetPager();
-    render();
-  }
-
-  function render(){
-    updateCounts();
-    updateSelectionUI();
-
-    const items = getVisibleItems();
-    if (!items.length){
-      listEl.innerHTML = `<div class="muted">（データがありません）</div>`;
-      pagerEl.innerHTML = "";
-      return;
+    if (scope === "pending" || scope === "both") {
+      const existed = !!(await kv.get(`pending:${id}`));
+      await kvDel(kv, `pending:${id}`);
+      if (existed) { deleted.pending++; touched = true; }
     }
 
-    const html = items.map(item => {
-      const checked = selectedIds.has(item.id) ? "checked" : "";
+    if (wipeMeta) {
+      const existed = !!(await kv.get(`meta:${id}`));
+      await kvDel(kv, `meta:${id}`);
+      if (existed) deleted.meta++;
+    }
+    if (wipeTotals) {
+      const existed = !!(await kv.get(`likes_total:${id}`));
+      await kvDel(kv, `likes_total:${id}`);
+      if (existed) deleted.totals++;
+    }
 
-      const m = String(item.mode || "").trim().toLowerCase();
-      const uiMode = (m === "fun") ? "comedy" : "trivia";
+    if (touched) doneIds.push(id);
+  }
 
-      let badgeScope = "";
-      if (activeTab === "all"){
-        if (item.scope === "pending") badgeScope = `<span class="badge badgePending">pending</span>`;
-        else if (item.scope === "public") badgeScope = `<span class="badge badgePublic">public</span>`;
-        else badgeScope = `<span class="badge">seed</span>`;
-      } else {
-        badgeScope = (activeTab === "pending")
-          ? `<span class="badge badgePending">pending</span>`
-          : `<span class="badge badgePublic">public</span>`;
+  return { ok: true, deleted, ids: doneIds, scope, wipeMeta, wipeTotals };
+}
+
+async function adminDeleteAll(kv, scope) {
+  const deleted = { public: 0, pending: 0 };
+
+  if (scope === "public" || scope === "both") {
+    let cursor = undefined;
+    for (let loop = 0; loop < 200; loop++) {
+      const listed = await kv.list({ prefix: "public:", cursor, limit: 1000 });
+      for (const k of listed.keys) { await kvDel(kv, k.name); deleted.public++; }
+      cursor = listed.cursor;
+      if (!cursor) break;
+    }
+  }
+
+  if (scope === "pending" || scope === "both") {
+    let cursor = undefined;
+    for (let loop = 0; loop < 200; loop++) {
+      const listed = await kv.list({ prefix: "pending:", cursor, limit: 1000 });
+      for (const k of listed.keys) { await kvDel(kv, k.name); deleted.pending++; }
+      cursor = listed.cursor;
+      if (!cursor) break;
+    }
+  }
+
+  return { ok: true, deleted, all: true, scope };
+}
+
+// =======================================================
+// admin: seed取り込み用（安定ID）
+// =======================================================
+function hash32(str){
+  let h = 5381;
+  for (let i = 0; i < str.length; i++){
+    h = ((h << 5) + h) ^ str.charCodeAt(i);
+  }
+  return (h >>> 0).toString(16);
+}
+
+// =======================================================
+// ✅ 承認API: 受けるパスを全部統合（admin.htmlの試行順に合わせる）
+// =======================================================
+function isApprovePath(pathname){
+  const p = String(pathname || "").trim();
+  const pl = p.toLowerCase();
+
+  const norm = (s) => s.replace(/\/+$/, "");
+  const n = norm(pl);
+
+  return (
+    n === "/api/admin/approve" ||
+    n === "/api/admin/approvepending" ||
+    n === "/api/admin/approve_pending" ||
+    n === "/api/admin/publish" ||
+    n === "/api/approve" ||
+    n === "/api/approvepending" ||
+    n === "/api/approve_pending" ||
+    n === "/api/publish"
+  );
+}
+
+function normalizeIncomingId(v){
+  let s = String(v || "").trim();
+  if (!s) return "";
+  s = s.replace(/^(pending|public|meta)\s*:\s*/i, "");
+  s = s.trim();
+  return s;
+}
+
+function pickIdsFromBody(body){
+  const ids = [];
+  if (body && typeof body === "object") {
+    if (body.id != null) {
+      const s = normalizeIncomingId(body.id);
+      if (s) ids.push(s);
+    }
+    if (body.key != null) {
+      const s = normalizeIncomingId(body.key);
+      if (s) ids.push(s);
+    }
+
+    if (Array.isArray(body.ids)) {
+      for (const v of body.ids) {
+        const s = normalizeIncomingId(v);
+        if (s) ids.push(s);
+      }
+    }
+    if (Array.isArray(body.keys)) {
+      for (const v of body.keys) {
+        const s = normalizeIncomingId(v);
+        if (s) ids.push(s);
+      }
+    }
+  }
+  return Array.from(new Set(ids));
+}
+
+// =======================================================
+// ✅ admin: public index を再構築（既存public→idx:public:*へ）
+// - /api/public が空になる系の事故を一発で直す
+// - admin限定
+// - ✅ 部分指定でも壊れないよう「既存idxとマージ」する
+// =======================================================
+async function adminReindexPublic(kv, { mode = null, bucket = null, max = 20000 } = {}) {
+  const map = new Map(); // idxKey -> Set(ids)
+
+  let cursor = undefined;
+  let scanned = 0;
+
+  for (let loop = 0; loop < 200; loop++) {
+    const listed = await kv.list({ prefix: "public:", cursor, limit: 1000 });
+
+    for (const k of listed.keys) {
+      const it = await kvGetJSON(kv, k.name);
+      if (!it) continue;
+
+      const m = normMode(it.mode);
+      const b = normBucket(it.bucket);
+
+      if (mode && m !== mode) continue;
+      if (bucket != null && b !== bucket) continue;
+
+      const idxKey = publicIndexKey(m, b);
+      if (!map.has(idxKey)) map.set(idxKey, new Set());
+      map.get(idxKey).add(String(it.id));
+
+      scanned++;
+      if (scanned >= max) break;
+    }
+    if (scanned >= max) break;
+
+    cursor = listed.cursor;
+    if (!cursor) break;
+  }
+
+  let wrote = 0;
+
+  for (const [idxKey, idSet] of map.entries()) {
+    // ✅ 既存idxがあれば読み込み、マージして保存（部分再構築でも壊れない）
+    let existing = await kvGetJSON(kv, idxKey);
+    if (!Array.isArray(existing)) existing = [];
+
+    for (const id of existing) idSet.add(String(id));
+
+    // ✅ 5000件制限 + 余計な空除去
+    const merged = Array.from(idSet).map(x => String(x || "").trim()).filter(Boolean).slice(0, 5000);
+
+    await kvPutJSON(kv, idxKey, merged);
+    wrote++;
+  }
+
+  return { ok: true, scanned, wrote, note: "reindex_done" };
+}
+
+// =======================================================
+// Router
+// =======================================================
+export default {
+  async fetch(request, env, ctx) {
+    try {
+
+      const kv = pickKV(env);
+      if (!kv) return bad(500, "KV binding not found (env.KV / env.DB etc.)", {}, request);
+
+      const url = new URL(request.url);
+
+      // ✅ path は “生” と “小文字” を両方用意（404根絶）
+      const pathRaw = (url.pathname || "/").replace(/\/+$/, "") || "/";
+      const pathLower = pathRaw.toLowerCase();
+
+      // --- CORS preflight ---
+      if (request.method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders(request) });
       }
 
-      const metaParts = [];
-      const mb = modeBucketLabel(item);
-      if (mb) metaParts.push(`<span class="badge">${escapeHtml(mb)}</span>`);
-      metaParts.push(`<span class="badge">likes: ${escapeHtml(item.likes)}</span>`);
-      if (item.penName) metaParts.push(`<span class="badge">pen: ${escapeHtml(item.penName)}</span>`);
-      const ts = formatTs(item.createdAt);
-      if (ts) metaParts.push(`<span class="badge">${escapeHtml(ts)}</span>`);
-
-      const text = item.text || "";
-      const tooLong = text.length > 240;
-
-      const prefix = `<span class="pctLabel">${escapeHtml(modeBucketLabel(item))}：</span>`;
-      const bodyHtml = `${prefix}${escapeHtml(text)}`;
-
-      const textHtml = tooLong
-        ? `<details><summary>本文を展開（${text.length}文字）</summary><div class="itemText">${bodyHtml}</div></details>`
-        : `<div class="itemText">${bodyHtml}</div>`;
-
-      const perActions = [];
-
-      if (activeTab === "pending"){
-        perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
-        perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（削除）</button>`);
-      } else if (activeTab === "public"){
-        perActions.push(`<button class="smallBtn btnDanger" data-act="deletePublic" data-id="${escapeAttr(item.id)}">削除</button>`);
-      } else if (activeTab === "all"){
-        if (item.scope === "pending"){
-          perActions.push(`<button class="smallBtn btnOk" data-act="approve" data-id="${escapeAttr(item.id)}">承認</button>`);
-          perActions.push(`<button class="smallBtn btnDanger" data-act="reject" data-id="${escapeAttr(item.id)}">却下（削除）</button>`);
-        } else if (item.scope === "public"){
-          perActions.push(`<button class="smallBtn btnDanger" data-act="deletePublic" data-id="${escapeAttr(item.id)}">削除</button>`);
-        }
+      // --- health ---
+      if (pathLower === "/api/health") {
+        return json({
+          ok: true,
+          status: "ok",
+          kv: true,
+          hofThreshold: getHofThreshold(env),
+          build: BUILD
+        }, 200, {}, request);
       }
 
-      const isSeed = (item.scope === "seed-local");
-      const disableRow = (activeTab === "all" && isSeed);
+      // ===================================================
+      // ✅ usage ping（public） + ✅ rate limit（乱打/水増し対策）
+      // ===================================================
+      if (pathLower === "/api/usage/ping" && request.method === "POST") {
 
-      return `
-        <div class="item" data-mode="${uiMode}" data-item="${escapeAttr(item.id)}">
-          <div class="itemTop">
-            <div class="itemMeta">
-              <label style="margin:0; display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" class="chk itemChk" data-id="${escapeAttr(item.id)}" ${checked} ${disableRow ? "disabled" : ""}/>
-                <span class="muted mono">${escapeHtml(item.id)}</span>
-              </label>
-              ${badgeScope}
-              ${metaParts.join("")}
-            </div>
-            <div class="actions itemActions">
-              ${perActions.join("")}
-            </div>
-          </div>
-          ${textHtml}
-        </div>
-      `;
-    }).join("");
+        // ✅ 乱打防止（1 fingerprint あたり 1日 200回まで）
+        // 普通の利用では絶対届かない。攻撃/誤実装だけ止める。
+        const fp = fingerPrint(request);
+        const lim = await incrLimit(kv, "usage", fp, 200);
+        if (!lim.ok) return bad(429, "usage ping limit exceeded", {}, request);
 
-    listEl.innerHTML = html;
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        const deviceId = String(body?.deviceId || "").trim();
 
-    // ✅ pager（前へ / 次へ / ページ指定）
-    const all = getVisibleItemsAll();
-    const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
-    const start = all.length ? (page - 1) * PAGE_SIZE + 1 : 0;
-    const end = Math.min(page * PAGE_SIZE, all.length);
-
-    if (all.length === 0){
-      pagerEl.innerHTML = "";
-    } else {
-      pagerEl.innerHTML = `
-        <button id="btnPrev" ${page<=1 ? "disabled" : ""}>前へ</button>
-
-        <span class="pill" style="margin:0 10px;">
-          ページ ${page} / ${totalPages}（${start}-${end} / ${all.length}件）
-        </span>
-
-        <button id="btnNext" ${page>=totalPages ? "disabled" : ""}>次へ</button>
-
-        <span class="pill" style="margin-left:12px; display:inline-flex; gap:8px; align-items:center;">
-          <span class="muted" style="font-size:12px;">ページ指定</span>
-          <input id="pageInput"
-                 type="number"
-                 min="1"
-                 max="${totalPages}"
-                 value="${page}"
-                 style="width:90px; min-width:0; padding:8px 10px; border-radius:10px; border:1px solid rgba(15,23,42,.12); font-size:14px;"
-          />
-          <button id="btnGoPage" class="miniBtn">移動</button>
-        </span>
-      `;
-
-      $("btnPrev").addEventListener("click", () => {
-        if (page > 1) {
-          page--;
-          render();
-          scrollToListTop();
+        // 端末IDが無い/長すぎは拒否（攻撃対策）
+        if (!deviceId || deviceId.length > 120) {
+          return bad(400, "deviceId required", {}, request);
         }
-      });
 
-      $("btnNext").addEventListener("click", () => {
-        if (page < totalPages) {
-          page++;
-          render();
-          scrollToListTop();
+        const day = todayJST();
+
+        // ✅ 同日重複排除（TTL 2日）
+        const seenKey = `usage_seen:${day}:${deviceId}`;
+        const already = await kv.get(seenKey);
+        if (already) {
+          const cur = Number(await kv.get(`usage_count:${day}`) || "0");
+          return json({ ok: true, day, counted: false, count: cur }, 200, {}, request);
         }
-      });
 
-      // ✅ ページ指定：移動
-      function goToPage(){
-        const inp = document.getElementById("pageInput");
-        if (!inp) return;
-        let p = Number(inp.value);
-        if (!Number.isFinite(p)) return;
-        p = Math.floor(p);
-        if (p < 1) p = 1;
-        if (p > totalPages) p = totalPages;
-        if (p === page) return;
-        page = p;
-        render();
-        scrollToListTop();
+        await kv.put(seenKey, "1", { expirationTtl: 60 * 60 * 24 * 2 });
+
+        // ✅ カウンタ（厳密ではないが実用十分）
+        const countKey = `usage_count:${day}`;
+        const cur = Number(await kv.get(countKey) || "0");
+        const next = cur + 1;
+        await kv.put(countKey, String(next), { expirationTtl: 60 * 60 * 24 * 60 }); // 60日保持
+
+        return json({ ok: true, day, counted: true, count: next }, 200, {}, request);
       }
 
-      $("btnGoPage").addEventListener("click", goToPage);
+      // --- admin usage（今日の使用者）---
+      // ✅ admin.html が /api/admin/usage にフォールバックしても「今日の使用者数」が出るよう互換フィールドを付与
+      if (pathLower === "/api/admin/usage" && request.method === "GET") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
 
-      // ✅ Enterキーで移動
-      const pi = document.getElementById("pageInput");
-      if (pi){
-        pi.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") goToPage();
+        const day = todayJST();
+        const count = Number(await kv.get(`usage_count:${day}`) || "0");
+
+        return json({
+          ok: true,
+          day,
+          count,
+
+          // ✅ 互換：admin.html がどれを読んでもOK
+          dauToday: count,
+          today: count,
+          dau: count,
+
+          build: BUILD
+        }, 200, {}, request);
+      }
+
+      // --- admin stats（今日/昨日の使用者数）---
+      // ✅ admin.html は /api/admin/stats を見に行くのでここを追加
+      // ✅ 互換：/api/admin/dau, /api/admin/usage 風の項目名も返す
+      if (
+        (pathLower === "/api/admin/stats" || pathLower === "/api/admin/dau")
+        && request.method === "GET"
+      ) {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        const day = todayJST();
+
+        // ✅ JSTで昨日を計算（UTC跨ぎ対策）
+        const dJ = new Date(Date.now() + 9 * 60 * 60 * 1000);
+        dJ.setDate(dJ.getDate() - 1);
+        const yesterday = dJ.toISOString().slice(0, 10);
+
+        const dauToday = Number(await kv.get(`usage_count:${day}`) || "0");
+        const dauYesterday = Number(await kv.get(`usage_count:${yesterday}`) || "0");
+
+        // ✅ ついでに7日分（あると便利：表示はしなくても将来使える）
+        const last7 = [];
+        for (let i = 0; i < 7; i++) {
+          const dd = new Date(Date.now() + 9 * 60 * 60 * 1000);
+          dd.setDate(dd.getDate() - i);
+          const k = dd.toISOString().slice(0, 10);
+          const c = Number(await kv.get(`usage_count:${k}`) || "0");
+          last7.push({ day: k, count: c });
+        }
+
+        return json({
+          ok: true,
+          day,
+          yesterday,
+          dauToday,
+          dauYesterday,
+          // ✅ admin.html 側が別名で読んでも動くように互換フィールドも付与
+          today: dauToday,
+          count: dauToday,
+          dau: dauToday,
+          last7,
+          build: BUILD
+        }, 200, {}, request);
+      }
+
+      // --- penname auth ---
+      if (pathLower === "/api/penname/auth" && request.method === "POST") {
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
+
+        const penNameRaw = normPenName(body.penName);
+        const penPin = body.penPin || body.pin || null;
+
+        const penRes = await verifyOrRegisterPen(kv, env, penNameRaw, penPin);
+        if (!penRes.ok) return bad(penRes.status, penRes.msg, { code: penRes.code }, request);
+
+        return json({ ok: true, penName: penRes.penName }, 200, {}, request);
+      }
+
+      // --- submit ---
+      if (pathLower === "/api/submit" && request.method === "POST") {
+        const fp = fingerPrint(request);
+        const lim = await incrLimit(kv, "submit", fp, 10);
+        if (!lim.ok) return bad(429, "submit limit per day exceeded (10)", {}, request);
+
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
+
+        const mode = normMode(body.mode);
+        const bucket = normBucket(body.bucket);
+        const text = trimText(body.text, 300);
+        const penNameRaw = normPenName(body.penName);
+        const penPin = body.penPin || body.pin || null;
+
+        if (!text) return bad(400, "text required", {}, request);
+
+        const penRes = await verifyOrRegisterPen(kv, env, penNameRaw, penPin);
+        if (!penRes.ok) return bad(penRes.status, penRes.msg, { code: penRes.code }, request);
+
+        const stableId = canonicalId(mode, text);
+
+        // ✅ クライアントが持ってる（ローカルの）IDを受け取る救済
+        const clientId = String(body.clientId || body.localId || body.tmpId || body.id || "").trim();
+
+        // ✅ ここで「仮ID → 安定ID」を保存（script.jsを直さなくても同期不可が消える）
+        if (clientId && clientId !== stableId) {
+          await putAlias(kv, clientId, stableId);
+        }
+
+        const existsPub = await kv.get(`public:${stableId}`);
+        if (existsPub) return json({ ok: true, id: stableId, note: "already_public" }, 200, {}, request);
+
+        const existsPen = await kv.get(`pending:${stableId}`);
+        if (existsPen) return json({ ok: true, id: stableId, note: "already_pending" }, 200, {}, request);
+
+        const item = {
+          id: stableId,
+          mode,
+          bucket,
+          text,
+          penName: penRes.penName,
+          source: "pending",
+          createdAt: now(),
+        };
+
+        await putPending(kv, item);
+        return json({ ok: true, id: item.id }, 200, {}, request);
+      }
+
+      // --- public list（✅ kv.list禁止：インデックスから取得） ---
+      if (pathLower === "/api/public" && request.method === "GET") {
+        const mode = normMode(url.searchParams.get("mode"));
+        const bucket = normBucket(url.searchParams.get("bucket"));
+        const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || "50")));
+
+        const key = publicIndexKey(mode, bucket);
+        const ids = await kvGetJSON(kv, key);
+
+        // インデックスが無い/空なら空で返す（＝listしない）
+        if (!Array.isArray(ids) || ids.length === 0) {
+          return json({ ok: true, items: [], hofThreshold: getHofThreshold(env), note: "no_index_or_empty" }, 200, {}, request);
+        }
+
+        const out = [];
+        for (let i = 0; i < ids.length && out.length < limit; i++){
+          const id = String(ids[i] || "");
+          if (!id) continue;
+
+          const it = await kvGetJSON(kv, `public:${id}`);
+          if (!it) continue;
+
+          if (normMode(it.mode) !== mode) continue;
+          if (normBucket(it.bucket) !== bucket) continue;
+
+          const totalLikes = await getLikeTotal(kv, it.id);
+
+          out.push({
+            id: it.id,
+            mode: it.mode,
+            bucket: it.bucket,
+            text: it.text,
+            penName: it.penName || null,
+            createdAt: it.createdAt || null,
+            totalLikes,
+            hof: isHof(totalLikes, env),
+          });
+        }
+
+        return json({ ok: true, items: out, hofThreshold: getHofThreshold(env) }, 200, {}, request);
+      }
+
+      // --- 互換: /api/list（publicのみ） ---
+      if (pathLower === "/api/list" && request.method === "GET") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        const modeQ = url.searchParams.get("mode");
+        const bucketQ = url.searchParams.get("bucket");
+        const limit = Math.max(1, Math.min(5000, Number(url.searchParams.get("limit") || "200")));
+
+        const mode = (modeQ == null || modeQ === "" || modeQ === "all") ? null : normMode(modeQ);
+        const bucket = (bucketQ == null || bucketQ === "" || bucketQ === "all") ? null : normBucket(bucketQ);
+
+        const out = await adminListPublic(kv, { mode, bucket, limit });
+        return json({ ok: true, items: out }, 200, {}, request);
+      }
+
+      // --- like ---
+      if (pathLower === "/api/like" && request.method === "POST") {
+        const fp = fingerPrint(request);
+        const lim = await incrLimit(kv, "like", fp, 10);
+        if (!lim.ok) return bad(429, "like limit per day exceeded (10)", {}, request);
+
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
+
+        const idRaw = String(body.id || "").trim();
+        const hasText = !!trimText(body.text || "", 300);
+
+        // mode/bucket は「meta優先」で後で確定させる（クライアント誤送信対策）
+        let mode = normMode(body.mode || "trivia");
+        let id = idRaw;
+
+        if (!id && hasText) {
+          id = canonicalId(mode, body.text || "");
+        }
+        if (!id) return bad(400, "id required", {}, request);
+
+        // ✅ alias救済（古い仮IDを押しても加点できるように）
+        // まず存在確認 → 無ければ alias を引いて置き換え
+        const existsId0 = (await kv.get(`public:${id}`)) || (await kv.get(`pending:${id}`));
+        if (!existsId0) {
+          const ali = await resolveAlias(kv, id);
+          if (ali) id = ali;
+        }
+
+        // ✅ textが来てる場合は canonicalId に寄せる（ただし存在がある方へ）
+        if (hasText) {
+          const cid = canonicalId(mode, body.text || "");
+          const existsId = (await kv.get(`public:${id}`)) || (await kv.get(`pending:${id}`));
+          const existsCid = (await kv.get(`public:${cid}`)) || (await kv.get(`pending:${cid}`));
+          if (!existsId && existsCid) id = cid;
+        }
+
+        const day = todayJST();
+        const likedKey = `liked:${day}:${fp}:${id}`;
+        const already = await kv.get(likedKey);
+        if (already) return bad(409, "already liked today", {}, request);
+        await kv.put(likedKey, "1", { expirationTtl: 60 * 60 * 24 * 2 });
+
+        // ✅ 先に meta を確保（ここで mode/bucket が確定できる）
+        const ensured = await ensureMeta(kv, {
+          id,
+          text: body.text || "",
+          penName: body.penName || null,
+          mode: body.mode || "trivia",
+          bucket: body.bucket ?? 0,
+          source: body.source || "unknown",
         });
-      }
-    }
-  } // END render()
 
-  // Settings
-  function saveSettings(){
-    localStorage.setItem(LS_API, apiBase() || DEFAULT_API_BASE);
-    localStorage.setItem(LS_KEY, adminKey() || "");
-  }
-  function loadSettings(){
-    const a = localStorage.getItem(LS_API) || DEFAULT_API_BASE;
-    const k = localStorage.getItem(LS_KEY) || "";
-    elApiBase.value = a;
-    elAdminKey.value = k;
-  }
+        const likesToday = await incLike(kv, id);
+        const totalLikes = await incLikeTotal(kv, id);
 
-  function loadViewSettings(){
-    q = normalizeQuery(localStorage.getItem(LS_Q) || "");
-    sortKey = (localStorage.getItem(LS_SORT) || "new");
-    if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
-    elQ.value = q;
-    elSort.value = sortKey;
-  }
-  function saveViewSettings(){
-    localStorage.setItem(LS_Q, normalizeQuery(q));
-    localStorage.setItem(LS_SORT, sortKey);
-  }
+        // ✅ 事前集計ランキング更新（meta優先で誤bucket/誤modeを防ぐ）
+        mode = normMode(ensured?.mode ?? body.mode ?? "trivia");
+        const bkt = normBucket(ensured?.bucket ?? body.bucket ?? 0);
 
-  // Loaders
-  async function loadPending(signal){
-    const data = await callAdminWithFallback(API.pending, { admin:true, signal });
-    itemsPending = normalizeItems(data.items || data.pending || [], "pending");
-    return itemsPending;
-  }
+        const textForRank = trimText(ensured?.text || body.text || "", 300);
+        const penForRank  = ensured?.penName || (body.penName ? trimText(body.penName, 40) : null);
+        const srcForRank  = ensured?.source || body.source || "unknown";
 
-  async function loadPublic(signal){
-    const data = await callAdminWithFallback(API.list, { admin:true, signal });
-    itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
-    return itemsPublic;
-  }
+        await upsertRankList(
+          kv,
+          rankKeyToday(day, mode, bkt),
+          {
+            id,
+            likes: likesToday,
+            text: textForRank,
+            penName: penForRank,
+            source: srcForRank,
+            updatedAt: now(),
+          },
+          50
+        );
 
-  async function loadAll(signal){
-    const data = await callAdminWithFallback(API.all, { admin:true, signal });
-    const raw = data.items || data.all || [];
-    itemsAllKV = normalizeItems(raw, "");
-    rebuildAllFromKV(itemsAllKV);
-    return itemsAll;
-  }
+        await upsertRankList(
+          kv,
+          rankKeyTotal(mode, bkt),
+          {
+            id,
+            totalLikes,
+            text: textForRank,
+            penName: penForRank,
+            source: srcForRank,
+            updatedAt: now(),
+          },
+          200
+        );
 
-  function applyCacheToActiveTabInstant(){
-    if (activeTab === "pending"){
-      const c = loadCache("pending");
-      if (c?.items){
-        itemsPending = c.items;
-      }
-    } else if (activeTab === "public"){
-      const c = loadCache("public");
-      if (c?.items){
-        itemsPublic = c.items;
-      }
-    } else {
-      const c = loadCache("allkv");
-      if (c?.items){
-        rebuildAllFromKV(c.items);
-      }
-    }
-    render();
-  }
-
-  // ======================================================
-  // ✅ DAU（今日の使用者数）更新：health以外でも更新する
-  // ======================================================
-  async function refreshDAU({ signal=null, silent=false } = {}){
-    if (__dauInFlight) return;
-    __dauInFlight = true;
-
-    try{
-      // stats は admin 必須（鍵が空ならスキップ）
-      if (!adminKey()){
-        if (!silent) setPill(pillDAU, "今日の使用者数: -（ADMIN_KEY未入力）", null);
-        return;
-      }
-      const s = await callAdminWithFallback(API.stats, { admin:true, signal });
-      const today = Number(s?.dauToday ?? s?.today ?? s?.dau ?? NaN);
-      const yday  = Number(s?.dauYesterday ?? s?.yesterday ?? NaN);
-
-      if (Number.isFinite(today)){
-        const tail = Number.isFinite(yday) ? ` / 昨日:${yday}` : "";
-        setPill(pillDAU, `今日の使用者数: ${today}${tail}`, true);
-      } else {
-        setPill(pillDAU, "今日の使用者数: -（stats形式不明）", null);
-      }
-    } catch(e){
-      // stats が未実装でも壊さない
-      if (!silent) setPill(pillDAU, "今日の使用者数: -（stats未実装）", null);
-    } finally {
-      __dauInFlight = false;
-    }
-  }
-
-  function startDAUPoll(){
-    stopDAUPoll();
-    __dauTimer = setInterval(() => {
-      refreshDAU({ silent:true });
-    }, DAU_POLL_MS);
-  }
-  function stopDAUPoll(){
-    try{ if (__dauTimer) clearInterval(__dauTimer); }catch(e){}
-    __dauTimer = null;
-  }
-
-  async function refreshCurrentTab(){
-    applyCacheToActiveTabInstant();
-
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
-
-    try{
-      if (activeTab === "pending"){
-        const old = (loadCache("pending")?.items) || itemsPending || [];
-        const fresh = await loadPending(signal);
-        itemsPending = mergeById(old, fresh);
-        saveCache("pending", itemsPending);
-      } else if (activeTab === "public"){
-        const old = (loadCache("public")?.items) || itemsPublic || [];
-        const fresh = await loadPublic(signal);
-        itemsPublic = mergeById(old, fresh);
-        saveCache("public", itemsPublic);
-      } else {
-        const oldKV = (loadCache("allkv")?.items) || itemsAllKV || [];
-        await loadAll(signal);
-        const mergedKV = mergeById(oldKV, itemsAllKV);
-        rebuildAllFromKV(mergedKV);
-        saveCache("allkv", itemsAllKV);
+        return json({
+          ok: true,
+          id,
+          likesToday,
+          totalLikes,
+          hof: isHof(totalLikes, env),
+          hofThreshold: getHofThreshold(env)
+        }, 200, {}, request);
       }
 
-      // ✅ 追加：更新ボタンでもDAU更新
-      await refreshDAU({ signal, silent:true });
+      // --- status check（✅ kv.list禁止：idごとにgetだけ） ---
+      if (pathLower === "/api/status" && request.method === "GET") {
+        const idsRaw = String(url.searchParams.get("ids") || "").trim();
+        if (!idsRaw) return json({ ok: true, items: [] }, 200, {}, request);
 
-      syncCacheAll();
-      resetPager();
-      render();
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`更新に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
+        const ids = Array.from(new Set(idsRaw.split(",").map(s => s.trim()).filter(Boolean))).slice(0, 50);
 
-  async function refreshAllTabs(){
-    hydrateFromCache();
-    render();
+        const items = [];
+        for (const id0 of ids) {
+          let id = String(id0 || "").trim();
+          if (!id) continue;
 
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
+          // ✅ alias救済（statusでも追従）
+          const hasDirect = !!(await kv.get(`public:${id}`)) || !!(await kv.get(`pending:${id}`));
+          if (!hasDirect) {
+            const ali = await resolveAlias(kv, id);
+            if (ali) id = ali;
+          }
 
-    try{
-      const oldP = (loadCache("pending")?.items) || itemsPending || [];
-      const oldU = (loadCache("public")?.items)  || itemsPublic  || [];
-      const oldA = (loadCache("allkv")?.items)  || itemsAllKV   || [];
+          const hasPub = !!(await kv.get(`public:${id}`));
+          const hasPen = hasPub ? false : !!(await kv.get(`pending:${id}`));
+          let approvedAt = null;
 
-      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
+          if (hasPub) {
+            const meta = await kvGetJSON(kv, `meta:${id}`);
+            approvedAt = meta?.approvedAt ?? null;
+          }
 
-      itemsPending = mergeById(oldP, itemsPending);
-      itemsPublic  = mergeById(oldU, itemsPublic);
-
-      const mergedKV = mergeById(oldA, itemsAllKV);
-      rebuildAllFromKV(mergedKV);
-
-      // ✅ 追加：全更新でもDAU更新
-      await refreshDAU({ signal, silent:true });
-
-      syncCacheAll();
-      resetPager();
-      render();
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`更新に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-  async function doHealth(){
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
-
-    try{
-      const data = await callAdminWithFallback(API.health, { signal });
-      const kv = (data.kv === true) ? "kv:OK" : "kv:?" ;
-      setPill(pillHealth, `health: OK (${kv})`, true);
-
-      try{
-        await callAdminWithFallback(API.pending, { admin:true, signal });
-        setPill(pillAdmin, "admin: OK", true);
-      } catch(e){
-        if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-        else if (e?.status === 404) setPill(pillAdmin, "admin: NG（APIなし）", false);
-        else setPill(pillAdmin, `admin: NG（${e.message}）`, false);
-      }
-
-      // ✅ 追加：DAU表示（stats が未実装でも壊れない）
-      await refreshDAU({ signal, silent:false });
-
-    } catch(e){
-      setPill(pillHealth, `health: NG（${e.message}）`, false);
-      setPill(pillDAU, "今日の使用者数: -", null);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-  // ✅ 復旧（reindex_public）
-  async function doReindexPublic(){
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
-
-    try{
-      const body = { mode: "all", bucket: "all", max: 20000 };
-      const r = await callAdminWithFallback(API.reindex, { method:"POST", admin:true, body, signal });
-
-      const scanned = Number(r?.scanned ?? 0);
-      const wrote   = Number(r?.wrote ?? 0);
-
-      await refreshAllTabs();
-      alert(`復旧（reindex）完了\nscanned: ${scanned}\nwrote: ${wrote}`);
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`復旧（reindex）に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-  // =========================
-  // Actions：承認 / 却下(=削除) / 公開削除
-  // =========================
-  function getSelectedIds(){ return Array.from(selectedIds); }
-
-  async function approveIds(ids){
-    if (!ids.length) return;
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
-
-    try{
-      const uniq = Array.from(new Set(ids)).filter(Boolean);
-      const body = { ids: uniq };
-
-      await callAdminFast(API.approve, { method:"POST", admin:true, body, signal });
-
-      await Promise.all([loadPending(signal), loadPublic(signal)]);
-      if (activeTab === "all") await loadAll(signal);
-
-      selectedIds = new Set();
-      syncCacheAll();
-      resetPager();
-      render();
-
-      // ✅ 追加：操作後もDAU更新
-      await refreshDAU({ signal, silent:true });
-
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`承認に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-  async function deletePublicRobust(ids, signal){
-    const uniq = Array.from(new Set(ids)).filter(Boolean);
-
-    for (const id of uniq){
-      const payloads = [
-        { ids: [id], scope: "public" },
-        { ids: [id], scope: "both" },
-        { id, scope: "public" },
-        { key: id, scope: "public" },
-        { ids: [id] },
-        { id },
-        { key: id },
-        { keys: [id], scope: "public" },
-        { keys: [id] },
-      ];
-
-      let deleted = false;
-      let lastErr = null;
-
-      for (const body of payloads){
-        try{
-          await callAdminWithFallback(API.del, { method: "POST", admin: true, body, signal });
-          deleted = true;
-          break;
-        } catch(e){
-          lastErr = e;
-          continue;
+          items.push({
+            id,
+            status: hasPub ? "public" : (hasPen ? "pending" : "missing"),
+            approvedAt,
+          });
         }
+
+        return json({ ok: true, items }, 200, {}, request);
       }
 
-      if (!deleted){
-        throw (lastErr || new Error("delete(public) failed"));
-      }
-    }
-  }
+      // --- report ---
+      if (pathLower === "/api/report" && request.method === "POST") {
+        const fp = fingerPrint(request);
+        const lim = await incrLimit(kv, "report", fp, 20);
+        if (!lim.ok) return bad(429, "report limit per day exceeded (20)", {}, request);
 
-  async function deletePublicItems(ids){
-    if (!ids.length) return;
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
 
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
+        let id = String(body.id || "").trim();
+        if (!id) return bad(400, "id required", {}, request);
 
-    try{
-      await deletePublicRobust(ids, signal);
-      await Promise.all([loadPublic(signal), loadAll(signal)]);
-      selectedIds = new Set();
-      syncCacheAll();
-      resetPager();
-      render();
-
-      // ✅ 追加：操作後もDAU更新
-      await refreshDAU({ signal, silent:true });
-
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`公開ネタの削除に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
-
-  async function deletePendingRobust(ids, signal){
-    const uniq = Array.from(new Set(ids)).filter(Boolean);
-
-    for (const id of uniq){
-      const payloads = [
-        { ids: [id], scope: "pending" },
-        { ids: [id], scope: "both" },
-        { id, scope: "pending" },
-        { key: id, scope: "pending" },
-        { ids: [id] },
-        { id },
-        { key: id },
-        { keys: [id], scope: "pending" },
-        { keys: [id] },
-      ];
-
-      let deleted = false;
-      let lastErr = null;
-
-      for (const body of payloads){
-        try{
-          await callAdminWithFallback(API.del, { method: "POST", admin: true, body, signal });
-          deleted = true;
-          break;
-        } catch(e){
-          lastErr = e;
-          continue;
+        // ✅ alias救済（reportでも）
+        const exists0 = (await kv.get(`public:${id}`)) || (await kv.get(`pending:${id}`));
+        if (!exists0) {
+          const ali = await resolveAlias(kv, id);
+          if (ali) id = ali;
         }
+
+        const day = todayJST();
+        const onceKey = `reported:${day}:${fp}:${id}`;
+        const already = await kv.get(onceKey);
+        if (already) return bad(409, "already reported today", {}, request);
+        await kv.put(onceKey, "1", { expirationTtl: 60 * 60 * 24 * 2 });
+
+        await ensureMeta(kv, {
+          id,
+          text: body.text || "",
+          penName: body.penName || null,
+          mode: body.mode || "trivia",
+          bucket: body.bucket ?? 0,
+          source: body.source || "unknown",
+        });
+
+        const reportsToday = await incReport(kv, id);
+        return json({ ok: true, id, reportsToday }, 200, {}, request);
       }
 
-      if (!deleted){
-        throw (lastErr || new Error("delete(pending) failed"));
-      }
-    }
-  }
+      // --- ranking today ---
+      if (pathLower === "/api/ranking/today" && request.method === "GET") {
+        const mode = normMode(url.searchParams.get("mode"));
+        const bucket = normBucket(url.searchParams.get("bucket"));
+        const limit = Math.max(1, Math.min(50, Number(url.searchParams.get("limit") || "3")));
 
-  async function rejectAndDeletePending(ids){
-    if (!ids.length) return;
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
-
-    try{
-      try{
-        await callAdminWithFallback(API.reject, { method:"POST", admin:true, body:{ ids }, signal });
-      } catch(e){
-        // rejectが無くてもOK
+        const items = await getRankingToday(kv, { mode, bucket, limit });
+        return json({ ok: true, items }, 200, {}, request);
       }
 
-      await deletePendingRobust(ids, signal);
+      // --- ranking total ---
+      if (pathLower === "/api/ranking/total" && request.method === "GET") {
+        const mode = normMode(url.searchParams.get("mode"));
+        const bucket = normBucket(url.searchParams.get("bucket"));
+        const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || "10")));
 
-      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
-
-      const remain = new Set(itemsPending.map(x => x.id));
-      const still = ids.filter(id => remain.has(id));
-      if (still.length){
-        alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
+        const items = await getRankingTotal(kv, { mode, bucket, limit }, env);
+        return json({ ok: true, items, hofThreshold: getHofThreshold(env) }, 200, {}, request);
       }
 
-      selectedIds = new Set();
-      syncCacheAll();
-      resetPager();
-      render();
+      // --- hall of fame ---
+      if (pathLower === "/api/hof" && request.method === "GET") {
+        const mode = normMode(url.searchParams.get("mode"));
+        const bucket = normBucket(url.searchParams.get("bucket"));
+        const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || "200")));
 
-      // ✅ 追加：操作後もDAU更新
-      await refreshDAU({ signal, silent:true });
+        const items = await getHallOfFame(kv, { mode, bucket, limit }, env);
+        return json({ ok: true, items, hofThreshold: getHofThreshold(env) }, 200, {}, request);
+      }
 
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`却下(削除)に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
+      // ===================================================
+      // admin: check
+      // ===================================================
+      if (pathLower === "/api/admin/check" && request.method === "GET") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+        return json({ ok: true, admin: true, build: BUILD }, 200, {}, request);
+      }
 
-  // 初期ネタ取り込み
-  function buildSeedItemsFromMetaphors(){
-    const trivia = window.NETA_TRIVIA;
-    const fun    = window.NETA;
-    const out = [];
+      // ===================================================
+      // ✅ admin: public index 再構築（追加）
+      // ===================================================
+      if (pathLower === "/api/admin/reindex_public" && request.method === "POST") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
 
-    function push(dict, mode){
-      if (!dict || typeof dict !== "object") return;
-      for (const k of Object.keys(dict)){
-        const bucket = Number(k);
-        if (!Number.isFinite(bucket)) continue;
-        const arr = dict[k];
-        if (!Array.isArray(arr)) continue;
-        for (const t of arr){
-          const text = String(t ?? "").trim();
-          if (!text) continue;
-          out.push({ mode, bucket, text });
+        const body = await request.json().catch(() => null);
+        const modeQ = body?.mode ?? null;
+        const bucketQ = body?.bucket ?? null;
+        const max = Number(body?.max ?? 20000);
+
+        const mode = (modeQ == null || modeQ === "" || modeQ === "all") ? null : normMode(modeQ);
+        const bucket = (bucketQ == null || bucketQ === "" || bucketQ === "all") ? null : normBucket(bucketQ);
+
+        const r = await adminReindexPublic(kv, { mode, bucket, max: Math.max(1000, Math.min(50000, max)) });
+        return json({ ...r, build: BUILD }, 200, {}, request);
+      }
+
+      // ===================================================
+      // admin: 全ネタ一覧（public + pending）
+      // ===================================================
+      if (pathLower === "/api/admin/all" && request.method === "GET") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        const scope = normScope(url.searchParams.get("scope"));
+        const limit = Math.max(1, Math.min(5000, Number(url.searchParams.get("limit") || "2000")));
+
+        const out = [];
+
+        if (scope === "public" || scope === "both") {
+          const pubs = await adminListPublic(kv, { limit });
+          for (const it of pubs) out.push({ ...it, status: "public" });
         }
-      }
-    }
+        if (scope === "pending" || scope === "both") {
+          const pens = await adminListPending(kv);
+          for (const it of pens) out.push({ ...it, status: "pending" });
+        }
 
-    push(trivia, "trivia");
-    push(fun, "fun");
-    return out;
-  }
-
-  async function importSeed(){
-    const items = buildSeedItemsFromMetaphors();
-    if (!items.length){
-      return alert("metaphors.js から初期ネタが取得できません（NETA_TRIVIA / NETA が見つからない）");
-    }
-
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
-
-    try{
-      const BATCH = 12;
-      let imported = 0;
-
-      for (let i = 0; i < items.length; i += BATCH){
-        const chunk = items.slice(i, i + BATCH);
-        await callAdminWithFallback(API.importSeed, { method:"POST", admin:true, body:{ items: chunk }, signal });
-        imported += chunk.length;
+        out.sort((a, b) => (b.approvedAt || b.createdAt || 0) - (a.approvedAt || a.createdAt || 0));
+        return json({ ok: true, items: out.slice(0, limit), scope, limit }, 200, {}, request);
       }
 
-      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
-      syncCacheAll();
-      resetPager();
-      render();
+      // ===================================================
+      // admin: list public
+      // ===================================================
+      if (pathLower === "/api/admin/list" && request.method === "GET") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
 
-      // ✅ 追加：取り込み後もDAU更新
-      await refreshDAU({ signal, silent:true });
+        const modeQ = url.searchParams.get("mode");
+        const bucketQ = url.searchParams.get("bucket");
+        const limit = Math.max(1, Math.min(5000, Number(url.searchParams.get("limit") || "200")));
 
-      alert(`初期ネタを取り込みました（${imported}件）`);
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`初期ネタ取り込みに失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
-  }
+        const mode = (modeQ == null || modeQ === "" || modeQ === "all") ? null : normMode(modeQ);
+        const bucket = (bucketQ == null || bucketQ === "" || bucketQ === "all") ? null : normBucket(bucketQ);
 
-  // Events
-  btnSave.addEventListener("click", async () => {
-    saveSettings();
-    alert("保存しました（このブラウザに記憶）");
-
-    // ✅ 保存直後に health/DAU を取り直す（入力ミス即検知）
-    try{ await doHealth(); }catch(e){}
-  });
-
-  btnHealth.addEventListener("click", doHealth);
-  btnRefresh.addEventListener("click", refreshCurrentTab);
-  btnRefreshAll.addEventListener("click", refreshAllTabs);
-  btnImportSeed.addEventListener("click", importSeed);
-
-  // ✅ FIX: 復旧ボタンは両方とも同じ動作
-  function bindReindex(btn){
-    if (!btn) return;
-    btn.addEventListener("click", async () => {
-      if (!confirm("復旧（reindex）を実行しますか？\npublicデータから idx:public:* を再構築します。")) return;
-      await doReindexPublic();
-    });
-  }
-  bindReindex(btnReindexTop);
-  bindReindex(btnReindex);
-
-  tabPending.addEventListener("click", () => setActiveTab("pending"));
-  tabPublic.addEventListener("click",  () => setActiveTab("public"));
-  tabAll.addEventListener("click",     () => setActiveTab("all"));
-
-  elQ.addEventListener("input", () => {
-    q = normalizeQuery(elQ.value);
-    saveViewSettings();
-    selectedIds = new Set();
-    resetPager();
-    render();
-  });
-
-  elSort.addEventListener("change", () => {
-    sortKey = elSort.value;
-    if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
-    saveViewSettings();
-    resetPager();
-    render();
-  });
-
-  btnClearQ.addEventListener("click", () => {
-    q = "";
-    elQ.value = "";
-    saveViewSettings();
-    selectedIds = new Set();
-    resetPager();
-    render();
-  });
-
-  chkAll.addEventListener("change", () => {
-    const visible = getVisibleItems();
-    const selectable = (activeTab === "all")
-      ? visible.filter(x => x.scope !== "seed-local")
-      : visible;
-
-    if (chkAll.checked){
-      selectable.forEach(x => selectedIds.add(x.id));
-    } else {
-      selectable.forEach(x => selectedIds.delete(x.id));
-    }
-
-    updateSelectionUI();
-    listEl.querySelectorAll(".itemChk").forEach(chk => {
-      const id = chk.getAttribute("data-id");
-      chk.checked = selectedIds.has(id);
-    });
-  });
-
-  btnBulkApprove.addEventListener("click", async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return alert("選択がありません");
-    if (!confirm(`選択 ${ids.length}件 を承認しますか？`)) return;
-    await approveIds(ids);
-  });
-
-  btnBulkReject.addEventListener("click", async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return alert("選択がありません");
-    if (!confirm(`選択 ${ids.length}件 を却下して削除しますか？（元に戻せません）`)) return;
-    await rejectAndDeletePending(ids);
-  });
-
-  btnBulkDeletePublic.addEventListener("click", async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return alert("選択がありません");
-    if (!confirm(`公開の選択 ${ids.length}件 を削除しますか？（元に戻せません）`)) return;
-    await deletePublicItems(ids);
-  });
-
-  listEl.addEventListener("click", async (ev) => {
-    const raw = ev.target;
-    if (!raw) return;
-
-    const el = (raw instanceof Element) ? raw.closest("button[data-act], input.itemChk") : null;
-    if (!el) return;
-
-    if (el instanceof HTMLInputElement && el.classList.contains("itemChk")) {
-      const id = el.getAttribute("data-id");
-      if (!id) return;
-      if (el.checked) selectedIds.add(id);
-      else selectedIds.delete(id);
-      updateSelectionUI();
-      return;
-    }
-
-    if (el instanceof HTMLButtonElement) {
-      const act = el.getAttribute("data-act");
-      const id  = el.getAttribute("data-id");
-      if (!act || !id) return;
-
-      if (act === "approve") {
-        if (!confirm("この1件を承認しますか？")) return;
-        await approveIds([id]);
-      } else if (act === "reject") {
-        if (!confirm("この1件を却下して削除しますか？（元に戻せません）")) return;
-        await rejectAndDeletePending([id]);
-      } else if (act === "deletePublic") {
-        if (!confirm("この公開ネタを削除しますか？（元に戻せません）")) return;
-        await deletePublicItems([id]);
+        const out = await adminListPublic(kv, { mode, bucket, limit });
+        return json({ ok: true, items: out }, 200, {}, request);
       }
+
+      // ===================================================
+      // admin: 初期ネタ取り込み（publicへ固定・重複防止）
+      // ===================================================
+      if (pathLower === "/api/admin/import_seed" && request.method === "POST") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        const body = await request.json().catch(() => null);
+        const items = Array.isArray(body?.items) ? body.items : [];
+        if (!items.length) return bad(400, "items required", {}, request);
+
+        let put = 0;
+        let skipped = 0;
+        const tNow = now();
+
+        for (const it of items) {
+          const mode = normMode(it?.mode);
+          const bucket = normBucket(it?.bucket);
+          const text = trimText(it?.text, 300);
+          const penName = normPenName(it?.penName) || "初期ネタ";
+          if (!text) { skipped++; continue; }
+
+          const stable = hash32(`${mode}|${bucket}|${text}`);
+          const id = `seed_${stable}`;
+
+          const exists = await kv.get(`public:${id}`);
+          if (exists) { skipped++; continue; }
+
+          const rec = {
+            id,
+            mode,
+            bucket,
+            text,
+            penName,
+            source: "seed",
+            createdAt: tNow,
+            approvedAt: tNow,
+          };
+
+          await putPublic(kv, rec);
+          put++;
+        }
+
+        return json({ ok: true, put, skipped }, 200, {}, request);
+      }
+
+      // ===================================================
+      // admin: delete
+      // ===================================================
+      if (pathLower === "/api/admin/delete" && request.method === "POST") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
+
+        const scope = normScope(body.scope);
+
+        if (body.all === true) {
+          const r = await adminDeleteAll(kv, scope);
+          return json(r, 200, {}, request);
+        }
+
+        const ids = [];
+        if (typeof body.id === "string" && body.id.trim()) ids.push(body.id.trim());
+        if (Array.isArray(body.ids)) {
+          for (const v of body.ids) {
+            const s = String(v || "").trim();
+            if (s) ids.push(s);
+          }
+        }
+        if (ids.length === 0) return bad(400, "id(s) required", {}, request);
+
+        const wipeMeta = !!body.wipeMeta;
+        const wipeTotals = !!body.wipeTotals;
+
+        const r = await adminDeleteIds(kv, ids, scope, { wipeMeta, wipeTotals });
+        return json(r, 200, {}, request);
+      }
+
+      // ===================================================
+      // admin: pending list
+      // ===================================================
+      if (pathLower === "/api/admin/pending" && request.method === "GET") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+        const out = await adminListPending(kv);
+        return json({ ok: true, items: out }, 200, {}, request);
+      }
+
+      // ===================================================
+      // ✅ 承認（admin/new/old/別名すべて）※ここに一本化
+      // ===================================================
+      if (isApprovePath(pathRaw) && request.method === "POST") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
+
+        const ids = pickIdsFromBody(body);
+        if (!ids.length) return bad(400, "id required", {}, request);
+
+        const CONC = 8;
+
+        async function runWithLimit(list, worker, limit){
+          const results = new Array(list.length);
+          let i = 0;
+
+          const runners = Array.from({ length: Math.min(limit, list.length) }, async () => {
+            while (true){
+              const idx = i++;
+              if (idx >= list.length) break;
+              try{
+                results[idx] = await worker(list[idx], idx);
+              }catch(e){
+                results[idx] = { ok:false, id:list[idx], status:500, error:String(e?.message || e) };
+              }
+            }
+          });
+
+          await Promise.all(runners);
+          return results;
+        }
+
+        const resList = await runWithLimit(ids, async (id) => {
+          const r = await adminApproveOne(kv, id);
+          if (!r?.ok) return { ok:false, id, status:r?.status || 500, error:r?.error || "approve failed", diag:r?.diag || null };
+          return { ok:true, id };
+        }, CONC);
+
+        const approved = resList.filter(x => x && x.ok).map(x => x.id);
+        const failed   = resList.filter(x => x && !x.ok).map(x => ({
+          id: x.id,
+          status: x.status || 500,
+          error: x.error || "approve failed",
+          diag: x.diag || null
+        }));
+
+        return json({
+          ok: true,
+          ids,
+          approved,
+          failed,
+          note: failed.length ? "partial_fail" : "all_ok"
+        }, 200, {}, request);
+      }
+
+      // ===================================================
+      // reject（admin + old互換）
+      // ===================================================
+      if (pathLower === "/api/admin/reject" && request.method === "POST") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
+
+        const ids = pickIdsFromBody(body);
+        if (!ids.length) return bad(400, "id required", {}, request);
+
+        for (const id of ids) {
+          await adminRejectOne(kv, id);
+        }
+
+        return json({ ok: true, ids }, 200, {}, request);
+      }
+
+      // old compat pending
+      if (pathLower === "/api/pending" && request.method === "GET") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+        const out = await adminListPending(kv);
+        return json({ ok: true, items: out }, 200, {}, request);
+      }
+
+      // old compat reject single
+      if (pathLower === "/api/reject" && request.method === "POST") {
+        if (!isAdmin(request, env)) return bad(403, "forbidden", {}, request);
+
+        let body = null;
+        try { body = await request.json(); } catch { body = null; }
+        if (!body) return bad(400, "bad json", {}, request);
+
+        const ids = pickIdsFromBody(body);
+        if (!ids.length) return bad(400, "id required", {}, request);
+
+        const id = ids[0];
+        const r = await adminRejectOne(kv, id);
+        return json({ ok: true, id: r.id }, 200, {}, request);
+      }
+
+      return bad(404, "not found", { path: pathRaw, method: request.method, build: BUILD }, request);
+
+    } catch (e) {
+      return bad(
+        500,
+        "internal_error",
+        { detail: String(e?.stack || e?.message || e), build: BUILD },
+        request
+      );
     }
-  });
+  }
+};
 
-  // 初期化
-  loadSettings();
-  loadViewSettings();
-  setPill(pillHealth, "health: 未確認", null);
-  setPill(pillAdmin,  "admin: 未確認", null);
-  setPill(pillDAU,    "今日の使用者数: -", null);
-
-  hydrateFromCache();
-  render();
-
-  // ✅ 追加：起動時に health/DAU を一度取りに行く（失敗しても壊れない）
-  try{ doHealth(); }catch(e){}
-
-  // ✅ 追加：DAU 自動更新開始
-  startDAUPoll();
-
-  // ✅ 念のため：ページ離脱時に停止
-  window.addEventListener("beforeunload", () => {
-    stopDAUPoll();
-    abortInFlight();
-  });
-
-})();
-</script>
-
-</body>
-</html>
-<!-- # END -->
+// # END
