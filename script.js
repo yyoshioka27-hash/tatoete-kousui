@@ -3,7 +3,7 @@
 // =========================
 
 // ✅ BUILD（反映確認用）
-const BUILD = "2026-02-07_script_reindex_hint_fix_full_v1";
+const BUILD = "2026-02-16_usage_ping_fix_full_v1";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -151,7 +151,7 @@ function likeFxPlusOne(btnEl){
   if (document.getElementById("penPin")) return;
 
   const pin = document.createElement("input");
-    pin.id = "penPin";
+  pin.id = "penPin";
 
   // ✅ iPhoneで日本語IMEを殺しやすいので password は使わない
   //    見た目は伏せ字にする（iOS Safari/PWAで安定）
@@ -338,6 +338,73 @@ function penHtmlIfAny(name){
   const n = normalizePenName(name);
   return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
 }
+
+// ==============================
+// ✅✅✅ NEW: 使用者カウント（DAU）用 ping
+// - 端末IDをlocalStorageに保持
+// - 1日1回だけ /api/usage/ping を叩く
+// ==============================
+function todayJSTString(){
+  // JST(+9)でYYYY-MM-DD
+  const d = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+function getOrCreateDeviceId(){
+  const key = "usage_device_id_v1";
+  try{
+    let v = localStorage.getItem(key);
+    if (v && v.length >= 16) return v;
+
+    // UUIDっぽい軽量版（十分）
+    const r = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+    v = `d_${r()}${r()}`;
+    localStorage.setItem(key, v);
+    return v;
+  }catch{
+    // localStorage不可でも一応動く（毎回変わるが致命ではない）
+    const r = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+    return `d_${r()}${r()}`;
+  }
+}
+
+async function pingUsageOncePerDay(reason="init"){
+  const dayKey = "usage_ping_day_v1";
+  const day = todayJSTString();
+
+  try{
+    const done = localStorage.getItem(dayKey);
+    if (done === day) return; // ✅ 同日は二度打たない
+  }catch{}
+
+  const deviceId = getOrCreateDeviceId();
+
+  // ✅ GETでもOKな実装を想定（あなたのworker側がPOSTの場合は言って。即合わせる）
+  const url = `${API_BASE}/api/usage/ping?d=${encodeURIComponent(deviceId)}&r=${encodeURIComponent(reason)}&v=${encodeURIComponent(BUILD)}`;
+
+  try{
+    // タイムアウト付きで軽く投げる
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 3000);
+    try{
+      const res = await fetch(url, { method:"GET", cache:"no-store", signal: ac.signal });
+      // 成否に関わらず「同日再送」を避ける（KV節約）
+      try{ localStorage.setItem(dayKey, day); }catch{}
+      // 失敗時だけconsoleに薄く出す
+      if (!res.ok) {
+        const txt = await res.text().catch(()=> "");
+        console.warn("usage ping not ok", res.status, txt.slice(0,80));
+      }
+    } finally {
+      clearTimeout(t);
+    }
+  }catch(e){
+    // ネット不調でも黙って無視（UX優先）
+    try{ localStorage.setItem(dayKey, day); }catch{}
+    console.warn("usage ping failed", e?.message || e);
+  }
+}
+
 // =========================
 // script.js  (PART 2 / 3)
 // =========================
@@ -666,6 +733,7 @@ function applyTheme(rounded){
     console.warn("applyTheme error", e);
   }
 }
+
 // =========================
 // script.js  (PART 3 / 3)
 // =========================
@@ -1432,6 +1500,10 @@ function fireIfApprovedOnNextSearch(){
             state.pops = null;
           } else {
             setStatus("取得しました", "ok");
+
+            // ✅✅✅ NEW: 天気取得成功＝実利用としてDAU ping（同日なら自動スキップ）
+            try{ pingUsageOncePerDay("wx_ok"); }catch{}
+
             try { fireIfApprovedOnNextSearch(); } catch {}
           }
 
@@ -1772,7 +1844,7 @@ function wireSubmit(){
       try{ renderMySubmissions(); }catch{}
       try{ await syncMySubmissionsStatus(); }catch{}
 
-      alert("送信しました！（承認待ちに入りました）");
+      alert("送信しました！（承認待ちに入りました）";
     }catch(e){
       alert(`送信失敗：${e?.message || e}`);
     }finally{
@@ -1945,6 +2017,9 @@ async function init(){
 
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
+
+  // ✅✅✅ NEW: 起動時にDAU ping（同日なら自動スキップ）
+  try { pingUsageOncePerDay("init"); } catch {}
 }
 
 if (document.readyState === "loading") {
@@ -1952,6 +2027,7 @@ if (document.readyState === "loading") {
 } else {
   init();
 }
+
 // =========================
 // ✅ アプリを開くQR（トップ下）
 // =========================
