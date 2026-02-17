@@ -1409,12 +1409,11 @@ async function renderRanking(){
 
         if (bodyHof) bodyHof.innerHTML = rows + more;
       }
-    } catch (e) {
-      if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
-    }
-
-
+     } catch(e){
+    console.warn("renderRanking error", e);
+  }
 }
+
 
 // =========================
 // ✅ 承認フラグがあれば「次の地域検索成功」で花火（1回だけ）
@@ -1621,15 +1620,21 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 (function wireRefresh(){
   const btn = document.getElementById("refresh");
   if (!btn) return;
+  (function wireRefresh(){
+  const btn = document.getElementById("refresh");
+  if (!btn) return;
   btn.onclick = () => {
-    // ✅ たとえを変える＝ネタ再抽選のみ
-    // ✅ ランキング固定仕様：ここではランキングを絶対に更新しない（チカチカ根絶）
     window.__forceRepick = true;
     __freezeMetaphor = false;
+
+    // ✅ 1フレーム後（renderが走った後）に戻す
     scheduleRender();
-    setTimeout(() => { window.__forceRepick = false; }, 0);
+    requestAnimationFrame(() => {
+      window.__forceRepick = false;
+    });
   };
 })();
+
 
 // ==============================
 // ✅ 自分の投稿欄DOM（HTML改修不要）
