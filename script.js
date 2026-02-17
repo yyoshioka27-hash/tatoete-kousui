@@ -1382,7 +1382,7 @@ async function renderRanking(){
       if (bodyTotal) bodyTotal.textContent = `累計ランキング取得に失敗：${e?.message || e}`;
     }
 
-    // ---- 殿堂入り ----
+        // ---- 殿堂入り ----
     try{
       const items = (await fetchHallOfFame(mode, bucket, 50))
         .filter(it => !isNgText(it?.text));
@@ -1409,10 +1409,15 @@ async function renderRanking(){
 
         if (bodyHof) bodyHof.innerHTML = rows + more;
       }
-     } catch(e){
+    } catch (e) {
+      if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
+    }
+
+  } catch(e){
     console.warn("renderRanking error", e);
   }
 }
+
 
 
 // =========================
@@ -1620,20 +1625,18 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 (function wireRefresh(){
   const btn = document.getElementById("refresh");
   if (!btn) return;
-  (function wireRefresh(){
-  const btn = document.getElementById("refresh");
-  if (!btn) return;
+
   btn.onclick = () => {
     window.__forceRepick = true;
     __freezeMetaphor = false;
 
-    // ✅ 1フレーム後（renderが走った後）に戻す
     scheduleRender();
     requestAnimationFrame(() => {
       window.__forceRepick = false;
     });
   };
 })();
+
 
 
 // ==============================
