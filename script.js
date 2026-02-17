@@ -1291,9 +1291,7 @@ async function renderRankingOnce(key){
 // ランキング表示（中身）
 // =========================
 async function renderRanking(){
-  const __prevFreeze = __freezeMetaphor;
-  __freezeMetaphor = true;
-
+  
   try{
     ensureRankingDom();
     const wrap = document.getElementById("todayRankingWrap");
@@ -1415,9 +1413,7 @@ async function renderRanking(){
       if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
     }
 
-  } finally {
-    __freezeMetaphor = __prevFreeze;
-  }
+
 }
 
 // =========================
