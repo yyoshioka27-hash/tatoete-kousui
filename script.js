@@ -797,8 +797,16 @@ function ensureLikeDom(slot){
 
 function getSelectedMode() {
   const el = document.querySelector('input[name="mode"]:checked');
-  return el ? el.value : "trivia";
+  const v = (el ? String(el.value || "").trim() : "");
+
+  // ✅ 正規化：HTMLが日本語valueでも吸収
+  if (v === "fun" || v === "お笑い") return "fun";
+  if (v === "trivia" || v === "雑学") return "trivia";
+
+  // ✅ 想定外は trivia に倒す（事故防止）
+  return "trivia";
 }
+
 
 function getBaseTexts(mode, bucket) {
   bucket = Number(bucket);
@@ -1250,12 +1258,14 @@ function ensureRankingDom(){
 let __rankingRenderedKey = null;
 
 function makeRankingKey({ mode, bucket, lat, lon }){
-  const m = (mode === "fun") ? "fun" : "trivia";
+  const mv = String(mode || "").trim();
+  const m = (mv === "fun" || mv === "お笑い") ? "fun" : "trivia";
   const b = (bucket == null) ? "null" : String(window.bucket10(bucket));
   const la = (lat == null) ? "null" : String(Math.round(Number(lat) * 10000) / 10000);
   const lo = (lon == null) ? "null" : String(Math.round(Number(lon) * 10000) / 10000);
   return `${m}|${b}|${la},${lo}`;
 }
+
 
 function invalidateRanking(){
   __rankingRenderedKey = null;
