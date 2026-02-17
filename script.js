@@ -1,15 +1,17 @@
 // =========================
 // script.js  (FULL)
-// ✅ FIX: 今日の使用者（DAU）カウントが反映されない問題
-//  - ping関連が「同名で複数定義」されていたのを解消（1つに統一）
-//  - 失敗しても「今日送った扱い」にしない（成功時だけlocalStorageに記録）
-//  - 「天気検索成功時のみ」カウント（起動時pingは停止）
+// ✅ FIX: ランキングが「たとえを変える」でチカチカする問題
+// ✅ 仕様：ランキングは
+//   1) 検索（候補選択→天気取得成功）後に表示して固定
+//   2) それ以降は「再度検索するまで」変えない
+//   3) ただし「モード切替時」はランキング更新したい（←要望）
+//   4) 候補を変えただけ（同じ地点名でも lat/lon が違えば）でも更新したい
 // =========================
 
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-02-16_usage_ping_fix_full_v2";
+const BUILD = "2026-02-17_rankfreeze_modeupdate__FULL_v1";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -99,7 +101,6 @@ function scheduleRender(){
 
 // =========================
 // ✅ NGワード（表示から除外したい文字列）
-// 「データから削除」相当として、全ソース(base/json/public)で表示しない
 // =========================
 const NG_PHRASES = [
   "共通テスト",
@@ -337,7 +338,6 @@ function escapeHtml(s) {
 
 // =========================
 // ✅ 復旧（reindex）案内UI（HTML改修不要）
-// - /api/public が no_index_or_empty の時に表示する
 // =========================
 function ensureReindexHintDom(){
   if (document.getElementById("reindexHint")) return;
@@ -421,7 +421,6 @@ function penHtmlIfAny(name){
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
-// ✅✅✅ 修正1：clientId を送れるよう引数追加
 async function submitToPending(mode, bucket, text, penName, penPin, clientId){
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
@@ -490,7 +489,6 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // ==============================
 // ✅ いいね（Workers）
 // - public/base/json すべて対象
-// - 返り値：{ likesToday, totalLikes, hof, hofThreshold }
 // ==============================
 async function likeAny(payload){
   const res = await fetch(`${API_BASE}/api/like`, {
@@ -689,6 +687,10 @@ let state = {
   tz: null,
   source: "API: 未接続",
   hofThreshold: 20,
+
+  // ✅ 候補選択した座標（ランキング固定キーに使う）
+  selectedLat: null,
+  selectedLon: null,
 
   currentPhrases: {
     m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null },
@@ -958,7 +960,10 @@ function updateLikeUI(slot) {
       state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
 
       updateLikeUI(slot);
-      try { renderRankingThrottled(60000); } catch {}
+
+      // ✅ ランキング固定仕様：いいねでランキングを更新しない（チカチカ防止）
+      // try { renderRankingThrottled(60000); } catch {}
+
     }catch(e){
       alert(`いいね失敗：${e?.message || e}`);
     }finally{
@@ -1111,9 +1116,9 @@ function render() {
     if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
     renderEmpty();
     if (footEl) footEl.textContent = "";
-    try { renderRanking(); } catch {}
     try { ensureMySubmissionsDom(); } catch {}
     try { renderMySubmissions(); } catch(e) { console.warn("renderMySubmissions error", e); }
+    // ✅ ランキング固定仕様：render() ではランキングを描画しない（チカチカ根絶）
     return;
   }
 
@@ -1127,7 +1132,7 @@ function render() {
   if (!candidates.length) {
     if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
     if (footEl) footEl.textContent = "";
-    try { renderRanking(); } catch {}
+    // ✅ ランキング固定仕様：render() ではランキングを描画しない
     return;
   }
 
@@ -1145,7 +1150,7 @@ function render() {
   if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
 
-  try { renderRanking(); } catch {}
+  // ✅ ランキング固定仕様：render() ではランキングを描画しない（←refreshでチカチカの原因）
 }
 
 // =========================
@@ -1239,22 +1244,42 @@ function ensureRankingDom(){
   refreshBtn.insertAdjacentElement("afterend", wrap);
 }
 
-// ✅ ランキング取得の呼びすぎ防止（KV Read節約）
-let __rankingLastAt = 0;
-let __rankingInFlight = false;
+// =========================
+// ✅ ランキング固定（検索成功 or モード変更 のときだけ更新）
+// =========================
+let __rankingRenderedKey = null;
 
-async function renderRankingThrottled(minIntervalMs = 60000){
-  const now = Date.now();
-  if (__rankingInFlight) return;
-  if (now - __rankingLastAt < minIntervalMs) return;
-
-  __rankingInFlight = true;
-  __rankingLastAt = now;
-  try { await renderRanking(); }
-  finally { __rankingInFlight = false; }
+function makeRankingKey({ mode, bucket, lat, lon }){
+  const m = (mode === "fun") ? "fun" : "trivia";
+  const b = (bucket == null) ? "null" : String(window.bucket10(bucket));
+  const la = (lat == null) ? "null" : String(Math.round(Number(lat) * 10000) / 10000);
+  const lo = (lon == null) ? "null" : String(Math.round(Number(lon) * 10000) / 10000);
+  return `${m}|${b}|${la},${lo}`;
 }
 
-// ランキング表示
+function invalidateRanking(){
+  __rankingRenderedKey = null;
+}
+
+function getRankingKeyNow(){
+  const mode = getSelectedMode();
+  const bucket = getCurrentMainBucket();
+  const lat = state.selectedLat;
+  const lon = state.selectedLon;
+  if (bucket == null || lat == null || lon == null) return null;
+  return makeRankingKey({ mode, bucket, lat, lon });
+}
+
+async function renderRankingOnce(key){
+  if (!key) return;
+  if (__rankingRenderedKey === key) return; // ✅固定：同じキーなら更新しない
+  __rankingRenderedKey = key;
+  await renderRanking();
+}
+
+// =========================
+// ランキング表示（中身）
+// =========================
 async function renderRanking(){
   const __prevFreeze = __freezeMetaphor;
   __freezeMetaphor = true;
@@ -1274,6 +1299,8 @@ async function renderRanking(){
 
     const hofTh = Number(state.hofThreshold || 20);
 
+    // ✅ ここでDOM作り直し＝チカチカの原因になり得るが、
+    //    「検索成功/モード変更時だけ」しか呼ばれない仕様にしたのでOK。
     wrap.innerHTML = `
       <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
         <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
@@ -1460,6 +1487,11 @@ function fireIfApprovedOnNextSearch(){
         const lat = Number(opt.dataset.lat);
         const lon = Number(opt.dataset.lon);
 
+        // ✅ 候補が変わったら（同名でも）ランキング更新対象になり得るのでキーは変わる
+        // ただし実際の描画は「天気取得成功後」に1回だけ
+        state.selectedLat = lat;
+        state.selectedLon = lon;
+
         window.__forceRepick = true;
         setTimeout(() => { window.__forceRepick = false; }, 0);
 
@@ -1514,6 +1546,14 @@ function fireIfApprovedOnNextSearch(){
             try{ pingUsageOncePerDay("wx_ok"); }catch{}
 
             try { fireIfApprovedOnNextSearch(); } catch {}
+
+            // ✅✅✅ ここが本命：ランキングは「検索成功後」に1回だけ描画して固定
+            try{
+              const key = getRankingKeyNow(); // mode/bucket/lat/lon
+              await renderRankingOnce(key);
+            }catch(e){
+              console.warn("renderRankingOnce(after search) failed", e);
+            }
           }
 
           scheduleRender();
@@ -1542,12 +1582,15 @@ function fireIfApprovedOnNextSearch(){
 })();
 
 // =========================
-// mode 切替
+// mode 切替（ランキングは更新したい）
 // =========================
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
     __freezeMetaphor = false;
     scheduleRender();
+
+    // ✅ モード切替時はランキング更新したい → キーを無効化して再描画
+    invalidateRanking();
 
     if (state?.pops) {
       try{
@@ -1557,6 +1600,14 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
           warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
         ]).then(() => scheduleRender()).catch(() => {});
       }catch{}
+
+      // ✅ モード変更時にランキングを1回だけ更新（検索し直し不要）
+      try{
+        const key = getRankingKeyNow();
+        await renderRankingOnce(key);
+      }catch(e){
+        console.warn("renderRankingOnce(on mode change) failed", e);
+      }
     }
   })
 );
@@ -1565,6 +1616,8 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   const btn = document.getElementById("refresh");
   if (!btn) return;
   btn.onclick = () => {
+    // ✅ たとえを変える＝ネタ再抽選のみ
+    // ✅ ランキング固定仕様：ここではランキングを絶対に更新しない（チカチカ根絶）
     window.__forceRepick = true;
     __freezeMetaphor = false;
     scheduleRender();
