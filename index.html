@@ -52,7 +52,7 @@
     }
 
     /* お笑い（薄い緑） */
-    .item-card[data-mode="comedy"]{
+    .item-card[data-mode="comedy"], .item-card[data-mode="fun"]{
       background: rgba(34,197,94,.07);
       border-color: rgba(34,197,94,.20);
       box-shadow: inset 6px 0 0 rgba(34,197,94,.18);
@@ -61,11 +61,10 @@
     body{
       margin:0;
       padding: 18px;
-      /* ✅ 絵文字が ?? になりやすい環境対策（Windows優先） */
       font-family: "Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",
                    -apple-system, system-ui, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
       color: var(--text);
-      background: linear-gradient(180deg, var(--bg1), var(--bg2)); /* 初期（themeが付くと上書き） */
+      background: linear-gradient(180deg, var(--bg1), var(--bg2));
     }
 
     .container{ max-width: 860px; margin: 0 auto; }
@@ -181,18 +180,14 @@
       margin-top: 10px;
     }
 
-    /* ✅ 強制FIX：例えモード（雑学/お笑い）を必ず左揃えにする */
     .example-mode .modeWrap label{
       width: 100%;
       box-sizing: border-box;
-
       display: flex;
       align-items: center;
       justify-content: flex-start;
       text-align: left;
-
       gap: 10px;
-
       padding: 10px 12px;
       border-radius: 14px;
       border: 1px solid rgba(15,23,42,0.10);
@@ -230,9 +225,6 @@
       .pill{ font-size: 11px; padding: 5px 8px; }
     }
 
-    /* =========================
-       ✅ FIX: 例えモードを左寄せに固定（中央寄りを潰す）
-       ========================= */
     .card.example-mode{ text-align:left !important; }
     .card.example-mode .small{ text-align:left !important; }
     .card.example-mode .modeWrap{ align-items:flex-start !important; }
@@ -241,12 +233,8 @@
       text-align:left !important;
     }
 
-    /* =========================
-      ✅ ホーム画面に追加の「手順カード」
-      - 初期は非表示（ボタン押下で表示）
-      ========================= */
     #a2hsGuide{
-      display:none; /* ✅追加：ボタンを押した時だけ出す */
+      display:none;
       margin-top: 12px;
       padding: 12px;
       border-radius: 12px;
@@ -267,6 +255,21 @@
       color:#64748b;
       font-size: 12px;
     }
+
+    /* =========================
+       ✅ 追加：ランキングのチカチカ防止UI
+       - 更新中でも内容は消さない
+       - 上に小さく「更新中…」表示だけ出す
+       ========================= */
+    #todayRankingWrap{ min-height: 56px; }
+    #rankStatus{
+      display:none;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color:#64748b;
+    }
+    #todayRankingWrap.is-updating #rankStatus{ display:block; }
+    #todayRankingWrap.is-updating .rankBody{ opacity: .85; }
   </style>
 </head>
 
@@ -284,7 +287,6 @@
           <div class="small" style="font-weight:800; font-size:14px;">📱 アプリを開くQR</div>
           <div class="muted" style="margin-top:6px;">読み取るとこのアプリが開きます（配布用）</div>
 
-          <!-- ✅ ここに制限表示（body内なのでOK） -->
           <div style="margin:8px 0 14px; color:#475569; font-size:12px;">
             制限：いいね 1日10回まで（同一ネタは1日1回まで）／ネタ投稿 1日10回まで
           </div>
@@ -293,7 +295,6 @@
         <div style="margin-left:auto;">
           <div id="openAppQr" style="width:150px; height:150px; background:#fff; padding:10px; border-radius:12px;"></div>
 
-          <!-- ✅ ホーム画面に追加（案内/インストール） -->
           <div style="margin-top:10px; text-align:center;">
             <button id="btnAddHome" class="btnPrimary" type="button" style="width:150px;">
               ホーム画面に追加
@@ -302,7 +303,6 @@
         </div>
       </div>
 
-      <!-- ✅✅✅ 追加：ボタン押下で表示される手順 -->
       <div id="a2hsGuide">
         <div class="title">📌 ホーム画面に追加する方法</div>
 
@@ -419,7 +419,11 @@
         <button id="refresh" class="btnPrimary" style="width:100%;">同じ確率でも例えを変える</button>
       </div>
 
-      <div id="todayRankingWrap" style="margin-top:12px;"></div>
+      <!-- ✅ ランキング：更新中でも中身は消さない -->
+      <div id="todayRankingWrap" style="margin-top:12px;">
+        <div id="rankStatus">更新中…</div>
+        <div class="rankBody" id="rankBody"></div>
+      </div>
     </div>
 
     <div class="card" id="addSection">
@@ -475,7 +479,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script defer src="script.js?v=99"></script>
 
-  <!-- ✅ Add to Home / Install Modal（Androidでインストール可能な時だけ使う） -->
+  <!-- ✅ Add to Home / Install Modal -->
   <div id="a2hsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;">
     <div style="max-width:560px; margin:10vh auto; background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25);">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
@@ -506,7 +510,7 @@
     const installBtn = document.getElementById("a2hsInstall");
     const guide = document.getElementById("a2hsGuide");
 
-    if (!btn) return; // ✅ ボタンがなければ終了（guideだけでも動かすため最小条件にする）
+    if (!btn) return;
 
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -515,7 +519,6 @@
     let deferredPrompt = null;
 
     function openModal(html, canInstall){
-      // ✅ modal一式が無い場合でもguide表示は壊さない
       if (!modal || !body || !installBtn) return;
       body.innerHTML = html;
       modal.style.display = "block";
@@ -537,16 +540,11 @@
     if (okBtn) okBtn.addEventListener("click", closeModal);
     if (modal) modal.addEventListener("click", (e)=>{ if(e.target === modal) closeModal(); });
 
-    // ✅ Android(PWA) インストール可能イベント
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
     });
 
-    // ✅ ボタン押下：
-    // 1) インストール済み → モーダル
-    // 2) Androidでインストール可能 → モーダル（インストールボタン）
-    // 3) それ以外 → この画面上に手順を表示/非表示
     btn.addEventListener("click", async () => {
       if (isStandalone) {
         openModal("すでにホーム画面から起動できる状態です 👍<br>（インストール済み）", false);
@@ -561,7 +559,6 @@
       toggleGuide();
     });
 
-    // ✅ モーダル内「インストールする」
     if (installBtn) {
       installBtn.addEventListener("click", async () => {
         if (!deferredPrompt) return;
