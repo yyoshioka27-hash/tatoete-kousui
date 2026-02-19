@@ -270,7 +270,9 @@
        autocapitalize="off"
        spellcheck="false"
        inputmode="search"
+       readonly
 />
+
 
         <select id="sortKey" class="filterSelect">
           <option value="new">並び替え：新着順</option>
@@ -1716,9 +1718,44 @@
   loadSettings();
   loadViewSettings();
   // ✅ ブラウザの自動入力が後から入れてくるのを潰す（最終兵器）
-  requestAnimationFrame(() => { elQ.value = ""; });
-  setTimeout(() => { elQ.value = ""; }, 0);
-  setTimeout(() => { elQ.value = ""; }, 50);
+  r// ✅ ブラウザの自動入力が後から入れてくるのを潰す（最終兵器：readonly封じ＋短期監視）
+function hardClearSearch(){
+  q = "";
+  if (elQ) elQ.value = "";
+}
+
+// 1) 起動直後は readonly のまま確実に空にする
+requestAnimationFrame(hardClearSearch);
+setTimeout(hardClearSearch, 0);
+setTimeout(hardClearSearch, 50);
+setTimeout(hardClearSearch, 250);
+setTimeout(hardClearSearch, 800);
+
+// 2) 少し待ってから readonly を解除（入力可能にする）
+setTimeout(() => {
+  try{ elQ && elQ.removeAttribute("readonly"); }catch(e){}
+  hardClearSearch();
+}, 900);
+
+// 3) 2秒だけ監視：URLっぽい文字が入ったら即消す（Edge/Chromeの後入れ対策）
+(function watchAutofill(){
+  let n = 0;
+  const timer = setInterval(() => {
+    n++;
+    const v = (elQ?.value || "").trim();
+    if (v && (/^https?:\/\//i.test(v) || /^www\./i.test(v) || v.includes(".github.io"))){
+      hardClearSearch();
+    }
+    if (n > 20) clearInterval(timer); // 20回×100ms＝約2秒で終了
+  }, 100);
+})();
+
+// 4) 戻る/復帰で再注入されるのも潰す
+window.addEventListener("pageshow", hardClearSearch);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) hardClearSearch();
+});
+
 
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
