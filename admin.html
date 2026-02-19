@@ -261,18 +261,16 @@
 
       <!-- ✅ 検索＆ソート -->
       <div class="filters">
+        <!-- ✅ FIX：nameを消してブラウザの自動復元を弱める / readonlyは初期だけJSで解除 -->
         <input id="q"
-       class="filterInput"
-       type="search"
-       name="admin_search_q"
-       placeholder="検索（本文 / pen / ID / 雑学70% など）"
-       autocomplete="off"
-       autocapitalize="off"
-       spellcheck="false"
-       inputmode="search"
-       readonly
-/>
-
+               class="filterInput"
+               type="search"
+               placeholder="検索（本文 / pen / ID / 雑学70% など）"
+               autocomplete="off"
+               autocapitalize="off"
+               spellcheck="false"
+               inputmode="search"
+               readonly />
 
         <select id="sortKey" class="filterSelect">
           <option value="new">並び替え：新着順</option>
@@ -1104,26 +1102,25 @@
   }
 
   function loadViewSettings(){
-  // ✅ 検索欄は毎回空にする（記憶しない）
-  q = "";
-  elQ.value = "";
+    // ✅ 検索欄は毎回空にする（記憶しない）
+    q = "";
+    elQ.value = "";
 
-  // ✅ ソートだけは今まで通り記憶してOK
-  sortKey = (localStorage.getItem(LS_SORT) || "new");
-  if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
-  elSort.value = sortKey;
+    // ✅ ソートだけは今まで通り記憶してOK
+    sortKey = (localStorage.getItem(LS_SORT) || "new");
+    if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
+    elSort.value = sortKey;
 
-  // ✅ 念のため、過去の検索記憶も消す
-  try{ localStorage.removeItem(LS_Q); }catch(e){}
-}
+    // ✅ 念のため、過去の検索記憶も消す
+    try{ localStorage.removeItem(LS_Q); }catch(e){}
+  }
 
   function saveViewSettings(){
-  // ✅ 検索は保存しない
-  try{ localStorage.removeItem(LS_Q); }catch(e){}
-  // ✅ ソートだけ保存
-  localStorage.setItem(LS_SORT, sortKey);
-}
-
+    // ✅ 検索は保存しない
+    try{ localStorage.removeItem(LS_Q); }catch(e){}
+    // ✅ ソートだけ保存
+    localStorage.setItem(LS_SORT, sortKey);
+  }
 
   // Loaders
   async function loadPending(signal){
@@ -1717,45 +1714,44 @@
   // 初期化
   loadSettings();
   loadViewSettings();
-  // ✅ ブラウザの自動入力が後から入れてくるのを潰す（最終兵器）
-  r// ✅ ブラウザの自動入力が後から入れてくるのを潰す（最終兵器：readonly封じ＋短期監視）
-function hardClearSearch(){
-  q = "";
-  if (elQ) elQ.value = "";
-}
 
-// 1) 起動直後は readonly のまま確実に空にする
-requestAnimationFrame(hardClearSearch);
-setTimeout(hardClearSearch, 0);
-setTimeout(hardClearSearch, 50);
-setTimeout(hardClearSearch, 250);
-setTimeout(hardClearSearch, 800);
+  // ✅ ブラウザの自動入力が後から入れてくるのを潰す（最終兵器：readonly封じ＋短期監視）
+  function hardClearSearch(){
+    q = "";
+    if (elQ) elQ.value = "";
+  }
 
-// 2) 少し待ってから readonly を解除（入力可能にする）
-setTimeout(() => {
-  try{ elQ && elQ.removeAttribute("readonly"); }catch(e){}
-  hardClearSearch();
-}, 900);
+  // 1) 起動直後は readonly のまま確実に空にする
+  requestAnimationFrame(hardClearSearch);
+  setTimeout(hardClearSearch, 0);
+  setTimeout(hardClearSearch, 50);
+  setTimeout(hardClearSearch, 250);
+  setTimeout(hardClearSearch, 800);
 
-// 3) 2秒だけ監視：URLっぽい文字が入ったら即消す（Edge/Chromeの後入れ対策）
-(function watchAutofill(){
-  let n = 0;
-  const timer = setInterval(() => {
-    n++;
-    const v = (elQ?.value || "").trim();
-    if (v && (/^https?:\/\//i.test(v) || /^www\./i.test(v) || v.includes(".github.io"))){
-      hardClearSearch();
-    }
-    if (n > 20) clearInterval(timer); // 20回×100ms＝約2秒で終了
-  }, 100);
-})();
+  // 2) 少し待ってから readonly を解除（入力可能にする）
+  setTimeout(() => {
+    try{ elQ && elQ.removeAttribute("readonly"); }catch(e){}
+    hardClearSearch();
+  }, 900);
 
-// 4) 戻る/復帰で再注入されるのも潰す
-window.addEventListener("pageshow", hardClearSearch);
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) hardClearSearch();
-});
+  // 3) 2秒だけ監視：URLっぽい文字が入ったら即消す（Edge/Chromeの後入れ対策）
+  (function watchAutofill(){
+    let n = 0;
+    const timer = setInterval(() => {
+      n++;
+      const v = (elQ?.value || "").trim();
+      if (v && (/^https?:\/\//i.test(v) || /^www\./i.test(v) || v.includes(".github.io"))){
+        hardClearSearch();
+      }
+      if (n > 20) clearInterval(timer); // 20回×100ms＝約2秒で終了
+    }, 100);
+  })();
 
+  // 4) 戻る/復帰で再注入されるのも潰す
+  window.addEventListener("pageshow", hardClearSearch);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) hardClearSearch();
+  });
 
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
