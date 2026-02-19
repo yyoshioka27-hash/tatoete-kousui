@@ -261,7 +261,17 @@
 
       <!-- ✅ 検索＆ソート -->
       <div class="filters">
-        <input id="q" class="filterInput" placeholder="検索（本文 / pen / ID / 雑学70% など）" />
+        <input id="q"
+       class="filterInput"
+       type="search"
+       name="admin_search_q"
+       placeholder="検索（本文 / pen / ID / 雑学70% など）"
+       autocomplete="off"
+       autocapitalize="off"
+       spellcheck="false"
+       inputmode="search"
+/>
+
         <select id="sortKey" class="filterSelect">
           <option value="new">並び替え：新着順</option>
           <option value="likes">並び替え：likes順</option>
