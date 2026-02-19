@@ -1092,16 +1092,26 @@
   }
 
   function loadViewSettings(){
-    q = normalizeQuery(localStorage.getItem(LS_Q) || "");
-    sortKey = (localStorage.getItem(LS_SORT) || "new");
-    if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
-    elQ.value = q;
-    elSort.value = sortKey;
-  }
+  // ✅ 検索欄は毎回空にする（記憶しない）
+  q = "";
+  elQ.value = "";
+
+  // ✅ ソートだけは今まで通り記憶してOK
+  sortKey = (localStorage.getItem(LS_SORT) || "new");
+  if (!["new","likes","bucket"].includes(sortKey)) sortKey = "new";
+  elSort.value = sortKey;
+
+  // ✅ 念のため、過去の検索記憶も消す
+  try{ localStorage.removeItem(LS_Q); }catch(e){}
+}
+
   function saveViewSettings(){
-    localStorage.setItem(LS_Q, normalizeQuery(q));
-    localStorage.setItem(LS_SORT, sortKey);
-  }
+  // ✅ 検索は保存しない
+  try{ localStorage.removeItem(LS_Q); }catch(e){}
+  // ✅ ソートだけ保存
+  localStorage.setItem(LS_SORT, sortKey);
+}
+
 
   // Loaders
   async function loadPending(signal){
