@@ -1715,6 +1715,11 @@
   // 初期化
   loadSettings();
   loadViewSettings();
+  // ✅ ブラウザの自動入力が後から入れてくるのを潰す（最終兵器）
+  requestAnimationFrame(() => { elQ.value = ""; });
+  setTimeout(() => { elQ.value = ""; }, 0);
+  setTimeout(() => { elQ.value = ""; }, 50);
+
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
   setPill(pillDAU,    "今日の使用者数: -", null);
