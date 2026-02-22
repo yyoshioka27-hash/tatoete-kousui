@@ -609,7 +609,7 @@ async function warmPublicCache(mode, bucket){
     const items = await fetchPublicMetaphors({
       mode: (mode === "fun" ? "fun" : "trivia"),
       bucket: window.bucket10(bucket),
-      limit: 200
+      limit: 1000
     });
     publicCache.set(k, items);
   }catch{
@@ -2015,7 +2015,7 @@ function saveMySubmission(item){
 
   list.unshift(item);
 
-  const MAX = 200;
+  const MAX = 1000;
   if (list.length > MAX) list.length = MAX;
 
   localStorage.setItem(key, JSON.stringify(list));
