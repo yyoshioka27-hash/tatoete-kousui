@@ -11,10 +11,14 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-02-17_rankfreeze_modeupdate__FULL_v1";
+const BUILD = "2026-02-23_hof_global_like_clientid__SCRIPT_FULL_v1";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+
+// =========================
+// ✅ 端末ID（いいね巻き添え防止用）
+// =========================
 function getClientId(){
   let id = localStorage.getItem("clientId");
   if(!id){
@@ -24,6 +28,7 @@ function getClientId(){
   }
   return id;
 }
+
 // ==============================
 // ✅ 今日の使用者カウント（DAU）
 // - 天気検索が「成功」した時にだけ、1日1回だけ /api/usage/ping を叩く
@@ -65,7 +70,7 @@ async function pingUsageOncePerDay(reason="wx_ok"){
 
   const deviceId = getOrCreateDeviceId();
 
-  // ✅ GET実装想定（worker側がPOSTならここを合わせる）
+  // ✅ worker.js が POST 想定なので POST に統一（GETだと0固定になりやすい）
   const url = `${API_BASE}/api/usage/ping?d=${encodeURIComponent(deviceId)}&r=${encodeURIComponent(reason)}&v=${encodeURIComponent(BUILD)}`;
 
   try{
@@ -74,7 +79,13 @@ async function pingUsageOncePerDay(reason="wx_ok"){
 
     let res, data;
     try{
-      res = await fetch(url, { method:"GET", cache:"no-store", signal: ac.signal });
+      res = await fetch(url, {
+        method:"POST",
+        cache:"no-store",
+        signal: ac.signal,
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ deviceId, reason, v: BUILD })
+      });
       data = await res.json().catch(()=>null);
     } finally {
       clearTimeout(t);
@@ -237,8 +248,6 @@ function likeFxPlusOne(btnEl){
   const pin = document.createElement("input");
   pin.id = "penPin";
 
-  // ✅ iPhoneで日本語IMEを殺しやすいので password は使わない
-  //    見た目は伏せ字にする（iOS Safari/PWAで安定）
   pin.type = "text";
   pin.style.webkitTextSecurity = "disc"; // 伏せ字（Safari/iOS向け）
   pin.setAttribute("inputmode", "text");
@@ -497,11 +506,22 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // ==============================
 // ✅ いいね（Workers）
 // - public/base/json すべて対象
+// - ✅ x-client-id を必ず送る（同一Wi-Fi巻き添え防止）
 // ==============================
-headers: {
-  "Content-Type":"application/json",
-  "x-client-id": getClientId(),
-},
+async function likeAny(payload){
+  const cid = getClientId(); // 端末ID
+  const res = await fetch(`${API_BASE}/api/like`, {
+    method: "POST",
+    headers: {
+      "Content-Type":"application/json",
+      "x-client-id": cid,
+    },
+    body: JSON.stringify({
+      ...payload,
+      clientId: cid, // bodyにも入れて保険（worker側がbody参照でもOK）
+    })
+  });
+
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
 
@@ -535,11 +555,15 @@ async function fetchRankingTotal(mode, bucket, limit = 3){
   return Array.isArray(data.items) ? data.items : [];
 }
 
+// ✅ 殿堂入り（全バケット共通）
+// worker.js 側が scope=all をデフォルトにしている想定。
+// ここでも明示しておく（事故防止）。
 async function fetchHallOfFame(mode, bucket, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
-  params.set("bucket", String(bucket));
   params.set("limit", String(limit));
+  params.set("scope", "all"); // ✅ 全バケット共通
+
   const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET" });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
@@ -813,7 +837,6 @@ function getSelectedMode() {
   return "trivia";
 }
 
-
 function getBaseTexts(mode, bucket) {
   bucket = Number(bucket);
   const base = (mode === "trivia"
@@ -963,8 +986,8 @@ function updateLikeUI(slot) {
         bucket: Number(mainBucket ?? phraseObj.bucket ?? 0),
         text: phraseObj.text,
         penName: normalizePenName(phraseObj.penName),
-        source: phraseObj.source || null
-        clientId: getClientId(), 
+        source: phraseObj.source || null,
+        clientId: getClientId(), // ✅ 保険（likeAny内部でも入れてる）
       });
 
       likeFxPop(btnEl);
@@ -975,9 +998,6 @@ function updateLikeUI(slot) {
       state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
 
       updateLikeUI(slot);
-
-      // ✅ ランキング固定仕様：いいねでランキングを更新しない（チカチカ防止）
-      // try { renderRankingThrottled(60000); } catch {}
 
     }catch(e){
       alert(`いいね失敗：${e?.message || e}`);
@@ -1133,7 +1153,6 @@ function render() {
     if (footEl) footEl.textContent = "";
     try { ensureMySubmissionsDom(); } catch {}
     try { renderMySubmissions(); } catch(e) { console.warn("renderMySubmissions error", e); }
-    // ✅ ランキング固定仕様：render() ではランキングを描画しない（チカチカ根絶）
     return;
   }
 
@@ -1147,7 +1166,6 @@ function render() {
   if (!candidates.length) {
     if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
     if (footEl) footEl.textContent = "";
-    // ✅ ランキング固定仕様：render() ではランキングを描画しない
     return;
   }
 
@@ -1164,8 +1182,6 @@ function render() {
 
   if (footEl) footEl.textContent =
     "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
-
-  // ✅ ランキング固定仕様：render() ではランキングを描画しない（←refreshでチカチカの原因）
 }
 
 // =========================
@@ -1273,7 +1289,6 @@ function makeRankingKey({ mode, bucket, lat, lon }){
   return `${m}|${b}|${la},${lo}`;
 }
 
-
 function invalidateRanking(){
   __rankingRenderedKey = null;
 }
@@ -1298,7 +1313,6 @@ async function renderRankingOnce(key){
 // ランキング表示（中身）
 // =========================
 async function renderRanking(){
-  
   try{
     ensureRankingDom();
     const wrap = document.getElementById("todayRankingWrap");
@@ -1314,8 +1328,6 @@ async function renderRanking(){
 
     const hofTh = Number(state.hofThreshold || 20);
 
-    // ✅ ここでDOM作り直し＝チカチカの原因になり得るが、
-    //    「検索成功/モード変更時だけ」しか呼ばれない仕様にしたのでOK。
     wrap.innerHTML = `
       <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
         <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
@@ -1330,7 +1342,7 @@ async function renderRanking(){
       </div>
 
       <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（累計👍${hofTh}以上）</div>
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全バケット共通 / 累計👍${hofTh}以上）</div>
         <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
         <div class="muted" id="rankingBodyHof">読み込み中…</div>
       </div>
@@ -1389,7 +1401,7 @@ async function renderRanking(){
       if (bodyTotal) bodyTotal.textContent = `累計ランキング取得に失敗：${e?.message || e}`;
     }
 
-        // ---- 殿堂入り ----
+    // ---- 殿堂入り（全バケット共通）----
     try{
       const items = (await fetchHallOfFame(mode, bucket, 50))
         .filter(it => !isNgText(it?.text));
@@ -1424,8 +1436,6 @@ async function renderRanking(){
     console.warn("renderRanking error", e);
   }
 }
-
-
 
 // =========================
 // ✅ 承認フラグがあれば「次の地域検索成功」で花火（1回だけ）
@@ -1504,8 +1514,6 @@ function fireIfApprovedOnNextSearch(){
         const lat = Number(opt.dataset.lat);
         const lon = Number(opt.dataset.lon);
 
-        // ✅ 候補が変わったら（同名でも）ランキング更新対象になり得るのでキーは変わる
-        // ただし実際の描画は「天気取得成功後」に1回だけ
         state.selectedLat = lat;
         state.selectedLon = lon;
 
@@ -1559,14 +1567,11 @@ function fireIfApprovedOnNextSearch(){
           } else {
             setStatus("取得しました", "ok");
 
-            // ✅✅✅ FIX: 天気取得成功＝実利用としてDAU ping（成功時のみ1日1回）
             try{ pingUsageOncePerDay("wx_ok"); }catch{}
-
             try { fireIfApprovedOnNextSearch(); } catch {}
 
-            // ✅✅✅ ここが本命：ランキングは「検索成功後」に1回だけ描画して固定
             try{
-              const key = getRankingKeyNow(); // mode/bucket/lat/lon
+              const key = getRankingKeyNow();
               await renderRankingOnce(key);
             }catch(e){
               console.warn("renderRankingOnce(after search) failed", e);
@@ -1606,7 +1611,6 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
     __freezeMetaphor = false;
     scheduleRender();
 
-    // ✅ モード切替時はランキング更新したい → キーを無効化して再描画
     invalidateRanking();
 
     if (state?.pops) {
@@ -1618,7 +1622,6 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
         ]).then(() => scheduleRender()).catch(() => {});
       }catch{}
 
-      // ✅ モード変更時にランキングを1回だけ更新（検索し直し不要）
       try{
         const key = getRankingKeyNow();
         await renderRankingOnce(key);
@@ -1643,8 +1646,6 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
     });
   };
 })();
-
-
 
 // ==============================
 // ✅ 自分の投稿欄DOM（HTML改修不要）
@@ -2100,9 +2101,6 @@ async function init(){
 
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
-
-  // ✅ FIX: 起動時pingはしない（「天気検索したらカウント」に合わせる）
-  // try { pingUsageOncePerDay("init"); } catch {}
 }
 
 if (document.readyState === "loading") {
