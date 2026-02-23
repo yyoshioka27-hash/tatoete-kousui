@@ -15,7 +15,15 @@ const BUILD = "2026-02-17_rankfreeze_modeupdate__FULL_v1";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
-
+function getClientId(){
+  let id = localStorage.getItem("clientId");
+  if(!id){
+    id = (crypto.randomUUID ? crypto.randomUUID()
+      : (Date.now() + "-" + Math.random().toString(16).slice(2)));
+    localStorage.setItem("clientId", id);
+  }
+  return id;
+}
 // ==============================
 // ✅ 今日の使用者カウント（DAU）
 // - 天気検索が「成功」した時にだけ、1日1回だけ /api/usage/ping を叩く
@@ -490,12 +498,10 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // ✅ いいね（Workers）
 // - public/base/json すべて対象
 // ==============================
-async function likeAny(payload){
-  const res = await fetch(`${API_BASE}/api/like`, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify(payload)
-  });
+headers: {
+  "Content-Type":"application/json",
+  "x-client-id": getClientId(),
+},
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
 
@@ -958,6 +964,7 @@ function updateLikeUI(slot) {
         text: phraseObj.text,
         penName: normalizePenName(phraseObj.penName),
         source: phraseObj.source || null
+        clientId: getClientId(), 
       });
 
       likeFxPop(btnEl);
