@@ -1,4 +1,3 @@
-// =========================
 // script.js  (FULL)
 // ✅ FIX: ランキングが「たとえを変える」でチカチカする問題
 // ✅ 仕様：ランキングは
@@ -11,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-02-23_hof_global_like_clientid__SCRIPT_FULL_v1";
+const BUILD = "2026-02-26_rank_all_today_bucketfix__SCRIPT_FULL_v2";
 
 // ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -431,16 +430,13 @@ function penHtmlIfAny(name){
   return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
 }
 
-// =========================
-// script.js  (PART 2 / 3)
-// =========================
-
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
 async function submitToPending(mode, bucket, text, penName, penPin, clientId){
   const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
+    cache: "no-store",
     headers: { "Content-Type":"application/json" },
     body: JSON.stringify({ mode, bucket, text, penName, penPin, clientId, from: "mobile" })
   });
@@ -463,7 +459,7 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   params.set("limit", String(limit));
 
   const url = `${API_BASE}/api/public?${params.toString()}`;
-  const res = await fetch(url, { method: "GET" });
+  const res = await fetch(url, { method: "GET", cache: "no-store" });
 
   if (!res.ok){
     setReindexHint(false);
@@ -512,6 +508,7 @@ async function likeAny(payload){
   const cid = getClientId(); // 端末ID
   const res = await fetch(`${API_BASE}/api/like`, {
     method: "POST",
+    cache: "no-store",
     headers: {
       "Content-Type":"application/json",
       "x-client-id": cid,
@@ -537,9 +534,20 @@ async function fetchRankingToday(mode, bucket, limit = 3){
   params.set("mode", mode);
   params.set("bucket", String(bucket));
   params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, { method:"GET" });
+  const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, { method:"GET", cache:"no-store" });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking failed ${res.status}`);
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+// ✅ NEW: 今日の総合ランキング（全バケット共通）
+async function fetchRankingTodayAll(mode, limit = 3){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/ranking/today_all?${params.toString()}`, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking today_all failed ${res.status}`);
   return Array.isArray(data.items) ? data.items : [];
 }
 
@@ -548,7 +556,7 @@ async function fetchRankingTotal(mode, bucket, limit = 3){
   params.set("mode", mode);
   params.set("bucket", String(bucket));
   params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/total?${params.toString()}`, { method:"GET" });
+  const res = await fetch(`${API_BASE}/api/ranking/total?${params.toString()}`, { method:"GET", cache:"no-store" });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking total failed ${res.status}`);
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
@@ -556,15 +564,13 @@ async function fetchRankingTotal(mode, bucket, limit = 3){
 }
 
 // ✅ 殿堂入り（全バケット共通）
-// worker.js 側が scope=all をデフォルトにしている想定。
-// ここでも明示しておく（事故防止）。
 async function fetchHallOfFame(mode, bucket, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
   params.set("limit", String(limit));
   params.set("scope", "all"); // ✅ 全バケット共通
 
-  const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET" });
+  const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET", cache:"no-store" });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
@@ -639,7 +645,7 @@ async function warmPublicCache(mode, bucket){
     const items = await fetchPublicMetaphors({
       mode: (mode === "fun" ? "fun" : "trivia"),
       bucket: window.bucket10(bucket),
-      limit: 1000
+      limit: 200 // ✅ worker側の上限に合わせる
     });
     publicCache.set(k, items);
   }catch{
@@ -774,10 +780,6 @@ function applyTheme(rounded){
     console.warn("applyTheme error", e);
   }
 }
-
-// =========================
-// script.js  (PART 3 / 3)
-// =========================
 
 // =========================
 // ✅ いいねUI：既存HTMLを活かしつつ、足りない要素は自動生成
@@ -979,11 +981,10 @@ function updateLikeUI(slot) {
   btnEl.onclick = async () => {
     btnEl.disabled = true;
     try{
-      const mainBucket = getCurrentMainBucket();
       const out = await likeAny({
         id: phraseObj.id,
         mode: phraseObj.mode || getSelectedMode(),
-        bucket: Number(mainBucket ?? phraseObj.bucket ?? 0),
+        bucket: Number(phraseObj.bucket ?? 0), // ✅ FIX: slotのbucketを使う（最大バケットに寄せない）
         text: phraseObj.text,
         penName: normalizePenName(phraseObj.penName),
         source: phraseObj.source || null,
@@ -1330,6 +1331,12 @@ async function renderRanking(){
 
     wrap.innerHTML = `
       <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
+        <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
+        <div class="muted" id="rankingBodyTodayAll">読み込み中…</div>
+      </div>
+
+      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
         <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
         <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（毎日0:00にリセット）</div>
         <div class="muted" id="rankingBodyToday">読み込み中…</div>
@@ -1348,11 +1355,35 @@ async function renderRanking(){
       </div>
     `;
 
+    const bodyTodayAll = document.getElementById("rankingBodyTodayAll");
     const bodyToday = document.getElementById("rankingBodyToday");
     const bodyTotal = document.getElementById("rankingBodyTotal");
     const bodyHof   = document.getElementById("rankingBodyHof");
 
-    // ---- 今日TOP3 ----
+    // ---- 今日TOP3（全バケット共通） ----
+    try{
+      const items = (await fetchRankingTodayAll(mode, 3))
+        .filter(it => !isNgText(it?.text));
+
+      if (!items.length) {
+        if (bodyTodayAll) bodyTodayAll.textContent = "まだランキングがありません（今日の👍が0件）";
+      } else {
+        const rows = items.map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}</div>
+              <div class="muted">今日の👍：${Number(it.likes||0)}</div>
+            </div>
+          `;
+        }).join("");
+        if (bodyTodayAll) bodyTodayAll.innerHTML = rows;
+      }
+    } catch (e) {
+      if (bodyTodayAll) bodyTodayAll.textContent = `総合ランキング取得に失敗：${e?.message || e}`;
+    }
+
+    // ---- 今日TOP3（バケット別） ----
     try{
       const items = (await fetchRankingToday(mode, bucket, 3))
         .filter(it => !isNgText(it?.text));
@@ -1375,7 +1406,7 @@ async function renderRanking(){
       if (bodyToday) bodyToday.textContent = `ランキング取得に失敗：${e?.message || e}`;
     }
 
-    // ---- 累計TOP3 ----
+    // ---- 累計TOP3（バケット別） ----
     try{
       const items = (await fetchRankingTotal(mode, bucket, 3))
         .filter(it => !isNgText(it?.text));
@@ -1957,7 +1988,7 @@ async function syncMySubmissionsStatus(){
 
     if (ids.length === 0) return;
 
-    const res = await fetch(`${API_BASE}/api/status?ids=${encodeURIComponent(ids.join(","))}`, { method:"GET" });
+    const res = await fetch(`${API_BASE}/api/status?ids=${encodeURIComponent(ids.join(","))}`, { method:"GET", cache:"no-store" });
     const data = await res.json().catch(()=>null);
 
     if (!res.ok || !data?.ok) {
