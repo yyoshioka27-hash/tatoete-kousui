@@ -10,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-02-26_rank_all_today_bucketfix__SCRIPT_FULL_v2";
+const BUILD = "2026-02-27_latestfold_rank2__SCRIPT_FULL_v3";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -186,6 +186,15 @@ function hasHard100PercentMismatch(text, bucket){
       background: rgba(255,255,255,.75);
       margin-left:6px;
     }
+
+    /* ✅ 最新枠のdetails見た目 */
+    .latest-details summary{
+      cursor:pointer;
+      user-select:none;
+      font-weight:900;
+      list-style:none;
+    }
+    .latest-details summary::-webkit-details-marker{ display:none; }
   `;
   document.head.appendChild(style);
 })();
@@ -468,6 +477,34 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
       penName: (it.penName ? String(it.penName).trim() : null),
       totalLikes: Number(it.totalLikes || 0),
       hof: !!it.hof
+    }))
+    .filter(x => x.id && x.text)
+    .filter(x => !isNgText(x.text));
+}
+
+// ==============================
+// ✅ 最新public（Workers /api/public_latest）
+// ==============================
+async function fetchPublicLatest(mode, limit = 20){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("limit", String(limit));
+
+  const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `public_latest failed ${res.status}`);
+
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items
+    .map(it => ({
+      id: String(it.id || "").trim(),
+      text: String(it.text || "").trim(),
+      penName: it.penName ? String(it.penName).trim() : null,
+      bucket: Number(it.bucket ?? 0),
+      approvedAt: it.approvedAt ?? null,
+      mode: (it.mode === "fun" ? "fun" : "trivia"),
     }))
     .filter(x => x.id && x.text)
     .filter(x => !isNgText(x.text));
@@ -944,7 +981,7 @@ function updateLikeUI(slot) {
       const out = await likeAny({
         id: phraseObj.id,
         mode: phraseObj.mode || getSelectedMode(),
-        bucket: Number(phraseObj.bucket ?? 0), // ✅ slotのbucketを使う（最大バケット寄せをしない）
+        bucket: Number(phraseObj.bucket ?? 0),
         text: phraseObj.text,
         penName: normalizePenName(phraseObj.penName),
         source: phraseObj.source || null,
@@ -1233,6 +1270,17 @@ function ensureRankingDom(){
 }
 
 // =========================
+// ✅ 最新枠（折り畳み）の開閉状態を保存
+// =========================
+const LATEST_OPEN_KEY = "latest_open_v1";
+function loadLatestOpen(){
+  try { return localStorage.getItem(LATEST_OPEN_KEY) === "1"; } catch { return false; }
+}
+function saveLatestOpen(open){
+  try { localStorage.setItem(LATEST_OPEN_KEY, open ? "1" : "0"); } catch {}
+}
+
+// =========================
 // ✅ ランキング固定（検索成功 or モード変更 のときだけ更新）
 // =========================
 let __rankingRenderedKey = null;
@@ -1268,6 +1316,7 @@ async function renderRankingOnce(key){
 
 // =========================
 // ランキング表示（中身）
+// ✅ 表示は「最新（折り畳み）＋今日の総合TOP3＋殿堂入り」だけ
 // =========================
 async function renderRanking(){
   try{
@@ -1275,33 +1324,25 @@ async function renderRanking(){
     const wrap = document.getElementById("todayRankingWrap");
     if (!wrap) return;
 
-    const bucket = getCurrentMainBucket();
     const mode = getSelectedMode();
-
-    if (bucket == null) {
-      wrap.innerHTML = "";
-      return;
-    }
-
     const hofTh = Number(state.hofThreshold || 20);
+    const latestOpen = loadLatestOpen();
 
     wrap.innerHTML = `
+      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
+          <summary style="display:flex; align-items:center; justify-content:space-between;">
+            <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
+            <span class="muted" style="font-size:12px;">（開くと20件）</span>
+          </summary>
+          <div class="muted" style="margin-top:10px;" id="latestBody">読み込み中…</div>
+        </details>
+      </div>
+
       <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
         <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
         <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
         <div class="muted" id="rankingBodyTodayAll">読み込み中…</div>
-      </div>
-
-      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
-        <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（毎日0:00にリセット）</div>
-        <div class="muted" id="rankingBodyToday">読み込み中…</div>
-      </div>
-
-      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">累計ランキング TOP3（${bucket}% / ${mode==="fun"?"お笑い":"雑学"}）</div>
-        <div class="muted" style="margin-bottom:8px;">※累計👍（全期間）で集計</div>
-        <div class="muted" id="rankingBodyTotal">読み込み中…</div>
       </div>
 
       <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
@@ -1311,10 +1352,44 @@ async function renderRanking(){
       </div>
     `;
 
+    // ✅ 開閉状態保存
+    try{
+      const det = document.getElementById("latestDetails");
+      if (det && !det.dataset.wired){
+        det.dataset.wired = "1";
+        det.addEventListener("toggle", () => {
+          saveLatestOpen(!!det.open);
+        });
+      }
+    }catch{}
+
+    const latestBody  = document.getElementById("latestBody");
     const bodyTodayAll = document.getElementById("rankingBodyTodayAll");
-    const bodyToday = document.getElementById("rankingBodyToday");
-    const bodyTotal = document.getElementById("rankingBodyTotal");
-    const bodyHof   = document.getElementById("rankingBodyHof");
+    const bodyHof      = document.getElementById("rankingBodyHof");
+
+    // ---- 最新（折り畳み）----
+    try{
+      const items = (await fetchPublicLatest(mode, 20))
+        .filter(it => !isNgText(it?.text));
+
+      if (!items.length) {
+        if (latestBody) latestBody.textContent = "最新の公開ネタがまだありません";
+      } else {
+        const rows = items.map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          const bkt = Number(it.bucket ?? 0);
+          const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${bktTag}</div>
+            </div>
+          `;
+        }).join("");
+        if (latestBody) latestBody.innerHTML = rows;
+      }
+    } catch (e) {
+      if (latestBody) latestBody.textContent = `最新の取得に失敗：${e?.message || e}`;
+    }
 
     // ---- 今日TOP3（全バケット共通） ----
     try{
@@ -1339,60 +1414,11 @@ async function renderRanking(){
       if (bodyTodayAll) bodyTodayAll.textContent = `総合ランキング取得に失敗：${e?.message || e}`;
     }
 
-    // ---- 今日TOP3（バケット別） ----
-    try{
-      const items = (await fetchRankingToday(mode, bucket, 3))
-        .filter(it => !isNgText(it?.text));
-
-      if (!items.length) {
-        if (bodyToday) bodyToday.textContent = "まだランキングがありません（今日の👍が0件）";
-      } else {
-        const rows = items.map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}</div>
-              <div class="muted">今日の👍：${Number(it.likes||0)}</div>
-            </div>
-          `;
-        }).join("");
-        if (bodyToday) bodyToday.innerHTML = rows;
-      }
-    } catch (e) {
-      if (bodyToday) bodyToday.textContent = `ランキング取得に失敗：${e?.message || e}`;
-    }
-
-    // ---- 累計TOP3（バケット別） ----
-    try{
-      const items = (await fetchRankingTotal(mode, bucket, 3))
-        .filter(it => !isNgText(it?.text));
-
-      if (!items.length) {
-        if (bodyTotal) bodyTotal.textContent = "まだ累計ランキングがありません（累計👍が0件）";
-      } else {
-        const rows = items.map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          const totalLikes = Number(it.totalLikes || 0);
-          const hof = !!it.hof || (totalLikes >= Number(state.hofThreshold || 20));
-          const hofTag = hof ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${hofTag}</div>
-              <div class="muted">累計👍：${totalLikes}</div>
-            </div>
-          `;
-        }).join("");
-        if (bodyTotal) bodyTotal.innerHTML = rows;
-      }
-    } catch (e) {
-      if (bodyTotal) bodyTotal.textContent = `累計ランキング取得に失敗：${e?.message || e}`;
-    }
-
     // ---- 殿堂入り（全モード共通：trivia+fun を合体）----
     try{
       const [tItems, fItems] = await Promise.all([
-        fetchHallOfFame("trivia", bucket, 200),
-        fetchHallOfFame("fun",    bucket, 200),
+        fetchHallOfFame("trivia", 0, 200),
+        fetchHallOfFame("fun",    0, 200),
       ]);
 
       const merged = [...tItems, ...fItems]
@@ -1627,6 +1653,8 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
       }catch(e){
         console.warn("renderRankingOnce(on mode change) failed", e);
       }
+    } else {
+      // 地点未選択でも最新/ランキングだけは見たい場合 → ここは何もしない（固定仕様）
     }
   })
 );
@@ -2063,6 +2091,9 @@ async function init(){
 
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
+
+  // ✅ 起動直後にランキング枠を空でも描画（地点未選択でも最新枠は見たい場合）
+  // ただし「固定キー仕様」と衝突しないよう、ここでは renderRanking は呼ばない（必要なら後で）
 }
 
 if (document.readyState === "loading") {
