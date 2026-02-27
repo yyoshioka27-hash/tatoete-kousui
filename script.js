@@ -3,7 +3,7 @@
 // ✅ 仕様：ランキングは
 //   1) 検索（候補選択→天気取得成功）後に表示して固定
 //   2) それ以降は「再度検索するまで」変えない
-//   3) ただし「モード切替時」はランキング更新したい（←要望）
+//   3) ただし「モード切替時」はランキング更新したい
 //   4) 候補を変えただけ（同じ地点名でも lat/lon が違えば）でも更新したい
 // =========================
 
@@ -12,7 +12,7 @@
 // =========================
 const BUILD = "2026-02-26_rank_all_today_bucketfix__SCRIPT_FULL_v2";
 
-// ✅ API_BASE（あなたのPCで /api/health がOKだった“正”）
+// ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
 // =========================
@@ -30,11 +30,8 @@ function getClientId(){
 
 // ==============================
 // ✅ 今日の使用者カウント（DAU）
-// - 天気検索が「成功」した時にだけ、1日1回だけ /api/usage/ping を叩く
-// - 成功した時だけ localStorage に記録（失敗時は再送できる）
 // ==============================
 function todayJSTString(){
-  // JST(+9)でYYYY-MM-DD
   const d = new Date(Date.now() + 9 * 60 * 60 * 1000);
   return d.toISOString().slice(0, 10);
 }
@@ -44,14 +41,11 @@ function getOrCreateDeviceId(){
   try{
     let v = localStorage.getItem(key);
     if (v && v.length >= 16) return v;
-
-    // UUIDっぽい軽量版（十分）
     const r = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
     v = `d_${r()}${r()}`;
     localStorage.setItem(key, v);
     return v;
   }catch{
-    // localStorage不可でも一応動く（毎回変わるが致命ではない）
     const r = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
     return `d_${r()}${r()}`;
   }
@@ -61,15 +55,12 @@ async function pingUsageOncePerDay(reason="wx_ok"){
   const dayKey = "usage_ping_day_v1";
   const day = todayJSTString();
 
-  // ✅ 既に「今日成功済み」なら終了
   try{
     const done = localStorage.getItem(dayKey);
     if (done === day) return;
   }catch{}
 
   const deviceId = getOrCreateDeviceId();
-
-  // ✅ worker.js が POST 想定なので POST に統一（GETだと0固定になりやすい）
   const url = `${API_BASE}/api/usage/ping?d=${encodeURIComponent(deviceId)}&r=${encodeURIComponent(reason)}&v=${encodeURIComponent(BUILD)}`;
 
   try{
@@ -90,22 +81,19 @@ async function pingUsageOncePerDay(reason="wx_ok"){
       clearTimeout(t);
     }
 
-    // ✅ 成功時だけ「今日済み」を保存（ここが超重要）
     if (res.ok && data?.ok) {
       try{ localStorage.setItem(dayKey, day); }catch{}
       return;
     }
 
     console.warn("usage ping not ok", res?.status, data);
-
   }catch(e){
     console.warn("usage ping failed", e?.message || e);
   }
 }
 
 // =========================
-// ✅FIX: render 多重呼び出し防止（固まり対策）
-// requestAnimationFrame で 1フレームに 1回だけ render
+// ✅ render 多重呼び出し防止
 // =========================
 let __renderQueued = false;
 function scheduleRender(){
@@ -118,7 +106,7 @@ function scheduleRender(){
 }
 
 // =========================
-// ✅ NGワード（表示から除外したい文字列）
+// ✅ NGワード
 // =========================
 const NG_PHRASES = [
   "共通テスト",
@@ -139,28 +127,24 @@ function hasMismatchedPercent(text, bucket){
 
     const re = /(\d{1,3})\s*%/g;
     let m;
-
     while ((m = re.exec(t)) !== null){
       const p = Number(m[1]);
       if (!Number.isFinite(p)) continue;
       if (p < 0 || p > 100) continue;
-
-      // ✅ 1つでもズレてたら除外
       if (p !== b) return true;
     }
-    return false; // %が無いならOK
+    return false;
   }catch{
     return false;
   }
 }
 
-// ✅ 「100%/100％」だけは、bucketが100以外なら確実に除外（0%に100%ネタ混入対策）
 function hasHard100PercentMismatch(text, bucket){
   try{
     const t = String(text || "");
     const b = Number(bucket);
     if (!Number.isFinite(b)) return false;
-    if (b === 100) return false; // 100%バケットならOK
+    if (b === 100) return false;
     return /100\s*(%|％)/.test(t);
   }catch{
     return false;
@@ -168,7 +152,7 @@ function hasHard100PercentMismatch(text, bucket){
 }
 
 // =========================
-// ✅ いいね演出用CSSを注入（HTML改修不要）
+// ✅ いいね演出CSS
 // =========================
 (function injectLikeFxCSS(){
   const id = "likeFxCSS_v1";
@@ -190,10 +174,8 @@ function hasHard100PercentMismatch(text, bucket){
     }
     .like-plusone.__fly { transform: translateY(-18px); opacity: 0; }
 
-    /* ✅匿名を薄く */
     .pen-muted { opacity: .55; font-weight: 700; }
 
-    /* ✅殿堂入りバッジ */
     .hof-badge{
       display:inline-block;
       padding:2px 8px;
@@ -219,7 +201,6 @@ function likeFxPlusOne(btnEl){
   try{
     const parent = btnEl.parentElement;
     if (!parent) return;
-
     const cs = window.getComputedStyle(parent);
     if (cs.position === "static") parent.style.position = "relative";
 
@@ -237,7 +218,7 @@ function likeFxPlusOne(btnEl){
 }
 
 // ==============================
-// ✅ 合言葉（PIN）入力欄をJS側で自動生成（HTML改修不要）
+// ✅ 合言葉（PIN）入力欄をJS側で自動生成
 // ==============================
 (function ensurePenPinDom(){
   const pen = document.getElementById("penName");
@@ -246,19 +227,15 @@ function likeFxPlusOne(btnEl){
 
   const pin = document.createElement("input");
   pin.id = "penPin";
-
   pin.type = "text";
-  pin.style.webkitTextSecurity = "disc"; // 伏せ字（Safari/iOS向け）
+  pin.style.webkitTextSecurity = "disc";
   pin.setAttribute("inputmode", "text");
   pin.setAttribute("lang", "ja");
-
   pin.autocomplete = "off";
   pin.autocapitalize = "none";
   pin.autocorrect = "off";
   pin.spellcheck = false;
-
   pin.placeholder = "合言葉（初回登録/別端末ログイン用）";
-
   pin.style.width = "100%";
   pin.style.boxSizing = "border-box";
   pin.style.marginTop = "8px";
@@ -276,7 +253,7 @@ function likeFxPlusOne(btnEl){
 })();
 
 // ==============================
-// ✅ モバイルで「雑学/お笑い」の位置ズレを強制整列（HTML改修不要）
+// ✅ モバイルで「雑学/お笑い」位置ズレ整列
 // ==============================
 function fixModeToggleAlignment(){
   try{
@@ -353,7 +330,7 @@ function escapeHtml(s) {
 }
 
 // =========================
-// ✅ 復旧（reindex）案内UI（HTML改修不要）
+// ✅ 復旧（reindex）案内UI
 // =========================
 function ensureReindexHintDom(){
   if (document.getElementById("reindexHint")) return;
@@ -450,7 +427,6 @@ async function submitToPending(mode, bucket, text, penName, penPin, clientId){
 
 // ==============================
 // publicネタ取得（Workers）
-// 返り値：[{id, text, penName, totalLikes, hof}, ...]
 // ==============================
 async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   const params = new URLSearchParams();
@@ -472,7 +448,6 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
     throw new Error("public not ok");
   }
 
-  // ✅ /api/public が idx 空を示すなら「復旧（reindex）」を案内
   try{
     const note = String(data?.note || "");
     const itemsRaw = Array.isArray(data?.items) ? data.items : [];
@@ -483,7 +458,6 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
     }
   }catch{}
 
-  // ✅ 殿堂入り閾値も受け取る（無ければ20）
   state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
 
   const items = Array.isArray(data.items) ? data.items : [];
@@ -501,11 +475,9 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 
 // ==============================
 // ✅ いいね（Workers）
-// - public/base/json すべて対象
-// - ✅ x-client-id を必ず送る（同一Wi-Fi巻き添え防止）
 // ==============================
 async function likeAny(payload){
-  const cid = getClientId(); // 端末ID
+  const cid = getClientId();
   const res = await fetch(`${API_BASE}/api/like`, {
     method: "POST",
     cache: "no-store",
@@ -515,7 +487,7 @@ async function likeAny(payload){
     },
     body: JSON.stringify({
       ...payload,
-      clientId: cid, // bodyにも入れて保険（worker側がbody参照でもOK）
+      clientId: cid,
     })
   });
 
@@ -540,7 +512,7 @@ async function fetchRankingToday(mode, bucket, limit = 3){
   return Array.isArray(data.items) ? data.items : [];
 }
 
-// ✅ NEW: 今日の総合ランキング（全バケット共通）
+// ✅ 今日の総合ランキング（全バケット共通）
 async function fetchRankingTodayAll(mode, limit = 3){
   const params = new URLSearchParams();
   params.set("mode", mode);
@@ -568,8 +540,7 @@ async function fetchHallOfFame(mode, bucket, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
   params.set("limit", String(limit));
-  params.set("scope", "all"); // ✅ 全バケット共通
-
+  params.set("scope", "all");
   const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET", cache:"no-store" });
   const data = await res.json().catch(()=>null);
   if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
@@ -582,7 +553,6 @@ async function fetchHallOfFame(mode, bucket, limit = 50){
 // ==============================
 const SHARED_JSON_URL = "./metaphors.json";
 let sharedItems = [];
-
 window.JSON_METAPHORS = window.JSON_METAPHORS || [];
 
 async function loadSharedJSON() {
@@ -645,7 +615,7 @@ async function warmPublicCache(mode, bucket){
     const items = await fetchPublicMetaphors({
       mode: (mode === "fun" ? "fun" : "trivia"),
       bucket: window.bucket10(bucket),
-      limit: 200 // ✅ worker側の上限に合わせる
+      limit: 200
     });
     publicCache.set(k, items);
   }catch{
@@ -684,9 +654,9 @@ window.bucket10 = window.bucket10 || function (p) {
 const GEO = "https://geocoding-api.open-meteo.com/v1/search";
 const FC  = "https://api.open-meteo.com/v1/forecast";
 
-// ✅ 天気を「体感最速」にするためのキャッシュ（SWR）
+// ✅ SWRキャッシュ
 const WX_CACHE_KEY = "wx_pops_cache_v1";
-const WX_CACHE_TTL_MS = 10 * 60 * 1000; // 10分
+const WX_CACHE_TTL_MS = 10 * 60 * 1000;
 
 function wxKey(lat, lon){
   const la = Math.round(Number(lat) * 100) / 100;
@@ -710,9 +680,8 @@ async function fetchWithTimeout(url, ms = 4500){
   }
 }
 
-// ✅ 上部ネタ固定フラグ（ランキング更新では再抽選しない）
 let __freezeMetaphor = false;
-window.__forceRepick = false; // true のときだけ朝昼夜を再抽選する
+window.__forceRepick = false;
 
 // =========================
 // state
@@ -723,11 +692,8 @@ let state = {
   tz: null,
   source: "API: 未接続",
   hofThreshold: 20,
-
-  // ✅ 候補選択した座標（ランキング固定キーに使う）
   selectedLat: null,
   selectedLon: null,
-
   currentPhrases: {
     m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null },
     d: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null },
@@ -735,7 +701,7 @@ let state = {
   }
 };
 
-// ✅ 全ネタを一意ID化（base/json も集計対象）
+// ✅ 全ネタ一意ID（base/jsonも集計対象）
 function fnv1a32(str){
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++){
@@ -750,7 +716,7 @@ function makeGlobalId({mode, bucket, text, source}){
   return `t_${m}_${fnv1a32(`${m}|${t}`)}`;
 }
 
-// お天気アイコン（%の前）
+// アイコン
 function iconForPop(roundedPop) {
   const p = Number(roundedPop);
   if (p <= 20) return "☀️";
@@ -764,7 +730,7 @@ function setIcon(slotKey, roundedPop) {
   el.textContent = iconForPop(roundedPop);
 }
 
-// theme：降水確率で背景を変える
+// theme
 function applyTheme(rounded){
   try{
     const body = document.body;
@@ -782,7 +748,7 @@ function applyTheme(rounded){
 }
 
 // =========================
-// ✅ いいねUI：既存HTMLを活かしつつ、足りない要素は自動生成
+// ✅ いいねUI DOM補完
 // =========================
 function ensureLikeDom(slot){
   const btn = document.getElementById(`like_${slot}`);
@@ -830,12 +796,8 @@ function ensureLikeDom(slot){
 function getSelectedMode() {
   const el = document.querySelector('input[name="mode"]:checked');
   const v = (el ? String(el.value || "").trim() : "");
-
-  // ✅ 正規化：HTMLが日本語valueでも吸収
   if (v === "fun" || v === "お笑い") return "fun";
   if (v === "trivia" || v === "雑学") return "trivia";
-
-  // ✅ 想定外は trivia に倒す（事故防止）
   return "trivia";
 }
 
@@ -873,7 +835,6 @@ function buildCandidatePool(mode, bucket) {
   }));
 
   const publicItems = getPublicItems(m, b);
-
   const merged = [...publicItems, ...jsonItems, ...baseItems];
 
   const out = [];
@@ -922,7 +883,6 @@ function pickMetaphor(mode, bucket) {
   return picked;
 }
 
-// ✅ ランキングが参照する “代表バケット”
 function getCurrentMainBucket(){
   if (!state?.pops) return null;
   const arr = [state.pops.m, state.pops.d, state.pops.e].filter(v => v != null);
@@ -931,7 +891,7 @@ function getCurrentMainBucket(){
 }
 
 // =========================
-// ✅ いいねUI（公開ネタ＝全部対象）
+// ✅ いいねUI（public/base/jsonすべてOK）
 // =========================
 function updateLikeUI(slot) {
   ensureLikeDom(slot);
@@ -984,11 +944,11 @@ function updateLikeUI(slot) {
       const out = await likeAny({
         id: phraseObj.id,
         mode: phraseObj.mode || getSelectedMode(),
-        bucket: Number(phraseObj.bucket ?? 0), // ✅ FIX: slotのbucketを使う（最大バケットに寄せない）
+        bucket: Number(phraseObj.bucket ?? 0), // ✅ slotのbucketを使う（最大バケット寄せをしない）
         text: phraseObj.text,
         penName: normalizePenName(phraseObj.penName),
         source: phraseObj.source || null,
-        clientId: getClientId(), // ✅ 保険（likeAny内部でも入れてる）
+        clientId: getClientId(),
       });
 
       likeFxPop(btnEl);
@@ -999,7 +959,6 @@ function updateLikeUI(slot) {
       state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
 
       updateLikeUI(slot);
-
     }catch(e){
       alert(`いいね失敗：${e?.message || e}`);
     }finally{
@@ -1008,7 +967,6 @@ function updateLikeUI(slot) {
   };
 }
 
-// 「このネタを削除」：ローカルネタ廃止につき常に非表示
 function updateDeleteUI(slotKey) {
   const btn = document.getElementById(`del_${slotKey}`);
   if (!btn) return;
@@ -1094,7 +1052,6 @@ function render() {
       picked = pickMetaphor(mode, rounded);
     }
 
-    // ✅ 万一 NG を引いたら再抽選（最大5回）
     for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
       picked = pickMetaphor(mode, rounded);
     }
@@ -1186,7 +1143,7 @@ function render() {
 }
 
 // =========================
-// API
+// API: geocode
 // =========================
 async function geocode(name) {
   const url = new URL(GEO);
@@ -1199,7 +1156,7 @@ async function geocode(name) {
   return await res.json();
 }
 
-// ✅（内部）Open-Meteoへ“生”で取りに行く本体
+// ✅（内部）天気取得本体
 async function fetchPopsBySlotsNetwork(lat, lon, timeoutMs = 4500) {
   const url = new URL(FC);
   url.searchParams.set("latitude", String(lat));
@@ -1239,7 +1196,7 @@ async function fetchPopsBySlotsNetwork(lat, lon, timeoutMs = 4500) {
   };
 }
 
-// ✅（表）天気を体感最速で返す：SWR（キャッシュ即表示→裏で更新）
+// ✅（表）SWR（キャッシュ即表示→裏で更新）
 async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}) {
   const key = wxKey(lat, lon);
   const cache = loadWxCache();
@@ -1253,7 +1210,6 @@ async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}
   }
 
   const out = await fetchPopsBySlotsNetwork(lat, lon, timeoutMs);
-
   cache[key] = { ts: Date.now(), pops: out.pops, tz: out.tz || null };
   saveWxCache(cache);
 
@@ -1261,7 +1217,7 @@ async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}
 }
 
 // =========================
-// ✅ ランキングDOM（既にindexにあるなら何もしない）
+// ✅ ランキングDOM
 // =========================
 function ensureRankingDom(){
   if (document.getElementById("todayRankingWrap")) return;
@@ -1303,41 +1259,9 @@ function getRankingKeyNow(){
   return makeRankingKey({ mode, bucket, lat, lon });
 }
 
-
-
-// =========================
-// ランキング表示（中身）
-// =========================
-// =========================
-// ✅ ランキング固定（検索成功 or モード変更 のときだけ更新）
-// =========================
-let __rankingRenderedKey = null;
-
-function makeRankingKey({ mode, bucket, lat, lon }){
-  const mv = String(mode || "").trim();
-  const m = (mv === "fun" || mv === "お笑い") ? "fun" : "trivia";
-  const b = (bucket == null) ? "null" : String(window.bucket10(bucket));
-  const la = (lat == null) ? "null" : String(Math.round(Number(lat) * 10000) / 10000);
-  const lo = (lon == null) ? "null" : String(Math.round(Number(lon) * 10000) / 10000);
-  return `${m}|${b}|${la},${lo}`;
-}
-
-function invalidateRanking(){
-  __rankingRenderedKey = null;
-}
-
-function getRankingKeyNow(){
-  const mode = getSelectedMode();
-  const bucket = getCurrentMainBucket();
-  const lat = state.selectedLat;
-  const lon = state.selectedLon;
-  if (bucket == null || lat == null || lon == null) return null;
-  return makeRankingKey({ mode, bucket, lat, lon });
-}
-
 async function renderRankingOnce(key){
   if (!key) return;
-  if (__rankingRenderedKey === key) return; // ✅固定：同じキーなら更新しない
+  if (__rankingRenderedKey === key) return;
   __rankingRenderedKey = key;
   await renderRanking();
 }
@@ -1503,7 +1427,6 @@ async function renderRanking(){
 
         if (bodyHof) bodyHof.innerHTML = rows + more;
       }
-
     } catch (e) {
       if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
     }
@@ -1512,8 +1435,9 @@ async function renderRanking(){
     console.warn("renderRanking error", e);
   }
 }
+
 // =========================
-// ✅ 承認フラグがあれば「次の地域検索成功」で花火（1回だけ）
+// ✅ 承認フラグがあれば次の検索成功で花火
 // =========================
 function fireIfApprovedOnNextSearch(){
   try{
@@ -1679,7 +1603,7 @@ function fireIfApprovedOnNextSearch(){
 })();
 
 // =========================
-// mode 切替（ランキングは更新したい）
+// mode 切替（ランキング更新）
 // =========================
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
@@ -1849,7 +1773,6 @@ function fireworksOnce(){
 
     __fwCtx.globalCompositeOperation = "source-over";
     __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    __fwCtx.globalCompositeOperation = "source-over";
 
     for (let i=__fwParticles.length-1; i>=0; i--){
       const p = __fwParticles[i];
@@ -1889,40 +1812,6 @@ function stopFireworks(){
   if (__fwCtx) __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
   if (__fwCanvas) __fwCanvas.style.opacity = "0";
 }
-
-// =========================
-// Debug button (only ?debug=1)
-// =========================
-(function setupFireworksDebugButton(){
-  try{
-    const params = new URLSearchParams(location.search);
-    if (params.get("debug") !== "1") return;
-    if (document.getElementById("fwDebugBtn")) return;
-
-    const btn = document.createElement("button");
-    btn.id = "fwDebugBtn";
-    btn.textContent = "🎆 花火テスト";
-    btn.style.position = "fixed";
-    btn.style.right = "12px";
-    btn.style.bottom = "12px";
-    btn.style.zIndex = "1000000";
-    btn.style.padding = "10px 12px";
-    btn.style.borderRadius = "12px";
-    btn.style.border = "1px solid rgba(15,23,42,.15)";
-    btn.style.background = "#0f172a";
-    btn.style.color = "#fff";
-    btn.style.fontSize = "14px";
-    btn.style.boxShadow = "0 10px 24px rgba(2,6,23,.18)";
-
-    btn.addEventListener("click", () => {
-      try{ fireworksOnce(); } catch(e){ console.warn("fireworks error", e); }
-    });
-
-    document.body.appendChild(btn);
-  }catch(e){
-    console.warn("setupFireworksDebugButton error", e);
-  }
-})();
 
 // ==============================
 // ✅ ネタ追加（承認待ちへ送信）
@@ -2014,7 +1903,7 @@ function wireSubmit(){
 }
 
 // ==============================
-// ✅ 自分の投稿：承認状態をWorkersで同期（pending→approved）
+// ✅ 自分の投稿：承認状態同期
 // ==============================
 async function syncMySubmissionsStatus(){
   try{
@@ -2051,7 +1940,6 @@ async function syncMySubmissionsStatus(){
       const id = String(x?.id || "").trim();
 
       const prev = String(x?.status || "pending");
-
       const st = map.get(serverId) || map.get(clientId) || map.get(id);
       if (!st) return x;
 
@@ -2066,7 +1954,6 @@ async function syncMySubmissionsStatus(){
       return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
     });
 
-    // ✅ 承認済み(approved) と サーバ削除(missing) はローカルから消す
     const cleaned = next.filter(x => {
       const st = String(x?.status || "");
       return (st !== "approved" && st !== "missing");
@@ -2191,7 +2078,6 @@ if (document.readyState === "loading") {
   const el = document.getElementById("openAppQr");
   if (!el || !window.QRCode) return;
 
-  // ✅ 配布用：固定URL（今のURLではなくこれが安定）
   const url = "https://yyoshioka27-hash.github.io/tatoete-kousui/";
 
   el.innerHTML = "";
