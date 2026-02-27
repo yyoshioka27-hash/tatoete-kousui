@@ -1303,7 +1303,39 @@ function getRankingKeyNow(){
   return makeRankingKey({ mode, bucket, lat, lon });
 }
 
-async function Once(key){
+
+
+// =========================
+// ランキング表示（中身）
+// =========================
+// =========================
+// ✅ ランキング固定（検索成功 or モード変更 のときだけ更新）
+// =========================
+let __rankingRenderedKey = null;
+
+function makeRankingKey({ mode, bucket, lat, lon }){
+  const mv = String(mode || "").trim();
+  const m = (mv === "fun" || mv === "お笑い") ? "fun" : "trivia";
+  const b = (bucket == null) ? "null" : String(window.bucket10(bucket));
+  const la = (lat == null) ? "null" : String(Math.round(Number(lat) * 10000) / 10000);
+  const lo = (lon == null) ? "null" : String(Math.round(Number(lon) * 10000) / 10000);
+  return `${m}|${b}|${la},${lo}`;
+}
+
+function invalidateRanking(){
+  __rankingRenderedKey = null;
+}
+
+function getRankingKeyNow(){
+  const mode = getSelectedMode();
+  const bucket = getCurrentMainBucket();
+  const lat = state.selectedLat;
+  const lon = state.selectedLon;
+  if (bucket == null || lat == null || lon == null) return null;
+  return makeRankingKey({ mode, bucket, lat, lon });
+}
+
+async function renderRankingOnce(key){
   if (!key) return;
   if (__rankingRenderedKey === key) return; // ✅固定：同じキーなら更新しない
   __rankingRenderedKey = key;
@@ -1349,7 +1381,7 @@ async function renderRanking(){
       </div>
 
       <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全バケット共通 / 累計👍${hofTh}以上）</div>
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
         <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
         <div class="muted" id="rankingBodyHof">読み込み中…</div>
       </div>
@@ -1433,50 +1465,52 @@ async function renderRanking(){
     }
 
     // ---- 殿堂入り（全モード共通：trivia+fun を合体）----
-try{
-  const [tItems, fItems] = await Promise.all([
-    fetchHallOfFame("trivia", bucket, 200),
-    fetchHallOfFame("fun",    bucket, 200),
-  ]);
+    try{
+      const [tItems, fItems] = await Promise.all([
+        fetchHallOfFame("trivia", bucket, 200),
+        fetchHallOfFame("fun",    bucket, 200),
+      ]);
 
-  const merged = [...tItems, ...fItems]
-    .filter(it => !isNgText(it?.text))
-    // id重複排除（同文が両方に居る可能性に備える）
-    .reduce((acc, it) => {
-      const id = String(it?.id || "");
-      if (!id) return acc;
-      if (!acc.map.has(id)) { acc.map.set(id, it); acc.arr.push(it); }
-      return acc;
-    }, { map:new Map(), arr:[] }).arr
-    // totalLikesで降順
-    .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
+      const merged = [...tItems, ...fItems]
+        .filter(it => !isNgText(it?.text))
+        .reduce((acc, it) => {
+          const id = String(it?.id || "");
+          if (!id) return acc;
+          if (!acc.map.has(id)) { acc.map.set(id, it); acc.arr.push(it); }
+          return acc;
+        }, { map:new Map(), arr:[] }).arr
+        .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
 
-  const hofTh2 = Number(state.hofThreshold || 20);
+      const hofTh2 = Number(state.hofThreshold || 20);
 
-  if (!merged.length) {
-    if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
-  } else {
-    const rows = merged.slice(0, 20).map((it, idx) => {
-      const pen = penHtmlIfAny(it.penName);
-      const totalLikes = Number(it.totalLikes || 0);
-      // どっちのモードか表示したいならここで it.mode があれば出せる（今はhofレスポンスにmode入れてない）
-      return `
-        <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-          <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen} <span class="hof-badge">👑殿堂入り</span></div>
-          <div class="muted">累計👍：${totalLikes}</div>
-        </div>
-      `;
-    }).join("");
+      if (!merged.length) {
+        if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
+      } else {
+        const rows = merged.slice(0, 20).map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          const totalLikes = Number(it.totalLikes || 0);
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen} <span class="hof-badge">👑殿堂入り</span></div>
+              <div class="muted">累計👍：${totalLikes}</div>
+            </div>
+          `;
+        }).join("");
 
-    const more = (merged.length > 20)
-      ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
-      : "";
+        const more = (merged.length > 20)
+          ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
+          : "";
 
-    if (bodyHof) bodyHof.innerHTML = rows + more;
+        if (bodyHof) bodyHof.innerHTML = rows + more;
+      }
+
+    } catch (e) {
+      if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
+    }
+
+  } catch(e){
+    console.warn("renderRanking error", e);
   }
-
-} catch (e) {
-  if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
 }
 // =========================
 // ✅ 承認フラグがあれば「次の地域検索成功」で花火（1回だけ）
