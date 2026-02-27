@@ -1,14 +1,994 @@
-{
-  "items": [
-    {
-      "mode": "trivia",
-      "bucket": 20,
-      "text": "人が新しい習慣を1週間で定着させられる確率は約20％"
-    },
-    {
-      "mode": "trivia",
-      "bucket": 20,
-      "text": "地球上の水のうち、人間が直接使える淡水は約20％"
-    }
-  ]
+﻿{
+    "items":  [
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "「頑張ったから明日、休んでいいよ。」と言われる確率、0％",
+                      "penName":  "そろそろ育成契約"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "あまりにも寒いので、地球を押して太陽に近づける人、0％",
+                      "penName":  "三遊亭遊遊"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "コイントスをしたらコインが消えてしまう確率、0%",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "ゴルフで隣のホールにホールインワンする確率、0％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "スーパーで前に並んだおばさんが楽天カードを素早く提示できる確率、0％",
+                      "penName":  "そろそろ育成契約"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "スマホを探すためにスマホのライトを使う人：0%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "暇なので泳いで世界一周旅行に出かける人、0％",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "牛乳を気合い入れてかき混ぜてホットミルクを作る人、0%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "靴の中の小石を取ったらダイヤモンドだった確率、0％",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "人からもらった宝くじで大金持ちになる確率、0%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "早く退社するため、腕をグルグル回して地球の自転を早める人、0％",
+                      "penName":  "三遊亭遊遊"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  0,
+                      "text":  "令和の時代に、いまだに「倍返しだ！」を使っている人、0％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "「アルゴリズム」を、怪獣の名前だと一瞬思う人：10％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "「タッチ決済」で会計のとき店員さんにもタッチする人：10％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "ISベース、ただいま10％割引中（笑）",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "オンラインを野球用語だと思っている人、10％",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "この天気で雨に打たれたら、日ごろの行いを見直すべし",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "サザエさんとカツオくんが“親子じゃなくて姉弟”だと知らない人、10%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "テストで本当に0点を取ったことがある人、約10%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "雨雲レーダーで雨雲をスワイプして晴れにしている人、10％",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  10,
+                      "text":  "新幹線の走行中、おもいっきりジャンプしたら壁に激突すると思っている人、10%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  20,
+                      "text":  "クラウドとグラウンドの区別がつかない人、20％",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  20,
+                      "text":  "チャック全開に気づいた瞬間、“誰も観測してないからセーフ”と量子論を持ち出す人：20％",
+                      "penName":  "三遊亭遊遊"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  20,
+                      "text":  "ドアノブでバチッとなるたびに「なんだかやられた気分になる人」：20％",
+                      "penName":  "元ドラフト18位"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  20,
+                      "text":  "ベッドに入って「完璧に充電した」と思ったら、ケーブルが刺さってない確率、20%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  20,
+                      "text":  "マスクを外した瞬間、くしゃみを解放する人：20%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  20,
+                      "text":  "電子レンジを1秒前に止めて、省エネに貢献している人、20％",
+                      "penName":  "三遊亭遊遊"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  20,
+                      "text":  "目的を忘れて、別の買い物をして帰る確率、20%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "「この〜木、何の木、気になる木」のCMで画面に映っているのが山だと思っている人、30%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "「圧縮ファイル」を紙がぎっしりつまったファイルだと思っている人、30％",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "エレベータが落下したとき、ジャンプすれば助かると思っている人、30％",
+                      "penName":  "三遊亭游游"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "コピー機の前で紙が出てくるところを見守ると、紙が詰まらなくなると思っている人、30％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "ゴルフで池ポチャばかりしているので、魚に恨まれている人、30%",
+                      "penName":  "三流ゴルファー"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "ベルトを通し忘れてたのに、ズボンが落ちずに帰宅して「守備力で勝った」と思う人：30%",
+                      "penName":  "三遊亭遊有罪"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "横断歩道で、白線しか歩かない人。30％",
+                      "penName":  "三遊亭游游"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "会議が始まって5分で「長くなるな」と察する確率、30%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "今だに電化製品の調子が悪い時、バンバン叩いて復活させている人、30％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "新幹線の中でドローンを飛ばしたら、壁に激突すると思っている人、30％",
+                      "penName":  "三遊亭游游"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "探し物が、探すのをやめた瞬間に見つかる確率、30%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  30,
+                      "text":  "旅先で「名物」の店に入ったら、観光客向けで味が普通な確率、30%",
+                      "penName":  "イーロンマスクマン"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  40,
+                      "text":  "「今日は控えめに」と決めたのに、普通に食べる確率、40%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  40,
+                      "text":  "エスカレータで歩くと、得した気分になる人、40％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  40,
+                      "text":  "靴下を裏返しに履いてたのに、夜お風呂の時に気づいたら「勝った」と思う人：40%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  40,
+                      "text":  "洗濯機を回した後、片方の靴下が出てくる確率、40％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "“濡れる/濡れない”で人生観まで揺れる確率50%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "「誤差の範囲内です」がギリギリすぎて寿命が縮む確率、50％",
+                      "penName":  "万年補欠代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "「傘を持って勝つか、持たずに負けるか、心がちょうど半々」",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "『まあ…いける』を3回唱えて出撃する確率50%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "シャツを前後逆に着てたのに、誰にも指摘されず帰宅して「完封勝利」と思う人：50%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "ネットで買った服のサイズが、自分にピッタリな確率、20%",
+                      "penName":  "GPT"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "偉人の名言、うさん臭い確率、50％。",
+                      "penName":  "歴史マニア"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "休日、朝起きたらFace IDで携帯が開かない人、50％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "今日は雨が降りそうなので仕事休みます。って言ってみたい",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  50,
+                      "text":  "有給をとった日に限って、電話もメールも来ない確率、50%",
+                      "penName":  "GPT"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "うる覚えな暗証番号を入力する際、3回目までは本気にならない人、60%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "サザエさんが24歳だと知って「え、先輩じゃなかった…」となる人、60%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "サプリのCMを見た瞬間だけ、健康意識が5分だけ上がる人：60％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "会話の中で「今でしょ。」と言ったあと、恥ずかしくなる人、60%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "現場の職長さんが、図面を超える最適解を出してくる確率、60%",
+                      "penName":  "そろそろ育成契約"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "受付で「あと1人で呼ばれる」状態から、永遠に進まない確率、60%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "髪に寝ぐせアンテナ立てたまま外出したのに、誰にも触れられず「世界は優しさであふれている」と思う人：60%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "目覚まし時計が鳴る前に目を覚ましたら「勝った」と思う人、60%",
+                      "penName":  "管理人"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  60,
+                      "text":  "目覚まし時計が鳴る直前に目を覚ました時、「勝った」と思う人60%",
+                      "penName":  "そろそろ育成契約"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "LINEを返そうとして、別のアプリを開いて忘れる確率、70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "テスト中、隣の人の回答をカンニングしたが間違っている確率、70％",
+                      "penName":  "三遊亭游游"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "ハンバーグとメンチかつの具材がほぼ同じと知って納得する人、70%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "レジが空いた瞬間、前の客が「別会計で…」を始めてイラっとする確率、70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "空気を読んだ結果、誰も得しない確率：70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "女性の謎行動確、「何でもいい」と言ったあとに条件が出てくる確率、約70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "夫婦のすれ違い確率、同じ会話をしているのに、違う話をしている確率、約70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "並んだレジが一番遅い確率、70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  70,
+                      "text":  "宝くじを買ったら、当たったとき誰に言うべきか考える人、70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  80,
+                      "text":  "Face IDで携帯が開かない時、大体疲れた顔している人、80％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  80,
+                      "text":  "リモコンの電池が切れたら、ボタンを強く押して“気合いで電圧を上げる”人、80%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  80,
+                      "text":  "リモコンの電池が切れたら、電池をクルクル回して復活させる人：80%",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  80,
+                      "text":  "職場で60分以上の長電話するおじさん。何度も同じ話をしていてバカだな〜と思う確率、80％",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  80,
+                      "text":  "探し物は「探してない時に見つかる」確率、80%",
+                      "penName":  "イーロンマスクマン"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  90,
+                      "text":  "「一応メモしとくか」で書いたメモが、後日 唯一の公式資料になる確率、90％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  90,
+                      "text":  "ゴルフで「べたピンOK」と言われたパットを外した時、なかったことにする人、90%",
+                      "penName":  "三流ゴルファー"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  90,
+                      "text":  "今日はせめて上半身だけは守りたい",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "「濡れたくないので仕事休みます。」って言ってみたい・・・",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "こんな雨の日に元気なのは、「やる気、元気、いわき」くらいだと思う人、100%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "やまない雨はない。と自分に言い聞かせるが、不安になる。",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "覚悟はできたか。突撃せよ！",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "帰宅後のシャワーまで含めてイベント”になる確率100%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "玄関で靴を履いてから、忘れ物に気づく人：100%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "新しい文房具を買っただけで、仕事ができる人になった気がする人：100％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "人の集中力には波があると聞いて、いま集中できない理由が見つかった人：100%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "濡れた服を見て“今日頑張った”ことにする確率100%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "fun",
+                      "bucket":  100,
+                      "text":  "冷蔵庫に賞味期限切れのスイーツを発見した時、自分のアホさを恨む確率、100%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "50人集まると“誕生日が被る確率、約100%（実際：約97.0%）",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "ゴルフで大ダフリをしたとき、地球に申し訳ない気持ちになる人、40%",
+                      "penName":  "元ドラフト18位"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "サイコロを1回振って7が出る確率0％",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "わしの頭の中、仕事のこと0%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "王貞治の通算本塁打数868本を超える人、ほぼ0%",
+                      "penName":  "野球ネタ専門店"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "金田正一の通算勝利数400勝を超える日本人投手、ほぼ0%",
+                      "penName":  "野球ネタ専門店"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "自動販売機の下に小銭が落ちていないか確認したら、ブルーダイヤが落ちている確率、0% 1gで約30億円",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "新聞紙を42回折り曲げて月旅行に行く人、0％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "世界最難関試験「科挙」の合格率0.02%(1/5000)",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "赤道付近でオーロラをみる確率、0%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "地球上で“重力がない場所”に住んでいる人の割合、0％",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "地球上で最も高価な物質、カリホルニウム252（Cf-252）を公園の砂場で見つける確率、0% 1gで約93億円",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "南極で「自然の落雷」を見る確率、ほぼ0%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "日本から穴をほってブラジル旅行に行く人、0％",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  0,
+                      "text":  "隣のおじさんが円周率を最後まで計算する確率、0%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  10,
+                      "text":  "MacBook Proの性能を、存分に発揮いている人、10%",
+                      "penName":  "イーロンマスクマン"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  10,
+                      "text":  "おはよう靴下、の意味がわかる人、10%",
+                      "penName":  "おバカ代表"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  10,
+                      "text":  "大谷選手は14打席に1本の割合でホームランを打つ。約7%がホームラン",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  10,
+                      "text":  "途中の計算が間違っているのに最後の答えが奇跡的にあっている確率、10％",
+                      "penName":  "元ドラフト18位"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  10,
+                      "text":  "日本人の10％はAB型である",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "1990年代、巨人戦の視聴率は常に20％以上",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "タラちゃんとカツオが兄弟だと思っている人、20%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "トランプを2枚引いて両方赤を引く確率（戻さない）、約25％（実際：(26/52)×(25/51)≒24.5%）",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "漢字を使用する人の割合は、全世界の19%程度。ほぼ日本と中国",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "個人投資家の約20％が信用取引を行なっている。",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "国家総合職試験（旧国家Ⅰ種試験）：合格する確率＝約17%",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "人の睡眠中、レム睡眠が占める割合は全体の約20〜25％",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "宅建に受かる確率、約20%",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "日本人のパスポート保有率、約20%（17.5%）",
+                      "penName":  "日本社会総合研究所"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "飛行機の窓が丸い理由を正しく説明できる確率、20％（四角は応力集中が強い）",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  20,
+                      "text":  "富士山には私有地が混ざっていると知っている人、20％",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  30,
+                      "text":  "アマチュアゴルファーのうち平均スコアが100を切っている人、約30%",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  30,
+                      "text":  "コロナショックで日経平均は約30％下落した。",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  30,
+                      "text":  "世界GDPのうちアメリカが占める割合、約30%（実際 約25.9%）",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  30,
+                      "text":  "日本で65歳以上の割合、だいたい30%",
+                      "penName":  "日本社会総合研究所"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "2000年から現在までの間にヨーロッパ・アルプスの氷河が約40%減少した",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "タコの心臓が3つあると知って、「働きすぎ」と思う人：40%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "ワーテルローの戦い（ナポレオン軍 vs 連合軍総数）（1815）、38対62（仏 72,000〜73,000 vs 連合 118,000〜120,000）、ナポレオン軍の兵力は約40%",
+                      "penName":  "歴史マニア"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "世界GDPのうちG7（米・日・独・英・仏・伊・加）が占める割合、約40%（実際 約44.1%）",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "世界GDPのうち米中が占める割合、約40%（実際 約42.8%）",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "世界人口のうちインド人と中国人がしめる割合、約40%",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "総理大臣を出していない都道府県20/47=0.425、約40% 北海道、青森、宮城、山形、福島、茨城、埼玉、富山、山梨、長野、岐阜、静岡、三重、兵庫、鳥取、愛媛、長崎、宮崎、沖縄(出生地での分類)",
+                      "penName":  "歴史マニア"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "日本の食料自給率（カロリーベース）は約40%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  40,
+                      "text":  "日本人の40％はA型である",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  50,
+                      "text":  "FP2級（日本FP協会・紙試験）合格率、約50％",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  50,
+                      "text":  "関ヶ原の戦い（1600）：東軍 約7.4万：西軍 約8.2万 → 47：53→約50:50",
+                      "penName":  "歴史マニア"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  50,
+                      "text":  "関ヶ原の戦い（1600）：兵力48対52（東軍 81,890 vs 西軍 88,888）でほぼ互角",
+                      "penName":  "歴史マニア"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  50,
+                      "text":  "上位1%の資産家が世界の富の50%を保有している。",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  50,
+                      "text":  "日本の都道府県で一番面積が小さいのは香川県、知っている人、50％",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  50,
+                      "text":  "料理の味見で「うん、天才」と言いながら、塩を入れすぎる人：50%",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  60,
+                      "text":  "サザエさんの波平さんが54歳と聞いて、ショックを受ける人、60%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  60,
+                      "text":  "危険物取扱者（乙種7類）合格率、約60％",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  60,
+                      "text":  "世界人口の約60％はアジアに住んでいる。",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  60,
+                      "text":  "敵、前線に展開。撤退路を確保しつつ前進せよ。",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "2026年第51回衆院選、自民党議員当選率314/465,約70％",
+                      "penName":  "比例復活"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "携帯を落とした時、空中でキャッチしたら、今日の運を全て使ったと思う人、70％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "自動車普通免許（第1種）の合格率：67.6%",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "世界史の話が、気づけば「宗教改革」か「帝国主義」に着地する確率、70%",
+                      "penName":  "歴史マニア"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "説明書を読まずに始めて後悔する確率、約70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "長篠の戦い（1575）織田・徳川 約38,000 vs 武田 約15,000、織田・徳川軍の兵力は約70%、武田軍は30%",
+                      "penName":  "歴史マニア"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "日本は「山が多い国」の代表格で、**山地が約73%**という説明もよく使われる",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  70,
+                      "text":  "夫婦のすれ違い確率、エアコンの適温が一致しない確率、約70%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  80,
+                      "text":  "NBA選手のフリースロー成功率、約80％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  80,
+                      "text":  "地球体積の約83％はマントルである。",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  90,
+                      "text":  "1929年の世界恐慌ではNYダウが89%下落した。",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  90,
+                      "text":  "PGA選手が1mのパットを決める確率、約90％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  90,
+                      "text":  "カバンだけ死守して、本人が全滅する確率90%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  90,
+                      "text":  "一級建築士試験に落ちる確率、約90%",
+                      "penName":  "管理人Ｙ"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  90,
+                      "text":  "宇宙を原子の数で見ると、水素は約90%",
+                      "penName":  "管理人Y"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  90,
+                      "text":  "雷に打たれても生存する確率、90%",
+                      "penName":  "雑学王"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  100,
+                      "text":  "円周率πが3より大きい確率：100%",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  100,
+                      "text":  "昔の人も普通に愚痴や冗談を書き残してると知って、急に親近感わく人：100%",
+                      "penName":  "ただいま休憩中"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  100,
+                      "text":  "中国の王朝が滅びる確率100%",
+                      "penName":  "雑学王子"
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  100,
+                      "text":  "日頃の行いを少し恨んでみる確率、100％",
+                      "penName":  null
+                  },
+                  {
+                      "mode":  "trivia",
+                      "bucket":  100,
+                      "text":  "日本の郵便番号が7桁である確率：100%",
+                      "penName":  null
+                  }
+              ]
 }
