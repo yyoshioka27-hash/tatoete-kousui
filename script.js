@@ -485,7 +485,7 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // ==============================
 // ✅ 最新public（Workers /api/public_latest）
 // ==============================
-async function fetchPublicLatest(mode, limit = 20){
+async function fetchPublicLatest(mode, limit = 10){
   const params = new URLSearchParams();
   params.set("mode", mode);
   params.set("limit", String(limit));
@@ -1333,7 +1333,7 @@ async function renderRanking(){
         <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
           <summary style="display:flex; align-items:center; justify-content:space-between;">
             <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-            <span class="muted" style="font-size:12px;">（開くと20件）</span>
+            <span class="muted" style="font-size:12px;">（開くと10件）</span>
           </summary>
           <div class="muted" style="margin-top:10px;" id="latestBody">読み込み中…</div>
         </details>
@@ -1369,7 +1369,7 @@ async function renderRanking(){
 
     // ---- 最新（折り畳み）----
     try{
-      const items = (await fetchPublicLatest(mode, 20))
+      const items = (await fetchPublicLatest(mode, 10))
         .filter(it => !isNgText(it?.text));
 
       if (!items.length) {
@@ -1448,7 +1448,7 @@ async function renderRanking(){
         }).join("");
 
         const more = (merged.length > 20)
-          ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
+          ? `<div class="muted" style="margin-top:8px;">※表示は上位10件まで（全${merged.length}件）</div>`
           : "";
 
         if (bodyHof) bodyHof.innerHTML = rows + more;
