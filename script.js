@@ -197,29 +197,29 @@ function hasHard100PercentMismatch(text, bucket){
     }
     .latest-details summary::-webkit-details-marker{ display:none; }
 
-    /* ✅ モードバッジ（雑学=薄青 / お笑い=薄緑） */
-    .mode-badge{
-      display:inline-block;
-      padding:2px 8px;
-      border-radius:999px;
-      font-weight:900;
-      font-size:12px;
-      border:1px solid rgba(15,23,42,.12);
-      margin-left:6px;
-      vertical-align:middle;
-    }
-    .mode-badge.trivia{
-      background: rgba(59,130,246,.14);
-      border-color: rgba(59,130,246,.28);
-      color: rgba(30,58,138,.95);
-    }
-    .mode-badge.fun{
-      background: rgba(34,197,94,.14);
-      border-color: rgba(34,197,94,.28);
-      color: rgba(20,83,45,.95);
-    }
-  `;
-  document.head.appendChild(style);
+     /* ✅ モードバッジ（雑学=薄青 / お笑い=薄緑） */
+  .mode-badge{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:999px;
+    font-weight:900;
+    font-size:12px;
+    border:1px solid rgba(15,23,42,.12);
+    margin-left:6px;
+    vertical-align:middle;
+  }
+  .mode-badge.trivia{
+    background: rgba(59,130,246,.14);
+    border-color: rgba(59,130,246,.28);
+    color: rgba(30,58,138,.95);
+  }
+  .mode-badge.fun{
+    background: rgba(34,197,94,.14);
+    border-color: rgba(34,197,94,.28);
+    color: rgba(20,83,45,.95);
+  }
+`;
+document.head.appendChild(style);
 })();
 function likeFxPop(btnEl){
   try{
