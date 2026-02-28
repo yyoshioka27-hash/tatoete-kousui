@@ -152,7 +152,7 @@ function hasHard100PercentMismatch(text, bucket){
 }
 
 // =========================
-// ✅ いいね演出CSS
+// ✅ いいね演出CSS + モードバッジCSS
 // =========================
 (function injectLikeFxCSS(){
   const id = "likeFxCSS_v1";
@@ -188,7 +188,6 @@ function hasHard100PercentMismatch(text, bucket){
       margin-left:6px;
     }
 
-    /* ✅ 最新枠のdetails見た目 */
     .latest-details summary{
       cursor:pointer;
       user-select:none;
@@ -1430,15 +1429,13 @@ async function renderRanking(){
       }
     }catch{}
 
-    const latestBody  = document.getElementById("latestBody");
+    const latestBody   = document.getElementById("latestBody");
     const bodyTodayAll = document.getElementById("rankingBodyTodayAll");
     const bodyHof      = document.getElementById("rankingBodyHof");
 
     // ---- 最新（折り畳み）----
     try{
-      const items = (await fetchPublicLatest(mode, 10))
-        .filter(it => !isNgText(it?.text));
-
+      const items = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
       if (!items.length) {
         if (latestBody) latestBody.textContent = "最新の公開ネタがまだありません";
       } else {
@@ -1458,11 +1455,9 @@ async function renderRanking(){
       if (latestBody) latestBody.textContent = `最新の取得に失敗：${e?.message || e}`;
     }
 
-    // ---- 今日TOP3（全バケット共通） ----
+    // ---- 今日TOP3（全バケット共通）----
     try{
-      const items = (await fetchRankingTodayAll(mode, 3))
-        .filter(it => !isNgText(it?.text));
-
+      const items = (await fetchRankingTodayAll(mode, 3)).filter(it => !isNgText(it?.text));
       if (!items.length) {
         if (bodyTodayAll) bodyTodayAll.textContent = "まだランキングがありません（今日の👍が0件）";
       } else {
@@ -1482,55 +1477,58 @@ async function renderRanking(){
     }
 
     // ---- 殿堂入り（全モード共通：trivia+fun を合体）----
-try{
-  const [tItems, fItems] = await Promise.all([
-    fetchHallOfFame("trivia", 0, 200),
-    fetchHallOfFame("fun",    0, 200),
-  ]);
+    try{
+      const [tItems, fItems] = await Promise.all([
+        fetchHallOfFame("trivia", 0, 200),
+        fetchHallOfFame("fun",    0, 200),
+      ]);
 
-  const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({ ...it, __mode: "trivia" }));
-  const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({ ...it, __mode: "fun" }));
+      const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({ ...it, __mode: "trivia" }));
+      const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({ ...it, __mode: "fun" }));
 
-  const merged = [...tTagged, ...fTagged]
-    .filter(it => !isNgText(it?.text))
-    .reduce((acc, it) => {
-      const id = String(it?.id || "");
-      if (!id) return acc;
-      if (!acc.map.has(id)) { acc.map.set(id, it); acc.arr.push(it); }
-      return acc;
-    }, { map:new Map(), arr:[] }).arr
-    .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
+      const merged = [...tTagged, ...fTagged]
+        .filter(it => !isNgText(it?.text))
+        .reduce((acc, it) => {
+          const id = String(it?.id || "");
+          if (!id) return acc;
+          if (!acc.map.has(id)) { acc.map.set(id, it); acc.arr.push(it); }
+          return acc;
+        }, { map:new Map(), arr:[] }).arr
+        .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
 
-  const hofTh2 = Number(state.hofThreshold || 20);
+      const hofTh2 = Number(state.hofThreshold || 20);
 
-  if (!merged.length) {
-    if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
-  } else {
-    const rows = merged.slice(0, 20).map((it, idx) => {
-      const pen = penHtmlIfAny(it.penName);
-      const totalLikes = Number(it.totalLikes || 0);
-      return `
-        <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-          <div style="font-weight:800;">
-            ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
-            <span class="hof-badge">👑殿堂入り</span>
-          </div>
-          <div class="muted">累計👍：${totalLikes}</div>
-        </div>
-      `;
-    }).join("");
+      if (!merged.length) {
+        if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
+      } else {
+        const rows = merged.slice(0, 20).map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          const totalLikes = Number(it.totalLikes || 0);
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">
+                ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
+                <span class="hof-badge">👑殿堂入り</span>
+              </div>
+              <div class="muted">累計👍：${totalLikes}</div>
+            </div>
+          `;
+        }).join("");
 
-    const more = (merged.length > 20)
-      ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
-      : "";
+        const more = (merged.length > 20)
+          ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
+          : "";
 
-    if (bodyHof) bodyHof.innerHTML = rows + more;
+        if (bodyHof) bodyHof.innerHTML = rows + more;
+      }
+    } catch (e) {
+      if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
+    }
+
+  } catch(e){
+    console.warn("renderRanking error", e);
   }
-} catch (e) {
-  if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
 }
-}
-
 // =========================
 // ✅ 承認フラグがあれば次の検索成功で花火
 // =========================
