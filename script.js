@@ -1039,6 +1039,9 @@ function renderEmpty() {
 // =========================
 // render（メイン）
 // =========================
+// =========================
+// render（メイン）
+// =========================
 function render() {
   const hintEl = document.getElementById("popHint");
   const sourceTag = document.getElementById("sourceTag");
@@ -1089,11 +1092,12 @@ function render() {
       picked = pickMetaphor(mode, rounded);
     }
 
-        for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
+    // NGを避けて再抽選
+    for (let i = 0; i < 5 && picked?.text && isNgText(picked.text); i++) {
       picked = pickMetaphor(mode, rounded);
     }
 
-    // ✅ NGだった場合の最終ガード（ここが崩れてました）
+    // ✅ NGだった場合の最終ガード
     if (picked?.text && isNgText(picked.text)) {
       picked = {
         text: "（非表示ワードが含まれるため表示できません）",
@@ -1110,7 +1114,7 @@ function render() {
     // ✅ publicCache が後から温まった場合でも、
     //    同一テキストが public にあれば「累計/ID/ペンネーム」を public に寄せて更新する
     //    ※テキスト自体は変えない（チカチカ防止）
-    try{
+    try {
       const mbKey = keyMB(mode, rounded);
       const pubArr = publicCache.get(mbKey);
 
@@ -1129,9 +1133,10 @@ function render() {
           };
         }
       }
-    }catch(e){
+    } catch (e) {
       console.warn("public upgrade failed", e);
     }
+
     const displayPen = (picked.penName && String(picked.penName).trim())
       ? String(picked.penName).trim()
       : "匿名";
@@ -1144,7 +1149,7 @@ function render() {
       const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
       metaEl.innerHTML =
         `${escapeHtml(label)}：${escapeHtml(picked.text)}${penHtml}${hofHtml}` +
-        ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source||"base")} b:${rounded}]</span>`;
+        ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source || "base")} b:${rounded}]</span>`;
     }
 
     const prevId = state.currentPhrases[slotKey]?.id || null;
@@ -1183,7 +1188,7 @@ function render() {
     renderEmpty();
     if (footEl) footEl.textContent = "";
     try { ensureMySubmissionsDom(); } catch {}
-    try { renderMySubmissions(); } catch(e) { console.warn("renderMySubmissions error", e); }
+    try { renderMySubmissions(); } catch (e) { console.warn("renderMySubmissions error", e); }
     return;
   }
 
@@ -1211,10 +1216,10 @@ function render() {
       ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(src)} b:${escapeHtml(String(bkt))}]</span>`;
   }
 
-  if (footEl) footEl.textContent =
-    "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
+  if (footEl) {
+    footEl.textContent = "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
+  }
 }
-
 // =========================
 // API: geocode
 // =========================
