@@ -157,6 +157,7 @@ function hasHard100PercentMismatch(text, bucket){
 (function injectLikeFxCSS(){
   const id = "likeFxCSS_v1";
   if (document.getElementById(id)) return;
+
   const style = document.createElement("style");
   style.id = id;
   style.textContent = `
@@ -195,8 +196,8 @@ function hasHard100PercentMismatch(text, bucket){
       list-style:none;
     }
     .latest-details summary::-webkit-details-marker{ display:none; }
-  `;
-      /* ✅ モードバッジ（雑学=薄青 / お笑い=薄緑） */
+
+    /* ✅ モードバッジ（雑学=薄青 / お笑い=薄緑） */
     .mode-badge{
       display:inline-block;
       padding:2px 8px;
@@ -208,18 +209,18 @@ function hasHard100PercentMismatch(text, bucket){
       vertical-align:middle;
     }
     .mode-badge.trivia{
-      background: rgba(59,130,246,.14);   /* 薄い青 */
+      background: rgba(59,130,246,.14);
       border-color: rgba(59,130,246,.28);
       color: rgba(30,58,138,.95);
     }
     .mode-badge.fun{
-      background: rgba(34,197,94,.14);    /* 薄い緑 */
+      background: rgba(34,197,94,.14);
       border-color: rgba(34,197,94,.28);
       color: rgba(20,83,45,.95);
     }
+  `;
   document.head.appendChild(style);
 })();
-
 function likeFxPop(btnEl){
   try{
     btnEl.classList.add("__pop");
@@ -1469,7 +1470,7 @@ async function renderRanking(){
           const pen = penHtmlIfAny(it.penName);
           return `
             <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}</div>
+              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${modeBadgeHtml(mode)}</div>
               <div class="muted">今日の👍：${Number(it.likes||0)}</div>
             </div>
           `;
@@ -1488,6 +1489,9 @@ async function renderRanking(){
       ]);
 
       const merged = [...tItems, ...fItems]
+        const tTagged = tItems.map(it => ({ ...it, __mode: "trivia" }));
+        const fTagged = fItems.map(it => ({ ...it, __mode: "fun" }));
+        const merged = [...tTagged, ...fTagged]
         .filter(it => !isNgText(it?.text))
         .reduce((acc, it) => {
           const id = String(it?.id || "");
@@ -1507,7 +1511,7 @@ async function renderRanking(){
           const totalLikes = Number(it.totalLikes || 0);
           return `
             <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen} <span class="hof-badge">👑殿堂入り</span></div>
+              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)} <span class="hof-badge">👑殿堂入り</span></div>
               <div class="muted">累計👍：${totalLikes}</div>
             </div>
           `;
