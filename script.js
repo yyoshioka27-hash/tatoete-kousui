@@ -1092,10 +1092,34 @@ function render() {
     for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
       picked = pickMetaphor(mode, rounded);
     }
-    if (picked?.text && isNgText(picked.text)) {
+   
       picked = { text: "（非表示ワードが含まれるため表示できません）", source: null, id: null, penName: null, totalLikes: 0, hof: false, bucket: rounded, mode };
     }
+        // ✅ publicCache が後から温まった場合でも、
+    //    同一テキストが public にあれば「累計/ID/ペンネーム」を public に寄せて更新する
+    //    ※テキスト自体は変えない（チカチカ防止）
+    try{
+      const mbKey = keyMB(mode, rounded);
+      const pubArr = publicCache.get(mbKey);
 
+      if (Array.isArray(pubArr) && pubArr.length && picked?.text) {
+        const t = String(picked.text).trim();
+        const hit = pubArr.find(it => String(it?.text || "").trim() === t);
+
+        if (hit) {
+          picked = {
+            ...picked,
+            source: "public",
+            id: String(hit.id || picked.id || "").trim() || null,
+            penName: (hit.penName != null ? String(hit.penName).trim() : picked.penName),
+            totalLikes: Number(hit.totalLikes || 0),
+            hof: !!hit.hof
+          };
+        }
+      }
+    }catch(e){
+      console.warn("public upgrade failed", e);
+    }
     const displayPen = (picked.penName && String(picked.penName).trim())
       ? String(picked.penName).trim()
       : "匿名";
