@@ -197,29 +197,29 @@ function hasHard100PercentMismatch(text, bucket){
     }
     .latest-details summary::-webkit-details-marker{ display:none; }
 
-     /* ✅ モードバッジ（雑学=薄青 / お笑い=薄緑） */
-  .mode-badge{
-    display:inline-block;
-    padding:2px 8px;
-    border-radius:999px;
-    font-weight:900;
-    font-size:12px;
-    border:1px solid rgba(15,23,42,.12);
-    margin-left:6px;
-    vertical-align:middle;
-  }
-  .mode-badge.trivia{
-    background: rgba(59,130,246,.14);
-    border-color: rgba(59,130,246,.28);
-    color: rgba(30,58,138,.95);
-  }
-  .mode-badge.fun{
-    background: rgba(34,197,94,.14);
-    border-color: rgba(34,197,94,.28);
-    color: rgba(20,83,45,.95);
-  }
-`;
-document.head.appendChild(style);
+    /* ✅ モードバッジ（雑学=薄青 / お笑い=薄緑） */
+    .mode-badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12px;
+      border:1px solid rgba(15,23,42,.12);
+      margin-left:6px;
+      vertical-align:middle;
+    }
+    .mode-badge.trivia{
+      background: rgba(59,130,246,.14);
+      border-color: rgba(59,130,246,.28);
+      color: rgba(30,58,138,.95);
+    }
+    .mode-badge.fun{
+      background: rgba(34,197,94,.14);
+      border-color: rgba(34,197,94,.28);
+      color: rgba(20,83,45,.95);
+    }
+  `;
+  document.head.appendChild(style);
 })();
 function likeFxPop(btnEl){
   try{
@@ -1482,54 +1482,53 @@ async function renderRanking(){
     }
 
     // ---- 殿堂入り（全モード共通：trivia+fun を合体）----
-    try{
-      const [tItems, fItems] = await Promise.all([
-        fetchHallOfFame("trivia", 0, 200),
-        fetchHallOfFame("fun",    0, 200),
-      ]);
+try{
+  const [tItems, fItems] = await Promise.all([
+    fetchHallOfFame("trivia", 0, 200),
+    fetchHallOfFame("fun",    0, 200),
+  ]);
 
-      const merged = [...tItems, ...fItems]
-        const tTagged = tItems.map(it => ({ ...it, __mode: "trivia" }));
-        const fTagged = fItems.map(it => ({ ...it, __mode: "fun" }));
-        const merged = [...tTagged, ...fTagged]
-        .filter(it => !isNgText(it?.text))
-        .reduce((acc, it) => {
-          const id = String(it?.id || "");
-          if (!id) return acc;
-          if (!acc.map.has(id)) { acc.map.set(id, it); acc.arr.push(it); }
-          return acc;
-        }, { map:new Map(), arr:[] }).arr
-        .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
+  const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({ ...it, __mode: "trivia" }));
+  const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({ ...it, __mode: "fun" }));
 
-      const hofTh2 = Number(state.hofThreshold || 20);
+  const merged = [...tTagged, ...fTagged]
+    .filter(it => !isNgText(it?.text))
+    .reduce((acc, it) => {
+      const id = String(it?.id || "");
+      if (!id) return acc;
+      if (!acc.map.has(id)) { acc.map.set(id, it); acc.arr.push(it); }
+      return acc;
+    }, { map:new Map(), arr:[] }).arr
+    .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
 
-      if (!merged.length) {
-        if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
-      } else {
-        const rows = merged.slice(0, 20).map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          const totalLikes = Number(it.totalLikes || 0);
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)} <span class="hof-badge">👑殿堂入り</span></div>
-              <div class="muted">累計👍：${totalLikes}</div>
-            </div>
-          `;
-        }).join("");
+  const hofTh2 = Number(state.hofThreshold || 20);
 
-        const more = (merged.length > 20)
-          ? `<div class="muted" style="margin-top:8px;">※表示は上位10件まで（全${merged.length}件）</div>`
-          : "";
+  if (!merged.length) {
+    if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
+  } else {
+    const rows = merged.slice(0, 20).map((it, idx) => {
+      const pen = penHtmlIfAny(it.penName);
+      const totalLikes = Number(it.totalLikes || 0);
+      return `
+        <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+          <div style="font-weight:800;">
+            ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
+            <span class="hof-badge">👑殿堂入り</span>
+          </div>
+          <div class="muted">累計👍：${totalLikes}</div>
+        </div>
+      `;
+    }).join("");
 
-        if (bodyHof) bodyHof.innerHTML = rows + more;
-      }
-    } catch (e) {
-      if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
-    }
+    const more = (merged.length > 20)
+      ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
+      : "";
 
-  } catch(e){
-    console.warn("renderRanking error", e);
+    if (bodyHof) bodyHof.innerHTML = rows + more;
   }
+} catch (e) {
+  if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
+}
 }
 
 // =========================
