@@ -1089,13 +1089,25 @@ function render() {
       picked = pickMetaphor(mode, rounded);
     }
 
-    for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
+        for (let i=0; i<5 && picked?.text && isNgText(picked.text); i++){
       picked = pickMetaphor(mode, rounded);
     }
-   
-      picked = { text: "（非表示ワードが含まれるため表示できません）", source: null, id: null, penName: null, totalLikes: 0, hof: false, bucket: rounded, mode };
+
+    // ✅ NGだった場合の最終ガード（ここが崩れてました）
+    if (picked?.text && isNgText(picked.text)) {
+      picked = {
+        text: "（非表示ワードが含まれるため表示できません）",
+        source: null,
+        id: null,
+        penName: null,
+        totalLikes: 0,
+        hof: false,
+        bucket: rounded,
+        mode
+      };
     }
-        // ✅ publicCache が後から温まった場合でも、
+
+    // ✅ publicCache が後から温まった場合でも、
     //    同一テキストが public にあれば「累計/ID/ペンネーム」を public に寄せて更新する
     //    ※テキスト自体は変えない（チカチカ防止）
     try{
