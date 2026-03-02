@@ -147,13 +147,13 @@
       position: relative;
       display: inline-block;
       width: 100%;
-      max-width: 420px; /* なくてもOK（見た目整える用） */
+      max-width: 420px;
     }
     .pw-wrap input{
       width: 100%;
-      padding-right: 46px; /* 右の目ボタン分 */
+      padding-right: 46px;
       box-sizing: border-box;
-      min-width: 280px; /* 既存inputと同等 */
+      min-width: 280px;
     }
     .pw-toggle{
       position: absolute;
@@ -631,16 +631,10 @@
       "/api/admin/remove",
     ],
 
+    // ✅ FIX（今回の修正ポイント）：
+    // 初期ネタ取り込みは「/api/admin/import_seed」に固定（無駄な404試行をゼロにする）
     importSeed: [
-      "/api/import_seed",
-      "/api/importSeed",
-      "/api/seed/import",
-      "/api/seed",
-
       "/api/admin/import_seed",
-      "/api/admin/importSeed",
-      "/api/admin/seed/import",
-      "/api/admin/seed",
     ],
 
     // ✅ reindex（worker.js の /api/admin/reindex_public）
@@ -1340,7 +1334,7 @@
       await Promise.all([loadPending(signal), loadPublic(signal)]);
       if (activeTab === "all") await loadAll(signal);
 
-      // ✅ 操作後にもDAU更新（任意：ついでに）
+      // ✅ 操作後にもDAU更新
       await fetchDAU(signal);
 
       selectedIds = new Set();
