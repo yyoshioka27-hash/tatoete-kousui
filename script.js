@@ -10,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-02-27_latestfold_rank2__SCRIPT_FULL_v3";
+const BUILD = "2026-03-02_publiccache_inflight_unique__SCRIPT_FULL_v4";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -662,6 +662,8 @@ function getSharedItems(mode, bucket) {
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
 const publicCache = new Map(); // "mode_bucket" => [{id,text,penName,totalLikes,hof}, ...]
+// ✅ NEW: 取得中（in-flight）ガード（同一キー多重warm防止）
+const publicInFlight = new Map(); // "mode_bucket" => Promise<void>
 
 function keyMB(mode, bucket){
   const m = (mode === "fun" ? "fun" : "trivia");
@@ -669,20 +671,45 @@ function keyMB(mode, bucket){
   return `${m}_${b}`;
 }
 
+// ✅ NEW: pops(m/d/e) のバケットを重複排除して返す
+function uniqueBucketsFromPops(pops){
+  try{
+    const arr = [pops?.m, pops?.d, pops?.e].map(v => window.bucket10(v ?? 0));
+    return Array.from(new Set(arr));
+  }catch{
+    return [];
+  }
+}
+
 async function warmPublicCache(mode, bucket){
   const k = keyMB(mode, bucket);
+
+  // 既にキャッシュ済み
   if (publicCache.has(k)) return;
 
-  try{
-    const items = await fetchPublicMetaphors({
-      mode: (mode === "fun" ? "fun" : "trivia"),
-      bucket: window.bucket10(bucket),
-      limit: 200
-    });
-    publicCache.set(k, items);
-  }catch{
-    publicCache.set(k, []);
-  }
+  // ✅ 取得中なら同じPromiseを待つ（多重発火防止）
+  const inflight = publicInFlight.get(k);
+  if (inflight) return inflight;
+
+  // ✅ ここから先は最初の1回だけ通す
+  const p = (async () => {
+    try{
+      const items = await fetchPublicMetaphors({
+        mode: (mode === "fun" ? "fun" : "trivia"),
+        bucket: window.bucket10(bucket),
+        // ✅ 200→120：worker側のスキャン量が少し減って効く
+        limit: 120
+      });
+      publicCache.set(k, items);
+    }catch{
+      publicCache.set(k, []);
+    }finally{
+      publicInFlight.delete(k);
+    }
+  })();
+
+  publicInFlight.set(k, p);
+  return p;
 }
 
 function getPublicItems(mode, bucket){
@@ -1061,9 +1088,6 @@ function renderEmpty() {
   if (metaAll) metaAll.textContent = "地点を選んでください";
 }
 
-// =========================
-// render（メイン）
-// =========================
 // =========================
 // render（メイン）
 // =========================
@@ -1630,12 +1654,13 @@ function fireIfApprovedOnNextSearch(){
               scheduleRender();
               setStatus("キャッシュ表示中…（裏で最新取得）", "muted");
 
+              // ✅ warm を「ユニークバケット」×「in-flightガード」で最小化
               try{
-                Promise.all([
-                  warmPublicCache(getSelectedMode(), cached.pops?.m ?? 0),
-                  warmPublicCache(getSelectedMode(), cached.pops?.d ?? 0),
-                  warmPublicCache(getSelectedMode(), cached.pops?.e ?? 0),
-                ]).then(() => scheduleRender()).catch(() => {});
+                const mode = getSelectedMode();
+                const buckets = uniqueBucketsFromPops(cached.pops);
+                Promise.all(buckets.map(b => warmPublicCache(mode, b)))
+                  .then(() => scheduleRender())
+                  .catch(() => {});
               }catch{}
             }
           });
@@ -1643,12 +1668,13 @@ function fireIfApprovedOnNextSearch(){
           state.pops = out.pops;
           state.tz = out.tz;
 
+          // ✅ warm を「ユニークバケット」×「in-flightガード」で最小化
           try{
-            Promise.all([
-              warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
-              warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
-              warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
-            ]).then(() => scheduleRender()).catch(() => {});
+            const mode = getSelectedMode();
+            const buckets = uniqueBucketsFromPops(state.pops);
+            Promise.all(buckets.map(b => warmPublicCache(mode, b)))
+              .then(() => scheduleRender())
+              .catch(() => {});
           }catch{}
 
           const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
@@ -1706,12 +1732,13 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
     invalidateRanking();
 
     if (state?.pops) {
+      // ✅ warm を「ユニークバケット」×「in-flightガード」で最小化
       try{
-        Promise.all([
-          warmPublicCache(getSelectedMode(), state.pops?.m ?? 0),
-          warmPublicCache(getSelectedMode(), state.pops?.d ?? 0),
-          warmPublicCache(getSelectedMode(), state.pops?.e ?? 0),
-        ]).then(() => scheduleRender()).catch(() => {});
+        const mode = getSelectedMode();
+        const buckets = uniqueBucketsFromPops(state.pops);
+        Promise.all(buckets.map(b => warmPublicCache(mode, b)))
+          .then(() => scheduleRender())
+          .catch(() => {});
       }catch{}
 
       try{
