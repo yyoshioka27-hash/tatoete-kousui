@@ -10,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-02_publiccache_inflight_unique__SCRIPT_FULL_v4";
+const BUILD = "2026-03-12_public_repick_priority__SCRIPT_FULL_v5";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -716,7 +716,10 @@ function getPublicItems(mode, bucket){
   const k = keyMB(mode, bucket);
 
   if (!publicCache.has(k)) {
-    warmPublicCache(mode, bucket).then(() => scheduleRender()).catch(() => {});
+    warmPublicCache(mode, bucket).then(() => {
+      __repickAfterPublicWarm = true;
+      scheduleRender();
+    }).catch(() => {});
     return [];
   }
 
@@ -952,22 +955,48 @@ function buildCandidatePool(mode, bucket) {
 }
 
 const lastPickKey = {};
+let __repickAfterPublicWarm = false;
+
 function pickMetaphor(mode, bucket) {
   const b = window.bucket10(bucket);
   const pool = buildCandidatePool(mode, b);
 
-  if (!pool.length) return { text: "データなし", source: null, id: null, penName: null, totalLikes: 0, hof: false, bucket: b, mode };
+  if (!pool.length) {
+    return {
+      text: "データなし",
+      source: null,
+      id: null,
+      penName: null,
+      totalLikes: 0,
+      hof: false,
+      bucket: b,
+      mode
+    };
+  }
 
   const key = `${mode}_${b}`;
-  let picked = pool[Math.floor(Math.random() * pool.length)];
+  const publicPool = pool.filter(x => x.source === "public");
+  let picked;
+
+  // ✅ public があるときは public をやや優先
+  if (publicPool.length && Math.random() < 0.7) {
+    picked = publicPool[Math.floor(Math.random() * publicPool.length)];
+  } else {
+    picked = pool[Math.floor(Math.random() * pool.length)];
+  }
 
   if (pool.length > 1) {
     let attempts = 0;
-    while (picked.text === lastPickKey[key] && attempts < 6) {
-      picked = pool[Math.floor(Math.random() * pool.length)];
+    while (picked.text === lastPickKey[key] && attempts < 8) {
+      if (publicPool.length && Math.random() < 0.7) {
+        picked = publicPool[Math.floor(Math.random() * publicPool.length)];
+      } else {
+        picked = pool[Math.floor(Math.random() * pool.length)];
+      }
       attempts++;
     }
   }
+
   lastPickKey[key] = picked.text;
   return picked;
 }
@@ -1133,7 +1162,9 @@ function render() {
       Number(prev.bucket) === Number(rounded) &&
       !isNgText(prev.text);
 
-    if (!window.__forceRepick && sameContext) {
+    if (__repickAfterPublicWarm) {
+      picked = pickMetaphor(mode, rounded);
+    } else if (!window.__forceRepick && sameContext) {
       picked = prev;
     } else if (__freezeMetaphor && prev?.text) {
       picked = prev;
@@ -1268,6 +1299,8 @@ function render() {
   if (footEl) {
     footEl.textContent = "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
   }
+
+  __repickAfterPublicWarm = false;
 }
 // =========================
 // API: geocode
