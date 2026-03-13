@@ -1,6 +1,7 @@
 // script.js  (FULL)
 // ✅ FIX: ランキングが「たとえを変える」でチカチカする問題
 // ✅ FIX: metaphors.js / public / json で同じネタが別表示・別カウントになる問題
+// ✅ SPEED: ランキング表示の体感高速化
 // ✅ 仕様：ランキングは
 //   1) 検索（候補選択→天気取得成功）後に表示して固定
 //   2) それ以降は「再度検索するまで」変えない
@@ -11,7 +12,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-13_dedupe_canonical_text__SCRIPT_FULL_v6";
+const BUILD = "2026-03-13_speed_rank_parallel__SCRIPT_FULL_v7";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -197,7 +198,6 @@ function hasHard100PercentMismatch(text, bucket){
     }
     .latest-details summary::-webkit-details-marker{ display:none; }
 
-    /* ✅ モードバッジ（雑学=薄青 / お笑い=薄緑） */
     .mode-badge{
       display:inline-block;
       padding:2px 8px;
@@ -445,8 +445,8 @@ function mergeDisplayItems(items, { mode, bucket } = {}){
 
     current.text = pickBetterText(current.text, text);
     current.penName = pickBetterPenName(current.penName, raw?.penName);
-    current.totalLikes = Number(current.totalLikes || 0) + Number(raw?.totalLikes || 0);
-    current.likes = Number(current.likes || 0) + Number(raw?.likes || 0);
+    current.totalLikes = Math.max(Number(current.totalLikes || 0), Number(raw?.totalLikes || 0));
+    current.likes = Math.max(Number(current.likes || 0), Number(raw?.likes || 0));
     current.hof = !!current.hof || !!raw?.hof;
     current.__canonText = normalizeMetaphorText(current.text);
 
@@ -545,6 +545,7 @@ function modeBadgeHtml(mode){
   const label = (m === "fun") ? "お笑い" : "雑学";
   return ` <span class="mode-badge ${m}">${label}</span>`;
 }
+
 // ==============================
 // 承認待ち投稿（Workers）
 // ==============================
@@ -783,8 +784,8 @@ function getSharedItems(mode, bucket) {
 // ==============================
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
-const publicCache = new Map(); // "mode_bucket" => [{id,text,penName,totalLikes,hof}, ...]
-const publicInFlight = new Map(); // "mode_bucket" => Promise<void>
+const publicCache = new Map();
+const publicInFlight = new Map();
 
 function keyMB(mode, bucket){
   const m = (mode === "fun" ? "fun" : "trivia");
@@ -814,7 +815,7 @@ async function warmPublicCache(mode, bucket){
       const items = await fetchPublicMetaphors({
         mode: (mode === "fun" ? "fun" : "trivia"),
         bucket: window.bucket10(bucket),
-        limit: 120
+        limit: 80
       });
       publicCache.set(k, items);
     }catch{
@@ -1309,9 +1310,6 @@ function render() {
       };
     }
 
-    // ✅ publicCache が後から温まった場合でも、
-    //    同一テキストが public にあれば「累計/ID/ペンネーム」を public に寄せて更新する
-    //    ※テキスト自体は変えない（チカチカ防止）
     try {
       const mbKey = keyMB(mode, rounded);
       const pubArr = publicCache.get(mbKey);
@@ -1422,6 +1420,7 @@ function render() {
 
   __repickAfterPublicWarm = false;
 }
+
 // =========================
 // API: geocode
 // =========================
@@ -1560,6 +1559,7 @@ async function renderRankingOnce(key){
 // =========================
 // ランキング表示（中身）
 // ✅ 表示は「最新（折り畳み）＋今日の総合TOP3＋殿堂入り」だけ
+// ✅ 速度改善：枠を先に描き、3本を並列ロード
 // =========================
 async function renderRanking(){
   try{
@@ -1609,137 +1609,143 @@ async function renderRanking(){
     const bodyTodayAll = document.getElementById("rankingBodyTodayAll");
     const bodyHof      = document.getElementById("rankingBodyHof");
 
-    // ---- 最新（折り畳み）----
-    try{
-      const latestRaw = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
-      const items = mergeDisplayItems(latestRaw, { mode });
+    const taskLatest = (async () => {
+      try{
+        const latestRaw = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
+        const items = mergeDisplayItems(latestRaw, { mode });
 
-      if (!items.length) {
-        if (latestBody) latestBody.textContent = "最新の公開ネタがまだありません";
-      } else {
-        const rows = items.slice(0, 10).map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          const bkt = Number(it.bucket ?? 0);
-          const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${bktTag}</div>
-            </div>
-          `;
-        }).join("");
-        if (latestBody) latestBody.innerHTML = rows;
+        if (!items.length) {
+          if (latestBody) latestBody.textContent = "最新の公開ネタがまだありません";
+        } else {
+          const rows = items.slice(0, 10).map((it, idx) => {
+            const pen = penHtmlIfAny(it.penName);
+            const bkt = Number(it.bucket ?? 0);
+            const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
+            return `
+              <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+                <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${bktTag}</div>
+              </div>
+            `;
+          }).join("");
+          if (latestBody) latestBody.innerHTML = rows;
+        }
+      } catch (e) {
+        if (latestBody) latestBody.textContent = `最新の取得に失敗：${e?.message || e}`;
       }
-    } catch (e) {
-      if (latestBody) latestBody.textContent = `最新の取得に失敗：${e?.message || e}`;
-    }
+    })();
 
-    // ---- 今日TOP3（全バケット共通）----
-    try{
-      const rankingRaw = (await fetchRankingTodayAll(mode, 50))
-        .map(it => ({
+    const taskToday = (async () => {
+      try{
+        const rankingRaw = (await fetchRankingTodayAll(mode, 20))
+          .map(it => ({
+            ...it,
+            mode,
+            bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
+            text: String(it?.text || "").trim(),
+            penName: it?.penName ? String(it.penName).trim() : null,
+            likes: Number(it?.likes || 0),
+            source: "public"
+          }))
+          .filter(it => it.text)
+          .filter(it => !isNgText(it?.text));
+
+        const items = mergeDisplayItems(rankingRaw, { mode })
+          .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
+          .slice(0, 3);
+
+        if (!items.length) {
+          if (bodyTodayAll) bodyTodayAll.textContent = "まだランキングがありません（今日の👍が0件）";
+        } else {
+          const rows = items.map((it, idx) => {
+            const pen = penHtmlIfAny(it.penName);
+            return `
+              <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+                <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${modeBadgeHtml(mode)}</div>
+                <div class="muted">今日の👍：${Number(it.likes||0)}</div>
+              </div>
+            `;
+          }).join("");
+          if (bodyTodayAll) bodyTodayAll.innerHTML = rows;
+        }
+      } catch (e) {
+        if (bodyTodayAll) bodyTodayAll.textContent = `総合ランキング取得に失敗：${e?.message || e}`;
+      }
+    })();
+
+    const taskHof = (async () => {
+      try{
+        const [tItems, fItems] = await Promise.all([
+          fetchHallOfFame("trivia", 0, 60),
+          fetchHallOfFame("fun",    0, 60),
+        ]);
+
+        const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({
           ...it,
-          mode,
+          __mode: "trivia",
+          mode: "trivia",
           bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
           text: String(it?.text || "").trim(),
           penName: it?.penName ? String(it.penName).trim() : null,
-          likes: Number(it?.likes || 0),
+          totalLikes: Number(it?.totalLikes || 0),
           source: "public"
+        }));
+        const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({
+          ...it,
+          __mode: "fun",
+          mode: "fun",
+          bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
+          text: String(it?.text || "").trim(),
+          penName: it?.penName ? String(it.penName).trim() : null,
+          totalLikes: Number(it?.totalLikes || 0),
+          source: "public"
+        }));
+
+        const merged = mergeDisplayItems(
+          [...tTagged, ...fTagged].filter(it => it.text).filter(it => !isNgText(it?.text))
+        )
+        .map(it => ({
+          ...it,
+          __mode: (it.mode === "fun" ? "fun" : "trivia")
         }))
-        .filter(it => it.text)
-        .filter(it => !isNgText(it?.text));
+        .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
 
-      const items = mergeDisplayItems(rankingRaw, { mode })
-        .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
-        .slice(0, 3);
+        const hofTh2 = Number(state.hofThreshold || 20);
 
-      if (!items.length) {
-        if (bodyTodayAll) bodyTodayAll.textContent = "まだランキングがありません（今日の👍が0件）";
-      } else {
-        const rows = items.map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${modeBadgeHtml(mode)}</div>
-              <div class="muted">今日の👍：${Number(it.likes||0)}</div>
-            </div>
-          `;
-        }).join("");
-        if (bodyTodayAll) bodyTodayAll.innerHTML = rows;
-      }
-    } catch (e) {
-      if (bodyTodayAll) bodyTodayAll.textContent = `総合ランキング取得に失敗：${e?.message || e}`;
-    }
-
-    // ---- 殿堂入り（全モード共通：trivia+fun を合体）----
-    try{
-      const [tItems, fItems] = await Promise.all([
-        fetchHallOfFame("trivia", 0, 200),
-        fetchHallOfFame("fun",    0, 200),
-      ]);
-
-      const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({
-        ...it,
-        __mode: "trivia",
-        mode: "trivia",
-        bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
-        text: String(it?.text || "").trim(),
-        penName: it?.penName ? String(it.penName).trim() : null,
-        totalLikes: Number(it?.totalLikes || 0),
-        source: "public"
-      }));
-      const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({
-        ...it,
-        __mode: "fun",
-        mode: "fun",
-        bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
-        text: String(it?.text || "").trim(),
-        penName: it?.penName ? String(it.penName).trim() : null,
-        totalLikes: Number(it?.totalLikes || 0),
-        source: "public"
-      }));
-
-      const merged = mergeDisplayItems(
-        [...tTagged, ...fTagged].filter(it => it.text).filter(it => !isNgText(it?.text))
-      )
-      .map(it => ({
-        ...it,
-        __mode: (it.mode === "fun" ? "fun" : "trivia")
-      }))
-      .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
-
-      const hofTh2 = Number(state.hofThreshold || 20);
-
-      if (!merged.length) {
-        if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
-      } else {
-        const rows = merged.slice(0, 20).map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          const totalLikes = Number(it.totalLikes || 0);
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">
-                ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
-                <span class="hof-badge">👑殿堂入り</span>
+        if (!merged.length) {
+          if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
+        } else {
+          const rows = merged.slice(0, 20).map((it, idx) => {
+            const pen = penHtmlIfAny(it.penName);
+            const totalLikes = Number(it.totalLikes || 0);
+            return `
+              <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+                <div style="font-weight:800;">
+                  ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
+                  <span class="hof-badge">👑殿堂入り</span>
+                </div>
+                <div class="muted">累計👍：${totalLikes}</div>
               </div>
-              <div class="muted">累計👍：${totalLikes}</div>
-            </div>
-          `;
-        }).join("");
+            `;
+          }).join("");
 
-        const more = (merged.length > 20)
-          ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
-          : "";
+          const more = (merged.length > 20)
+            ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
+            : "";
 
-        if (bodyHof) bodyHof.innerHTML = rows + more;
+          if (bodyHof) bodyHof.innerHTML = rows + more;
+        }
+      } catch (e) {
+        if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
       }
-    } catch (e) {
-      if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
-    }
+    })();
+
+    await Promise.allSettled([taskLatest, taskToday, taskHof]);
 
   } catch(e){
     console.warn("renderRanking error", e);
   }
 }
+
 // =========================
 // ✅ 承認フラグがあれば次の検索成功で花火
 // =========================
@@ -1875,7 +1881,9 @@ function fireIfApprovedOnNextSearch(){
 
             try{
               const key = getRankingKeyNow();
-              await renderRankingOnce(key);
+              renderRankingOnce(key).catch(e => {
+                console.warn("renderRankingOnce(after search) failed", e);
+              });
             }catch(e){
               console.warn("renderRankingOnce(after search) failed", e);
             }
@@ -1927,12 +1935,12 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 
       try{
         const key = getRankingKeyNow();
-        await renderRankingOnce(key);
+        renderRankingOnce(key).catch(e => {
+          console.warn("renderRankingOnce(on mode change) failed", e);
+        });
       }catch(e){
         console.warn("renderRankingOnce(on mode change) failed", e);
       }
-    } else {
-      // 地点未選択時は何もしない
     }
   })
 );
