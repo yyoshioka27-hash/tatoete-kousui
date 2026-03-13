@@ -1,5 +1,6 @@
 // script.js  (FULL)
 // ✅ FIX: ランキングが「たとえを変える」でチカチカする問題
+// ✅ FIX: metaphors.js / public / json で同じネタが別表示・別カウントになる問題
 // ✅ 仕様：ランキングは
 //   1) 検索（候補選択→天気取得成功）後に表示して固定
 //   2) それ以降は「再度検索するまで」変えない
@@ -10,7 +11,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-12_public_repick_priority__SCRIPT_FULL_v5";
+const BUILD = "2026-03-13_dedupe_canonical_text__SCRIPT_FULL_v6";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -125,7 +126,7 @@ function hasMismatchedPercent(text, bucket){
     const b = Number(bucket);
     if (!Number.isFinite(b)) return false;
 
-    const re = /(\d{1,3})\s*%/g;
+    const re = /(\d{1,3})\s*[%％]/g;
     let m;
     while ((m = re.exec(t)) !== null){
       const p = Number(m[1]);
@@ -359,6 +360,109 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+// ==============================
+// ✅ ネタ重複判定（canonical / dedupe）
+// ==============================
+function normalizeMetaphorText(text){
+  return String(text || "")
+    .normalize("NFKC")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t\u3000]+/g, " ")
+    .replace(/\n+/g, "\n")
+    .replace(/\s*[%％]\s*/g, "%")
+    .replace(/\s*[:：]\s*/g, "：")
+    .replace(/[‐-‒–—―ー]+/g, "ー")
+    .replace(/[!！?？。．、,，;；]+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function makeMetaphorDedupeKey({ mode, bucket, text }){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
+  const t = normalizeMetaphorText(text);
+  return `m:${m}|b:${b}|t:${t}`;
+}
+
+function sourcePriority(source){
+  const s = String(source || "");
+  if (s === "public") return 4;
+  if (s === "json") return 3;
+  if (s === "base") return 2;
+  return 1;
+}
+
+function pickBetterText(a, b){
+  const ta = String(a || "").trim();
+  const tb = String(b || "").trim();
+  if (!ta) return tb;
+  if (!tb) return ta;
+  if (tb.length > ta.length) return tb;
+  return ta;
+}
+
+function pickBetterPenName(a, b){
+  const pa = normalizePenName(a);
+  const pb = normalizePenName(b);
+  return pb || pa || null;
+}
+
+function mergeDisplayItems(items, { mode, bucket } = {}){
+  const map = new Map();
+
+  for (const raw of (Array.isArray(items) ? items : [])) {
+    const text = String(raw?.text || "").trim();
+    if (!text) continue;
+
+    const itemMode = (raw?.mode === "fun" ? "fun" : (mode === "fun" ? "fun" : "trivia"));
+    const itemBucket = Number.isFinite(Number(raw?.bucket))
+      ? window.bucket10(Number(raw.bucket))
+      : (Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0);
+
+    const key = makeMetaphorDedupeKey({ mode: itemMode, bucket: itemBucket, text });
+    const current = map.get(key);
+
+    if (!current) {
+      map.set(key, {
+        ...raw,
+        text,
+        mode: itemMode,
+        bucket: itemBucket,
+        source: raw?.source || null,
+        id: raw?.id ? String(raw.id).trim() : null,
+        penName: raw?.penName || null,
+        totalLikes: Number(raw?.totalLikes || 0),
+        likes: Number(raw?.likes || 0),
+        hof: !!raw?.hof,
+        __dedupeKey: key,
+        __canonText: normalizeMetaphorText(text),
+      });
+      continue;
+    }
+
+    const keepIncoming = sourcePriority(raw?.source) > sourcePriority(current?.source);
+
+    current.text = pickBetterText(current.text, text);
+    current.penName = pickBetterPenName(current.penName, raw?.penName);
+    current.totalLikes = Number(current.totalLikes || 0) + Number(raw?.totalLikes || 0);
+    current.likes = Number(current.likes || 0) + Number(raw?.likes || 0);
+    current.hof = !!current.hof || !!raw?.hof;
+    current.__canonText = normalizeMetaphorText(current.text);
+
+    if (keepIncoming) {
+      current.source = raw?.source || current.source || null;
+      current.id = raw?.id ? String(raw.id).trim() : (current.id || null);
+      current.mode = itemMode;
+      current.bucket = itemBucket;
+    } else if (!current.id && raw?.id) {
+      current.id = String(raw.id).trim();
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 // =========================
 // ✅ 復旧（reindex）案内UI
 // =========================
@@ -495,16 +599,31 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
 
   const items = Array.isArray(data.items) ? data.items : [];
-  return items
-    .map(it => ({
-      id: String(it.id || "").trim(),
-      text: String(it.text || "").trim(),
-      penName: (it.penName ? String(it.penName).trim() : null),
-      totalLikes: Number(it.totalLikes || 0),
-      hof: !!it.hof
-    }))
-    .filter(x => x.id && x.text)
-    .filter(x => !isNgText(x.text));
+  const deduped = mergeDisplayItems(
+    items
+      .map(it => ({
+        id: String(it.id || "").trim(),
+        text: String(it.text || "").trim(),
+        penName: (it.penName ? String(it.penName).trim() : null),
+        totalLikes: Number(it.totalLikes || 0),
+        likes: Number(it.likes || 0),
+        hof: !!it.hof,
+        source: "public",
+        mode: (mode === "fun" ? "fun" : "trivia"),
+        bucket: window.bucket10(Number(bucket))
+      }))
+      .filter(x => x.id && x.text)
+      .filter(x => !isNgText(x.text)),
+    { mode, bucket }
+  );
+
+  return deduped.map(x => ({
+    id: x.id,
+    text: x.text,
+    penName: x.penName || null,
+    totalLikes: Number(x.totalLikes || 0),
+    hof: !!x.hof
+  }));
 }
 
 // ==============================
@@ -530,6 +649,7 @@ async function fetchPublicLatest(mode, limit = 10){
       bucket: Number(it.bucket ?? 0),
       approvedAt: it.approvedAt ?? null,
       mode: (it.mode === "fun" ? "fun" : "trivia"),
+      source: "public"
     }))
     .filter(x => x.id && x.text)
     .filter(x => !isNgText(x.text));
@@ -629,7 +749,8 @@ async function loadSharedJSON() {
       .map(it => ({
         mode: (it.mode === "fun" ? "fun" : "trivia"),
         bucket: window.bucket10(Number(it.bucket)),
-        text: String(it.text || "").trim()
+        text: String(it.text || "").trim(),
+        source: "json"
       }))
       .filter(it => it.text)
       .filter(it => !isNgText(it.text));
@@ -650,7 +771,8 @@ function getSharedItems(mode, bucket) {
     : (Array.isArray(window.JSON_METAPHORS) ? window.JSON_METAPHORS.map(it => ({
         mode: (it?.mode === "fun" ? "fun" : "trivia"),
         bucket: window.bucket10(Number(it?.bucket)),
-        text: String(it?.text || "").trim()
+        text: String(it?.text || "").trim(),
+        source: "json"
       })).filter(x => x.text) : []);
 
   return base
@@ -662,7 +784,6 @@ function getSharedItems(mode, bucket) {
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
 const publicCache = new Map(); // "mode_bucket" => [{id,text,penName,totalLikes,hof}, ...]
-// ✅ NEW: 取得中（in-flight）ガード（同一キー多重warm防止）
 const publicInFlight = new Map(); // "mode_bucket" => Promise<void>
 
 function keyMB(mode, bucket){
@@ -671,7 +792,6 @@ function keyMB(mode, bucket){
   return `${m}_${b}`;
 }
 
-// ✅ NEW: pops(m/d/e) のバケットを重複排除して返す
 function uniqueBucketsFromPops(pops){
   try{
     const arr = [pops?.m, pops?.d, pops?.e].map(v => window.bucket10(v ?? 0));
@@ -684,20 +804,16 @@ function uniqueBucketsFromPops(pops){
 async function warmPublicCache(mode, bucket){
   const k = keyMB(mode, bucket);
 
-  // 既にキャッシュ済み
   if (publicCache.has(k)) return;
 
-  // ✅ 取得中なら同じPromiseを待つ（多重発火防止）
   const inflight = publicInFlight.get(k);
   if (inflight) return inflight;
 
-  // ✅ ここから先は最初の1回だけ通す
   const p = (async () => {
     try{
       const items = await fetchPublicMetaphors({
         mode: (mode === "fun" ? "fun" : "trivia"),
         bucket: window.bucket10(bucket),
-        // ✅ 200→120：worker側のスキャン量が少し減って効く
         limit: 120
       });
       publicCache.set(k, items);
@@ -787,9 +903,9 @@ let state = {
   selectedLat: null,
   selectedLon: null,
   currentPhrases: {
-    m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null },
-    d: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null },
-    e: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null }
+    m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
+    d: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
+    e: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null }
   }
 };
 
@@ -804,8 +920,9 @@ function fnv1a32(str){
 }
 function makeGlobalId({mode, bucket, text, source}){
   const m = (mode === "fun" ? "fun" : "trivia");
-  const t = String(text || "").trim();
-  return `t_${m}_${fnv1a32(`${m}|${t}`)}`;
+  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
+  const t = normalizeMetaphorText(text);
+  return `t_${m}_${b}_${fnv1a32(`${m}|${b}|${t}`)}`;
 }
 
 // アイコン
@@ -914,7 +1031,9 @@ function buildCandidatePool(mode, bucket) {
     id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
     penName: null,
     totalLikes: 0,
-    hof: false
+    hof: false,
+    mode: m,
+    bucket: b
   }));
 
   const jsonItems = getSharedItems(m, b).map(x => ({
@@ -923,35 +1042,35 @@ function buildCandidatePool(mode, bucket) {
     id: makeGlobalId({ mode: m, bucket: b, text: x.text, source: "json" }),
     penName: null,
     totalLikes: 0,
-    hof: false
+    hof: false,
+    mode: m,
+    bucket: b
   }));
 
-  const publicItems = getPublicItems(m, b);
-  const merged = [...publicItems, ...jsonItems, ...baseItems];
+  const publicItems = getPublicItems(m, b).map(x => ({
+    ...x,
+    mode: m,
+    bucket: b
+  }));
 
-  const out = [];
-  const seen = new Set();
-  for (const item of merged) {
-    const t = String(item?.text || "").trim();
-    if (!t) continue;
-    if (isNgText(t)) continue;
-    if (hasHard100PercentMismatch(t, b)) continue;
-    if (hasMismatchedPercent(t, b)) continue;
-    if (seen.has(t)) continue;
-    seen.add(t);
+  const merged = mergeDisplayItems([...publicItems, ...jsonItems, ...baseItems], { mode: m, bucket: b });
 
-    out.push({
-      text: t,
+  return merged
+    .map(item => ({
+      text: String(item?.text || "").trim(),
       source: item.source || "base",
-      id: item.id || makeGlobalId({ mode: m, bucket: b, text: t, source: item.source || "base" }),
+      id: item.id || makeGlobalId({ mode: m, bucket: b, text: item?.text || "", source: item.source || "base" }),
       penName: item.penName || null,
       totalLikes: Number(item.totalLikes || 0),
       hof: !!item.hof,
       bucket: b,
-      mode: m
-    });
-  }
-  return out;
+      mode: m,
+      dedupeKey: makeMetaphorDedupeKey({ mode: m, bucket: b, text: item?.text || "" })
+    }))
+    .filter(item => item.text)
+    .filter(item => !isNgText(item.text))
+    .filter(item => !hasHard100PercentMismatch(item.text, b))
+    .filter(item => !hasMismatchedPercent(item.text, b));
 }
 
 const lastPickKey = {};
@@ -970,7 +1089,8 @@ function pickMetaphor(mode, bucket) {
       totalLikes: 0,
       hof: false,
       bucket: b,
-      mode
+      mode,
+      dedupeKey: null
     };
   }
 
@@ -978,7 +1098,6 @@ function pickMetaphor(mode, bucket) {
   const publicPool = pool.filter(x => x.source === "public");
   let picked;
 
-  // ✅ public があるときは public をやや優先
   if (publicPool.length && Math.random() < 0.7) {
     picked = publicPool[Math.floor(Math.random() * publicPool.length)];
   } else {
@@ -987,7 +1106,7 @@ function pickMetaphor(mode, bucket) {
 
   if (pool.length > 1) {
     let attempts = 0;
-    while (picked.text === lastPickKey[key] && attempts < 8) {
+    while ((picked.dedupeKey || picked.text) === lastPickKey[key] && attempts < 8) {
       if (publicPool.length && Math.random() < 0.7) {
         picked = publicPool[Math.floor(Math.random() * publicPool.length)];
       } else {
@@ -997,7 +1116,7 @@ function pickMetaphor(mode, bucket) {
     }
   }
 
-  lastPickKey[key] = picked.text;
+  lastPickKey[key] = picked.dedupeKey || picked.text;
   return picked;
 }
 
@@ -1108,7 +1227,7 @@ function renderEmpty() {
 
     state.currentPhrases[k] = {
       text: null, source: null, id: null, penName: null,
-      likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null
+      likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
     };
     updateLikeUI(k);
     updateDeleteUI(k);
@@ -1141,7 +1260,7 @@ function render() {
 
       state.currentPhrases[slotKey] = {
         text: null, source: null, id: null, penName: null,
-        likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null
+        likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
       };
       updateLikeUI(slotKey);
       updateDeleteUI(slotKey);
@@ -1172,12 +1291,10 @@ function render() {
       picked = pickMetaphor(mode, rounded);
     }
 
-    // NGを避けて再抽選
     for (let i = 0; i < 5 && picked?.text && isNgText(picked.text); i++) {
       picked = pickMetaphor(mode, rounded);
     }
 
-    // ✅ NGだった場合の最終ガード
     if (picked?.text && isNgText(picked.text)) {
       picked = {
         text: "（非表示ワードが含まれるため表示できません）",
@@ -1187,7 +1304,8 @@ function render() {
         totalLikes: 0,
         hof: false,
         bucket: rounded,
-        mode
+        mode,
+        dedupeKey: null
       };
     }
 
@@ -1199,8 +1317,8 @@ function render() {
       const pubArr = publicCache.get(mbKey);
 
       if (Array.isArray(pubArr) && pubArr.length && picked?.text) {
-        const t = String(picked.text).trim();
-        const hit = pubArr.find(it => String(it?.text || "").trim() === t);
+        const canon = normalizeMetaphorText(picked.text);
+        const hit = pubArr.find(it => normalizeMetaphorText(it?.text || "") === canon);
 
         if (hit) {
           picked = {
@@ -1209,7 +1327,8 @@ function render() {
             id: String(hit.id || picked.id || "").trim() || null,
             penName: (hit.penName != null ? String(hit.penName).trim() : picked.penName),
             totalLikes: Number(hit.totalLikes || 0),
-            hof: !!hit.hof
+            hof: !!hit.hof,
+            dedupeKey: makeMetaphorDedupeKey({ mode, bucket: rounded, text: hit.text || picked.text })
           };
         }
       }
@@ -1252,7 +1371,8 @@ function render() {
       totalLikes: nextTotalLikes,
       hof: hofPicked,
       mode,
-      bucket: rounded
+      bucket: rounded,
+      dedupeKey: picked.dedupeKey || makeMetaphorDedupeKey({ mode, bucket: rounded, text: picked.text || "" })
     };
 
     updateLikeUI(slotKey);
@@ -1475,7 +1595,6 @@ async function renderRanking(){
       </div>
     `;
 
-    // ✅ 開閉状態保存
     try{
       const det = document.getElementById("latestDetails");
       if (det && !det.dataset.wired){
@@ -1492,11 +1611,13 @@ async function renderRanking(){
 
     // ---- 最新（折り畳み）----
     try{
-      const items = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
+      const latestRaw = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
+      const items = mergeDisplayItems(latestRaw, { mode });
+
       if (!items.length) {
         if (latestBody) latestBody.textContent = "最新の公開ネタがまだありません";
       } else {
-        const rows = items.map((it, idx) => {
+        const rows = items.slice(0, 10).map((it, idx) => {
           const pen = penHtmlIfAny(it.penName);
           const bkt = Number(it.bucket ?? 0);
           const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
@@ -1514,7 +1635,23 @@ async function renderRanking(){
 
     // ---- 今日TOP3（全バケット共通）----
     try{
-      const items = (await fetchRankingTodayAll(mode, 3)).filter(it => !isNgText(it?.text));
+      const rankingRaw = (await fetchRankingTodayAll(mode, 50))
+        .map(it => ({
+          ...it,
+          mode,
+          bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
+          text: String(it?.text || "").trim(),
+          penName: it?.penName ? String(it.penName).trim() : null,
+          likes: Number(it?.likes || 0),
+          source: "public"
+        }))
+        .filter(it => it.text)
+        .filter(it => !isNgText(it?.text));
+
+      const items = mergeDisplayItems(rankingRaw, { mode })
+        .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
+        .slice(0, 3);
+
       if (!items.length) {
         if (bodyTodayAll) bodyTodayAll.textContent = "まだランキングがありません（今日の👍が0件）";
       } else {
@@ -1540,18 +1677,35 @@ async function renderRanking(){
         fetchHallOfFame("fun",    0, 200),
       ]);
 
-      const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({ ...it, __mode: "trivia" }));
-      const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({ ...it, __mode: "fun" }));
+      const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({
+        ...it,
+        __mode: "trivia",
+        mode: "trivia",
+        bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
+        text: String(it?.text || "").trim(),
+        penName: it?.penName ? String(it.penName).trim() : null,
+        totalLikes: Number(it?.totalLikes || 0),
+        source: "public"
+      }));
+      const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({
+        ...it,
+        __mode: "fun",
+        mode: "fun",
+        bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
+        text: String(it?.text || "").trim(),
+        penName: it?.penName ? String(it.penName).trim() : null,
+        totalLikes: Number(it?.totalLikes || 0),
+        source: "public"
+      }));
 
-      const merged = [...tTagged, ...fTagged]
-        .filter(it => !isNgText(it?.text))
-        .reduce((acc, it) => {
-          const id = String(it?.id || "");
-          if (!id) return acc;
-          if (!acc.map.has(id)) { acc.map.set(id, it); acc.arr.push(it); }
-          return acc;
-        }, { map:new Map(), arr:[] }).arr
-        .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
+      const merged = mergeDisplayItems(
+        [...tTagged, ...fTagged].filter(it => it.text).filter(it => !isNgText(it?.text))
+      )
+      .map(it => ({
+        ...it,
+        __mode: (it.mode === "fun" ? "fun" : "trivia")
+      }))
+      .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
 
       const hofTh2 = Number(state.hofThreshold || 20);
 
@@ -1687,7 +1841,6 @@ function fireIfApprovedOnNextSearch(){
               scheduleRender();
               setStatus("キャッシュ表示中…（裏で最新取得）", "muted");
 
-              // ✅ warm を「ユニークバケット」×「in-flightガード」で最小化
               try{
                 const mode = getSelectedMode();
                 const buckets = uniqueBucketsFromPops(cached.pops);
@@ -1701,7 +1854,6 @@ function fireIfApprovedOnNextSearch(){
           state.pops = out.pops;
           state.tz = out.tz;
 
-          // ✅ warm を「ユニークバケット」×「in-flightガード」で最小化
           try{
             const mode = getSelectedMode();
             const buckets = uniqueBucketsFromPops(state.pops);
@@ -1765,7 +1917,6 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
     invalidateRanking();
 
     if (state?.pops) {
-      // ✅ warm を「ユニークバケット」×「in-flightガード」で最小化
       try{
         const mode = getSelectedMode();
         const buckets = uniqueBucketsFromPops(state.pops);
@@ -1781,7 +1932,7 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
         console.warn("renderRankingOnce(on mode change) failed", e);
       }
     } else {
-      // 地点未選択でも最新/ランキングだけは見たい場合 → ここは何もしない（固定仕様）
+      // 地点未選択時は何もしない
     }
   })
 );
@@ -2218,9 +2369,6 @@ async function init(){
 
   try { fixModeToggleAlignment(); } catch {}
   try { scheduleRender(); } catch {}
-
-  // ✅ 起動直後にランキング枠を空でも描画（地点未選択でも最新枠は見たい場合）
-  // ただし「固定キー仕様」と衝突しないよう、ここでは renderRanking は呼ばない（必要なら後で）
 }
 
 if (document.readyState === "loading") {
