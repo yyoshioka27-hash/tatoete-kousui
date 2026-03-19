@@ -1,18 +1,15 @@
 // script.js  (FULL)
-// ✅ FIX: ランキングが「たとえを変える」でチカチカする問題
+// ✅ FIX: 地域検索後にネタがチカチカ入れ替わる問題を抑制
+// ✅ FIX: ランキングを古いレスポンスで上書きしない
 // ✅ FIX: metaphors.js / public / json で同じネタが別表示・別カウントになる問題
+// ✅ FIX: ランキングは検索成功時/モード切替時だけ更新
 // ✅ SPEED: ランキング表示の体感高速化
-// ✅ 仕様：ランキングは
-//   1) 検索（候補選択→天気取得成功）後に表示して固定
-//   2) それ以降は「再度検索するまで」変えない
-//   3) ただし「モード切替時」はランキング更新したい
-//   4) 候補を変えただけ（同じ地点名でも lat/lon が違えば）でも更新したい
 // =========================
 
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-13_speed_rank_parallel__SCRIPT_FULL_v7";
+const BUILD = "2026-03-19_search_stable_rank_guard__SCRIPT_FULL_v8";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -105,6 +102,35 @@ function scheduleRender(){
     __renderQueued = false;
     try { render(); } catch (e) { console.warn("render error", e); }
   });
+}
+
+// =========================
+// ✅ 検索/ランキング request guard
+// =========================
+let __searchSeq = 0;
+let __rankingReqSeq = 0;
+let __freezeMetaphor = false;
+window.__forceRepick = false;
+
+function setSearchBusy(on){
+  try{
+    const card = document.getElementById("searchCard");
+    if (card) card.classList.toggle("is-searching", !!on);
+
+    const btn = document.getElementById("search");
+    if (btn) btn.disabled = !!on;
+  }catch(e){
+    console.warn("setSearchBusy error", e);
+  }
+}
+
+function setRankingBusy(on){
+  try{
+    const wrap = document.getElementById("todayRankingWrap");
+    if (wrap) wrap.classList.toggle("is-updating", !!on);
+  }catch(e){
+    console.warn("setRankingBusy error", e);
+  }
 }
 
 // =========================
@@ -221,6 +247,7 @@ function hasHard100PercentMismatch(text, bucket){
   `;
   document.head.appendChild(style);
 })();
+
 function likeFxPop(btnEl){
   try{
     btnEl.classList.add("__pop");
@@ -805,7 +832,7 @@ function uniqueBucketsFromPops(pops){
 async function warmPublicCache(mode, bucket){
   const k = keyMB(mode, bucket);
 
-  if (publicCache.has(k)) return;
+  if (publicCache.has(k)) return publicCache.get(k) || [];
 
   const inflight = publicInFlight.get(k);
   if (inflight) return inflight;
@@ -818,8 +845,10 @@ async function warmPublicCache(mode, bucket){
         limit: 80
       });
       publicCache.set(k, items);
+      return items;
     }catch{
       publicCache.set(k, []);
+      return [];
     }finally{
       publicInFlight.delete(k);
     }
@@ -831,15 +860,6 @@ async function warmPublicCache(mode, bucket){
 
 function getPublicItems(mode, bucket){
   const k = keyMB(mode, bucket);
-
-  if (!publicCache.has(k)) {
-    warmPublicCache(mode, bucket).then(() => {
-      __repickAfterPublicWarm = true;
-      scheduleRender();
-    }).catch(() => {});
-    return [];
-  }
-
   const arr = publicCache.get(k) || [];
   return arr.map(it => ({
     text: it.text,
@@ -888,9 +908,6 @@ async function fetchWithTimeout(url, ms = 4500){
     clearTimeout(t);
   }
 }
-
-let __freezeMetaphor = false;
-window.__forceRepick = false;
 
 // =========================
 // state
@@ -1075,7 +1092,6 @@ function buildCandidatePool(mode, bucket) {
 }
 
 const lastPickKey = {};
-let __repickAfterPublicWarm = false;
 
 function pickMetaphor(mode, bucket) {
   const b = window.bucket10(bucket);
@@ -1282,9 +1298,7 @@ function render() {
       Number(prev.bucket) === Number(rounded) &&
       !isNgText(prev.text);
 
-    if (__repickAfterPublicWarm) {
-      picked = pickMetaphor(mode, rounded);
-    } else if (!window.__forceRepick && sameContext) {
+    if (!window.__forceRepick && sameContext) {
       picked = prev;
     } else if (__freezeMetaphor && prev?.text) {
       picked = prev;
@@ -1417,8 +1431,6 @@ function render() {
   if (footEl) {
     footEl.textContent = "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
   }
-
-  __repickAfterPublicWarm = false;
 }
 
 // =========================
@@ -1499,16 +1511,33 @@ async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}
 // ✅ ランキングDOM
 // =========================
 function ensureRankingDom(){
-  if (document.getElementById("todayRankingWrap")) return;
+  let wrap = document.getElementById("todayRankingWrap");
+  if (!wrap) {
+    const refreshBtn = document.getElementById("refresh");
+    if (!refreshBtn) return;
 
-  const refreshBtn = document.getElementById("refresh");
-  if (!refreshBtn) return;
+    wrap = document.createElement("div");
+    wrap.id = "todayRankingWrap";
+    wrap.style.marginTop = "14px";
+    wrap.innerHTML = `
+      <div id="rankStatus">更新中…</div>
+      <div class="rankBody" id="rankBody"></div>
+    `;
+    refreshBtn.insertAdjacentElement("afterend", wrap);
+  }
 
-  const wrap = document.createElement("div");
-  wrap.id = "todayRankingWrap";
-  wrap.style.marginTop = "14px";
-
-  refreshBtn.insertAdjacentElement("afterend", wrap);
+  if (!document.getElementById("rankStatus")) {
+    const st = document.createElement("div");
+    st.id = "rankStatus";
+    st.textContent = "更新中…";
+    wrap.prepend(st);
+  }
+  if (!document.getElementById("rankBody")) {
+    const body = document.createElement("div");
+    body.className = "rankBody";
+    body.id = "rankBody";
+    wrap.appendChild(body);
+  }
 }
 
 // =========================
@@ -1559,82 +1588,84 @@ async function renderRankingOnce(key){
 // =========================
 // ランキング表示（中身）
 // ✅ 表示は「最新（折り畳み）＋今日の総合TOP3＋殿堂入り」だけ
-// ✅ 速度改善：枠を先に描き、3本を並列ロード
+// ✅ FIX: 古いレスポンスで上書きしない
+// ✅ FIX: 更新中でも今の内容は消さない
 // =========================
 async function renderRanking(){
   try{
     ensureRankingDom();
     const wrap = document.getElementById("todayRankingWrap");
-    if (!wrap) return;
+    const rankBody = document.getElementById("rankBody");
+    if (!wrap || !rankBody) return;
+
+    const reqId = ++__rankingReqSeq;
+    setRankingBusy(true);
 
     const mode = getSelectedMode();
     const hofTh = Number(state.hofThreshold || 20);
     const latestOpen = loadLatestOpen();
 
-    wrap.innerHTML = `
-      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
-          <summary style="display:flex; align-items:center; justify-content:space-between;">
-            <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-            <span class="muted" style="font-size:12px;">（開くと10件）</span>
-          </summary>
-          <div class="muted" style="margin-top:10px;" id="latestBody">読み込み中…</div>
-        </details>
-      </div>
+    if (!rankBody.innerHTML.trim()) {
+      rankBody.innerHTML = `<div class="muted">読み込み中…</div>`;
+    }
 
-      <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
-        <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
-        <div class="muted" id="rankingBodyTodayAll">読み込み中…</div>
-      </div>
-
-      <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-        <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
-        <div class="muted" id="rankingBodyHof">読み込み中…</div>
-      </div>
-    `;
-
-    try{
-      const det = document.getElementById("latestDetails");
-      if (det && !det.dataset.wired){
-        det.dataset.wired = "1";
-        det.addEventListener("toggle", () => {
-          saveLatestOpen(!!det.open);
-        });
-      }
-    }catch{}
-
-    const latestBody   = document.getElementById("latestBody");
-    const bodyTodayAll = document.getElementById("rankingBodyTodayAll");
-    const bodyHof      = document.getElementById("rankingBodyHof");
-
-    const taskLatest = (async () => {
+    const latestPromise = (async () => {
       try{
         const latestRaw = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
         const items = mergeDisplayItems(latestRaw, { mode });
 
         if (!items.length) {
-          if (latestBody) latestBody.textContent = "最新の公開ネタがまだありません";
-        } else {
-          const rows = items.slice(0, 10).map((it, idx) => {
-            const pen = penHtmlIfAny(it.penName);
-            const bkt = Number(it.bucket ?? 0);
-            const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
-            return `
-              <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-                <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${bktTag}</div>
-              </div>
-            `;
-          }).join("");
-          if (latestBody) latestBody.innerHTML = rows;
+          return `
+            <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+              <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
+                <summary style="display:flex; align-items:center; justify-content:space-between;">
+                  <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
+                  <span class="muted" style="font-size:12px;">（開くと10件）</span>
+                </summary>
+                <div class="muted" style="margin-top:10px;">最新の公開ネタがまだありません</div>
+              </details>
+            </div>
+          `;
         }
+
+        const rows = items.slice(0, 10).map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          const bkt = Number(it.bucket ?? 0);
+          const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${bktTag}</div>
+            </div>
+          `;
+        }).join("");
+
+        return `
+          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
+              <summary style="display:flex; align-items:center; justify-content:space-between;">
+                <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
+                <span class="muted" style="font-size:12px;">（開くと10件）</span>
+              </summary>
+              <div style="margin-top:10px;">${rows}</div>
+            </details>
+          </div>
+        `;
       } catch (e) {
-        if (latestBody) latestBody.textContent = `最新の取得に失敗：${e?.message || e}`;
+        return `
+          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
+              <summary style="display:flex; align-items:center; justify-content:space-between;">
+                <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
+                <span class="muted" style="font-size:12px;">（開くと10件）</span>
+              </summary>
+              <div class="muted" style="margin-top:10px;">最新の取得に失敗：${escapeHtml(String(e?.message || e))}</div>
+            </details>
+          </div>
+        `;
       }
     })();
 
-    const taskToday = (async () => {
+    const todayPromise = (async () => {
       try{
         const rankingRaw = (await fetchRankingTodayAll(mode, 20))
           .map(it => ({
@@ -1654,25 +1685,44 @@ async function renderRanking(){
           .slice(0, 3);
 
         if (!items.length) {
-          if (bodyTodayAll) bodyTodayAll.textContent = "まだランキングがありません（今日の👍が0件）";
-        } else {
-          const rows = items.map((it, idx) => {
-            const pen = penHtmlIfAny(it.penName);
-            return `
-              <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-                <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${modeBadgeHtml(mode)}</div>
-                <div class="muted">今日の👍：${Number(it.likes||0)}</div>
-              </div>
-            `;
-          }).join("");
-          if (bodyTodayAll) bodyTodayAll.innerHTML = rows;
+          return `
+            <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+              <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
+              <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
+              <div class="muted">まだランキングがありません（今日の👍が0件）</div>
+            </div>
+          `;
         }
+
+        const rows = items.map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${modeBadgeHtml(mode)}</div>
+              <div class="muted">今日の👍：${Number(it.likes||0)}</div>
+            </div>
+          `;
+        }).join("");
+
+        return `
+          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
+            <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
+            <div>${rows}</div>
+          </div>
+        `;
       } catch (e) {
-        if (bodyTodayAll) bodyTodayAll.textContent = `総合ランキング取得に失敗：${e?.message || e}`;
+        return `
+          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
+            <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
+            <div class="muted">総合ランキング取得に失敗：${escapeHtml(String(e?.message || e))}</div>
+          </div>
+        `;
       }
     })();
 
-    const taskHof = (async () => {
+    const hofPromise = (async () => {
       try{
         const [tItems, fItems] = await Promise.all([
           fetchHallOfFame("trivia", 0, 60),
@@ -1712,37 +1762,73 @@ async function renderRanking(){
         const hofTh2 = Number(state.hofThreshold || 20);
 
         if (!merged.length) {
-          if (bodyHof) bodyHof.textContent = `まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）`;
-        } else {
-          const rows = merged.slice(0, 20).map((it, idx) => {
-            const pen = penHtmlIfAny(it.penName);
-            const totalLikes = Number(it.totalLikes || 0);
-            return `
-              <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-                <div style="font-weight:800;">
-                  ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
-                  <span class="hof-badge">👑殿堂入り</span>
-                </div>
-                <div class="muted">累計👍：${totalLikes}</div>
-              </div>
-            `;
-          }).join("");
-
-          const more = (merged.length > 20)
-            ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
-            : "";
-
-          if (bodyHof) bodyHof.innerHTML = rows + more;
+          return `
+            <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+              <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh2}以上）</div>
+              <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
+              <div class="muted">まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）</div>
+            </div>
+          `;
         }
+
+        const rows = merged.slice(0, 20).map((it, idx) => {
+          const pen = penHtmlIfAny(it.penName);
+          const totalLikes = Number(it.totalLikes || 0);
+          return `
+            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+              <div style="font-weight:800;">
+                ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
+                <span class="hof-badge">👑殿堂入り</span>
+              </div>
+              <div class="muted">累計👍：${totalLikes}</div>
+            </div>
+          `;
+        }).join("");
+
+        const more = (merged.length > 20)
+          ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
+          : "";
+
+        return `
+          <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+            <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
+            <div>${rows}${more}</div>
+          </div>
+        `;
       } catch (e) {
-        if (bodyHof) bodyHof.textContent = `殿堂入り取得に失敗：${e?.message || e}`;
+        return `
+          <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+            <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
+            <div class="muted">殿堂入り取得に失敗：${escapeHtml(String(e?.message || e))}</div>
+          </div>
+        `;
       }
     })();
 
-    await Promise.allSettled([taskLatest, taskToday, taskHof]);
+    const [latestHtml, todayHtml, hofHtml] = await Promise.all([latestPromise, todayPromise, hofPromise]);
+
+    if (reqId !== __rankingReqSeq) return;
+
+    rankBody.innerHTML = `${latestHtml}${todayHtml}${hofHtml}`;
+
+    try{
+      const det = document.getElementById("latestDetails");
+      if (det && !det.dataset.wired){
+        det.dataset.wired = "1";
+        det.addEventListener("toggle", () => {
+          saveLatestOpen(!!det.open);
+        });
+      }
+    }catch{}
 
   } catch(e){
     console.warn("renderRanking error", e);
+  } finally {
+    if (__rankingReqSeq >= 0) {
+      setRankingBusy(false);
+    }
   }
 }
 
@@ -1788,6 +1874,7 @@ function fireIfApprovedOnNextSearch(){
 
     if (!q) { setStatus("地点名を入力してください", "ng"); return; }
 
+    setSearchBusy(true);
     setStatus("検索中…", "muted");
 
     try {
@@ -1819,82 +1906,104 @@ function fireIfApprovedOnNextSearch(){
       setStatus("候補を選ぶと天気を取得します", "ok");
 
       sel.onchange = async () => {
+        const mySeq = ++__searchSeq;
+
         const opt = sel.options[sel.selectedIndex];
         const lat = Number(opt.dataset.lat);
         const lon = Number(opt.dataset.lon);
 
         state.selectedLat = lat;
         state.selectedLon = lon;
-
-        window.__forceRepick = true;
-        setTimeout(() => { window.__forceRepick = false; }, 0);
-
         state.placeLabel = opt.textContent;
         state.source = "API: Open-Meteo";
 
-        scheduleRender();
+        invalidateRanking();
+        setRankingBusy(true);
+        setSearchBusy(true);
         setStatus("天気取得中…", "muted");
 
-        let usedCache = false;
+        let cachedOut = null;
 
         try {
           const out = await fetchPopsBySlotsSWR(lat, lon, {
             onCached: (cached) => {
+              if (mySeq !== __searchSeq) return;
               if (!cached?.pops) return;
-              usedCache = true;
-              state.pops = cached.pops;
-              state.tz = cached.tz || null;
-              scheduleRender();
-              setStatus("キャッシュ表示中…（裏で最新取得）", "muted");
-
-              try{
-                const mode = getSelectedMode();
-                const buckets = uniqueBucketsFromPops(cached.pops);
-                Promise.all(buckets.map(b => warmPublicCache(mode, b)))
-                  .then(() => scheduleRender())
-                  .catch(() => {});
-              }catch{}
+              cachedOut = { pops: cached.pops, tz: cached.tz || null };
             }
           });
 
-          state.pops = out.pops;
-          state.tz = out.tz;
+          if (mySeq !== __searchSeq) return;
 
-          try{
-            const mode = getSelectedMode();
-            const buckets = uniqueBucketsFromPops(state.pops);
-            Promise.all(buckets.map(b => warmPublicCache(mode, b)))
-              .then(() => scheduleRender())
-              .catch(() => {});
-          }catch{}
+          const nextPops = out.pops;
+          const nextTz = out.tz;
+
+          const mode = getSelectedMode();
+          const buckets = uniqueBucketsFromPops(nextPops);
+          await Promise.all(buckets.map(b => warmPublicCache(mode, b)));
+
+          if (mySeq !== __searchSeq) return;
+
+          state.pops = nextPops;
+          state.tz = nextTz;
 
           const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
           if (!any) {
             setStatus("降水確率が取得できませんでした（別地点で試してください）", "ng");
             state.source = "API: 取得失敗";
             state.pops = null;
-          } else {
-            setStatus("取得しました", "ok");
+            scheduleRender();
+            return;
+          }
 
-            try{ pingUsageOncePerDay("wx_ok"); }catch{}
-            try { fireIfApprovedOnNextSearch(); } catch {}
+          __freezeMetaphor = false;
+          window.__forceRepick = true;
+          scheduleRender();
+          requestAnimationFrame(() => {
+            window.__forceRepick = false;
+          });
+
+          setStatus("取得しました", "ok");
+
+          try{ pingUsageOncePerDay("wx_ok"); }catch{}
+          try { fireIfApprovedOnNextSearch(); } catch {}
+
+          try{
+            const key = getRankingKeyNow();
+            await renderRankingOnce(key);
+          }catch(e){
+            console.warn("renderRankingOnce(after search) failed", e);
+          }
+
+        } catch (e) {
+          if (mySeq !== __searchSeq) return;
+
+          if (cachedOut?.pops) {
+            const mode = getSelectedMode();
+            const buckets = uniqueBucketsFromPops(cachedOut.pops);
+            await Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
+
+            if (mySeq !== __searchSeq) return;
+
+            state.pops = cachedOut.pops;
+            state.tz = cachedOut.tz || null;
+            state.source = "API: キャッシュ";
+
+            __freezeMetaphor = false;
+            window.__forceRepick = true;
+            scheduleRender();
+            requestAnimationFrame(() => {
+              window.__forceRepick = false;
+            });
+
+            setStatus(`最新の取得に失敗（キャッシュ表示）：${e?.message || e}`, "ng");
 
             try{
               const key = getRankingKeyNow();
-              renderRankingOnce(key).catch(e => {
-                console.warn("renderRankingOnce(after search) failed", e);
-              });
-            }catch(e){
-              console.warn("renderRankingOnce(after search) failed", e);
+              await renderRankingOnce(key);
+            }catch(err){
+              console.warn("renderRankingOnce(cache fallback) failed", err);
             }
-          }
-
-          scheduleRender();
-        } catch (e) {
-          if (usedCache) {
-            setStatus(`最新の取得に失敗（キャッシュ表示中）：${e?.message || e}`, "ng");
-            state.source = "API: 更新失敗";
-            scheduleRender();
             return;
           }
 
@@ -1902,14 +2011,21 @@ function fireIfApprovedOnNextSearch(){
           state.source = "API: エラー";
           state.pops = null;
           scheduleRender();
+        } finally {
+          if (mySeq === __searchSeq) {
+            setSearchBusy(false);
+            setRankingBusy(false);
+          }
         }
       };
 
       sel.selectedIndex = 0;
-      sel.onchange();
+      await sel.onchange();
 
     } catch (e) {
       setStatus(e.message || "検索エラー", "ng");
+    } finally {
+      setSearchBusy(false);
     }
   };
 })();
@@ -1919,28 +2035,38 @@ function fireIfApprovedOnNextSearch(){
 // =========================
 document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
-    __freezeMetaphor = false;
-    scheduleRender();
-
     invalidateRanking();
 
-    if (state?.pops) {
-      try{
-        const mode = getSelectedMode();
-        const buckets = uniqueBucketsFromPops(state.pops);
-        Promise.all(buckets.map(b => warmPublicCache(mode, b)))
-          .then(() => scheduleRender())
-          .catch(() => {});
-      }catch{}
+    if (!state?.pops) {
+      __freezeMetaphor = false;
+      window.__forceRepick = true;
+      scheduleRender();
+      requestAnimationFrame(() => {
+        window.__forceRepick = false;
+      });
+      return;
+    }
 
-      try{
-        const key = getRankingKeyNow();
-        renderRankingOnce(key).catch(e => {
-          console.warn("renderRankingOnce(on mode change) failed", e);
-        });
-      }catch(e){
-        console.warn("renderRankingOnce(on mode change) failed", e);
-      }
+    try{
+      setRankingBusy(true);
+
+      const mode = getSelectedMode();
+      const buckets = uniqueBucketsFromPops(state.pops);
+      await Promise.all(buckets.map(b => warmPublicCache(mode, b)));
+
+      __freezeMetaphor = false;
+      window.__forceRepick = true;
+      scheduleRender();
+      requestAnimationFrame(() => {
+        window.__forceRepick = false;
+      });
+
+      const key = getRankingKeyNow();
+      await renderRankingOnce(key);
+    }catch(e){
+      console.warn("renderRankingOnce(on mode change) failed", e);
+    }finally{
+      setRankingBusy(false);
     }
   })
 );
