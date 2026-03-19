@@ -152,6 +152,7 @@
       padding: 14px;
       margin-top: 12px;
       background: rgba(255,255,255,0.72);
+      min-height: 148px;
     }
     .slot .big{ font-size: 34px; }
     .slot .small{ margin-top: 6px; }
@@ -162,6 +163,7 @@
       color: #1f2937;
       line-height: 1.65;
       font-weight: 500;
+      min-height: 2.2em;
     }
 
     .actions{
@@ -257,11 +259,13 @@
     }
 
     /* =========================
-       ✅ 追加：ランキングのチカチカ防止UI
+       ✅ ランキングのチカチカ防止UI
        - 更新中でも内容は消さない
        - 上に小さく「更新中…」表示だけ出す
        ========================= */
-    #todayRankingWrap{ min-height: 56px; }
+    #todayRankingWrap{
+      min-height: 96px;
+    }
     #rankStatus{
       display:none;
       margin-bottom: 8px;
@@ -270,6 +274,23 @@
     }
     #todayRankingWrap.is-updating #rankStatus{ display:block; }
     #todayRankingWrap.is-updating .rankBody{ opacity: .85; }
+    #rankBody{
+      min-height: 56px;
+    }
+
+    /* ✅ 地点検索時のちらつき防止 */
+    #placeStatus{
+      min-height: 1.6em;
+    }
+    #searchBusy{
+      display:none;
+      margin-top:8px;
+      font-size:12px;
+      color:#64748b;
+    }
+    .is-searching #searchBusy{
+      display:block;
+    }
   </style>
 </head>
 
@@ -326,18 +347,20 @@
       </div>
     </section>
 
-    <div class="card">
+    <div class="card" id="searchCard">
       <div class="small">天気予報を知りたい地点</div>
       <div class="row" style="margin-top:10px;">
         <input id="place" placeholder="例：仙台市 / Sendai / 仙台駅 / 仙台市青葉区" />
         <button id="search" class="btnPrimary">検索</button>
       </div>
 
+      <div id="searchBusy" aria-live="polite">地点とランキングを更新中…</div>
+
       <div style="margin-top:10px;">
         <select id="candidates" disabled>
           <option>検索結果がここに出ます</option>
         </select>
-        <div id="placeStatus" class="muted" style="margin-top:8px;">
+        <div id="placeStatus" class="muted" aria-live="polite">
           地点を入力して「検索」してください（APIキー不要）
         </div>
       </div>
@@ -360,13 +383,13 @@
       <div class="small">今日の降水確率（朝/昼/夜）</div>
       <div class="small" id="popHint">地点を選ぶと自動取得します</div>
 
-      <div class="slot">
+      <div class="slot" data-slot="m">
         <div class="small">朝（6-11時）</div>
         <div class="big">
           <span id="wx_m" style="margin-right:8px;">--</span>
           <span id="pop_m">--%</span>
         </div>
-        <div class="small" id="meta_m"></div>
+        <div class="small" id="meta_m" aria-live="polite"></div>
 
         <div class="actions">
           <button id="del_m" style="display:none;">このネタを削除</button>
@@ -376,13 +399,13 @@
         </div>
       </div>
 
-      <div class="slot">
+      <div class="slot" data-slot="d">
         <div class="small">昼（12-17時）</div>
         <div class="big">
           <span id="wx_d" style="margin-right:8px;">--</span>
           <span id="pop_d">--%</span>
         </div>
-        <div class="small" id="meta_d"></div>
+        <div class="small" id="meta_d" aria-live="polite"></div>
 
         <div class="actions">
           <button id="del_d" style="display:none;">このネタを削除</button>
@@ -392,13 +415,13 @@
         </div>
       </div>
 
-      <div class="slot">
+      <div class="slot" data-slot="e">
         <div class="small">夜（18-23時）</div>
         <div class="big">
           <span id="wx_e" style="margin-right:8px;">--</span>
           <span id="pop_e">--%</span>
         </div>
-        <div class="small" id="meta_e"></div>
+        <div class="small" id="meta_e" aria-live="polite"></div>
 
         <div class="actions">
           <button id="del_e" style="display:none;">このネタを削除</button>
@@ -421,7 +444,7 @@
 
       <!-- ✅ ランキング：更新中でも中身は消さない -->
       <div id="todayRankingWrap" style="margin-top:12px;">
-        <div id="rankStatus">更新中…</div>
+        <div id="rankStatus" aria-live="polite">更新中…</div>
         <div class="rankBody" id="rankBody"></div>
       </div>
     </div>
@@ -475,9 +498,9 @@
 
   </div>
 
-  <script src="metaphors.js?v=99"></script>
+  <script src="metaphors.js?v=100"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script defer src="script.js?v=99"></script>
+  <script defer src="script.js?v=100"></script>
 
   <!-- ✅ Add to Home / Install Modal -->
   <div id="a2hsModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:9999;">
