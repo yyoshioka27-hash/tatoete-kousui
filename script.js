@@ -3,13 +3,14 @@
 // ✅ FIX: ランキングを古いレスポンスで上書きしない
 // ✅ FIX: metaphors.js / public / json で同じネタが別表示・別カウントになる問題
 // ✅ FIX: ランキングは検索成功時/モード切替時だけ更新
-// ✅ SPEED: ランキング表示の体感高速化
+// ✅ SPEED: ランキングを段階表示（最新→今日→殿堂入り）に変更
+// ✅ SPEED: 殿堂入り取得件数を 60 → 20 に縮小
 // =========================
 
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-19_search_stable_rank_guard__SCRIPT_FULL_v8";
+const BUILD = "2026-03-19_search_stable_rank_progressive__SCRIPT_FULL_v9";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -1590,6 +1591,7 @@ async function renderRankingOnce(key){
 // ✅ 表示は「最新（折り畳み）＋今日の総合TOP3＋殿堂入り」だけ
 // ✅ FIX: 古いレスポンスで上書きしない
 // ✅ FIX: 更新中でも今の内容は消さない
+// ✅ SPEED: 段階表示
 // =========================
 async function renderRanking(){
   try{
@@ -1605,9 +1607,19 @@ async function renderRanking(){
     const hofTh = Number(state.hofThreshold || 20);
     const latestOpen = loadLatestOpen();
 
-    if (!rankBody.innerHTML.trim()) {
-      rankBody.innerHTML = `<div class="muted">読み込み中…</div>`;
-    }
+    rankBody.innerHTML = `
+      <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div class="muted">最新の公開ネタを読み込み中…</div>
+      </div>
+
+      <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div class="muted">今日のランキングを読み込み中…</div>
+      </div>
+
+      <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div class="muted">殿堂入りを読み込み中…</div>
+      </div>
+    `;
 
     const latestPromise = (async () => {
       try{
@@ -1616,7 +1628,7 @@ async function renderRanking(){
 
         if (!items.length) {
           return `
-            <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
               <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
                 <summary style="display:flex; align-items:center; justify-content:space-between;">
                   <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
@@ -1640,7 +1652,7 @@ async function renderRanking(){
         }).join("");
 
         return `
-          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+          <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
               <summary style="display:flex; align-items:center; justify-content:space-between;">
                 <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
@@ -1652,7 +1664,7 @@ async function renderRanking(){
         `;
       } catch (e) {
         return `
-          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+          <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
               <summary style="display:flex; align-items:center; justify-content:space-between;">
                 <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
@@ -1686,7 +1698,7 @@ async function renderRanking(){
 
         if (!items.length) {
           return `
-            <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
               <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
               <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
               <div class="muted">まだランキングがありません（今日の👍が0件）</div>
@@ -1705,7 +1717,7 @@ async function renderRanking(){
         }).join("");
 
         return `
-          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+          <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
             <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
             <div>${rows}</div>
@@ -1713,7 +1725,7 @@ async function renderRanking(){
         `;
       } catch (e) {
         return `
-          <div class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+          <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
             <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
             <div class="muted">総合ランキング取得に失敗：${escapeHtml(String(e?.message || e))}</div>
@@ -1725,8 +1737,8 @@ async function renderRanking(){
     const hofPromise = (async () => {
       try{
         const [tItems, fItems] = await Promise.all([
-          fetchHallOfFame("trivia", 0, 60),
-          fetchHallOfFame("fun",    0, 60),
+          fetchHallOfFame("trivia", 0, 20),
+          fetchHallOfFame("fun",    0, 20),
         ]);
 
         const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({
@@ -1763,7 +1775,7 @@ async function renderRanking(){
 
         if (!merged.length) {
           return `
-            <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
               <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh2}以上）</div>
               <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
               <div class="muted">まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）</div>
@@ -1790,7 +1802,7 @@ async function renderRanking(){
           : "";
 
         return `
-          <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+          <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
             <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
             <div>${rows}${more}</div>
@@ -1798,7 +1810,7 @@ async function renderRanking(){
         `;
       } catch (e) {
         return `
-          <div class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+          <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
             <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
             <div class="muted">殿堂入り取得に失敗：${escapeHtml(String(e?.message || e))}</div>
@@ -1807,28 +1819,39 @@ async function renderRanking(){
       }
     })();
 
-    const [latestHtml, todayHtml, hofHtml] = await Promise.all([latestPromise, todayPromise, hofPromise]);
+    latestPromise.then((html) => {
+      if (reqId !== __rankingReqSeq) return;
+      const el = document.getElementById("rankLatestCard");
+      if (el) el.outerHTML = html;
+      try{
+        const det = document.getElementById("latestDetails");
+        if (det && !det.dataset.wired){
+          det.dataset.wired = "1";
+          det.addEventListener("toggle", () => {
+            saveLatestOpen(!!det.open);
+          });
+        }
+      }catch{}
+    });
 
-    if (reqId !== __rankingReqSeq) return;
+    todayPromise.then((html) => {
+      if (reqId !== __rankingReqSeq) return;
+      const el = document.getElementById("rankTodayCard");
+      if (el) el.outerHTML = html;
+    });
 
-    rankBody.innerHTML = `${latestHtml}${todayHtml}${hofHtml}`;
+    hofPromise.then((html) => {
+      if (reqId !== __rankingReqSeq) return;
+      const el = document.getElementById("rankHofCard");
+      if (el) el.outerHTML = html;
+    });
 
-    try{
-      const det = document.getElementById("latestDetails");
-      if (det && !det.dataset.wired){
-        det.dataset.wired = "1";
-        det.addEventListener("toggle", () => {
-          saveLatestOpen(!!det.open);
-        });
-      }
-    }catch{}
+    await Promise.allSettled([latestPromise, todayPromise, hofPromise]);
 
   } catch(e){
     console.warn("renderRanking error", e);
   } finally {
-    if (__rankingReqSeq >= 0) {
-      setRankingBusy(false);
-    }
+    setRankingBusy(false);
   }
 }
 
