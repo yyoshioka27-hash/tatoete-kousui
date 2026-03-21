@@ -4,16 +4,20 @@
 // ✅ FIX: metaphors.js / public / json で同じネタが別表示・別カウントになる問題
 // ✅ FIX: ランキングは検索成功時/モード切替時だけ更新
 // ✅ SPEED: ランキングを段階表示（最新→今日→殿堂入り）に変更
-// ✅ SPEED: 殿堂入り取得件数を 60 → 20 に縮小
+// ✅ SPEED: 殿堂入りは日次JSON優先 + APIフォールバック
 // =========================
 
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-19_search_stable_rank_progressive__SCRIPT_FULL_v9";
+const BUILD = "2026-03-21_hof_daily_snapshot_cache__SCRIPT_FULL_v10";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+
+// ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
+const HOF_DAILY_JSON_URL = "./hall_of_fame_daily.json";
+const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v1";
 
 // =========================
 // ✅ 端末ID（いいね巻き添え防止用）
@@ -418,6 +422,7 @@ function sourcePriority(source){
   if (s === "public") return 4;
   if (s === "json") return 3;
   if (s === "base") return 2;
+  if (s === "hof_daily") return 5;
   return 1;
 }
 
@@ -746,7 +751,7 @@ async function fetchRankingTotal(mode, bucket, limit = 3){
   return Array.isArray(data.items) ? data.items : [];
 }
 
-// ✅ 殿堂入り（全バケット共通）
+// ✅ 殿堂入り（従来API / フォールバック用）
 async function fetchHallOfFame(mode, bucket, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
@@ -757,6 +762,129 @@ async function fetchHallOfFame(mode, bucket, limit = 50){
   if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return Array.isArray(data.items) ? data.items : [];
+}
+
+function normalizeHallSnapshotItem(raw){
+  const mode = (raw?.mode === "fun" ? "fun" : "trivia");
+  const text = String(raw?.text || "").trim();
+  if (!text) return null;
+
+  return {
+    id: raw?.id ? String(raw.id).trim() : makeGlobalId({
+      mode,
+      bucket: Number.isFinite(Number(raw?.bucket)) ? Number(raw.bucket) : 0,
+      text,
+      source: "hof_daily"
+    }),
+    text,
+    penName: raw?.penName ? String(raw.penName).trim() : null,
+    totalLikes: Number(raw?.totalLikes || 0),
+    likes: Number(raw?.likes || 0),
+    bucket: Number.isFinite(Number(raw?.bucket)) ? window.bucket10(Number(raw.bucket)) : 0,
+    mode,
+    hof: true,
+    source: "hof_daily"
+  };
+}
+
+function loadHallDailyCache(){
+  try{
+    return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
+  }catch{
+    return null;
+  }
+}
+
+function saveHallDailyCache(payload){
+  try{
+    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
+  }catch{}
+}
+
+async function fetchHallOfFameDaily(limit = 20){
+  const today = todayJSTString();
+  const cached = loadHallDailyCache();
+
+  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length){
+    if (cached?.hofThreshold != null) {
+      state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
+    }
+    return {
+      generatedAt: cached.generatedAt || null,
+      hofThreshold: Number(cached.hofThreshold || state.hofThreshold || 20),
+      items: cached.items
+        .map(normalizeHallSnapshotItem)
+        .filter(Boolean)
+        .filter(it => !isNgText(it.text))
+        .slice(0, limit)
+    };
+  }
+
+  const url = `${HOF_DAILY_JSON_URL}?d=${encodeURIComponent(today)}`;
+  const res = await fetch(url, { method:"GET", cache:"default" });
+  const data = await res.json().catch(()=>null);
+
+  if (!res.ok || !data) {
+    throw new Error(`hof daily json failed ${res.status}`);
+  }
+
+  const items = (Array.isArray(data?.items) ? data.items : [])
+    .map(normalizeHallSnapshotItem)
+    .filter(Boolean)
+    .filter(it => !isNgText(it.text));
+
+  const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
+  state.hofThreshold = hofThreshold;
+
+  const payload = {
+    day: today,
+    generatedAt: data?.generatedAt || null,
+    hofThreshold,
+    items: items
+  };
+  saveHallDailyCache(payload);
+
+  return {
+    generatedAt: payload.generatedAt,
+    hofThreshold,
+    items: items.slice(0, limit)
+  };
+}
+
+async function fetchHallOfFameForRanking(limit = 20){
+  try{
+    return await fetchHallOfFameDaily(limit);
+  }catch(e){
+    console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
+
+    const [tItems, fItems] = await Promise.all([
+      fetchHallOfFame("trivia", 0, limit),
+      fetchHallOfFame("fun",    0, limit),
+    ]);
+
+    const merged = mergeDisplayItems(
+      [...(Array.isArray(tItems) ? tItems : []), ...(Array.isArray(fItems) ? fItems : [])]
+        .map(it => ({
+          ...it,
+          text: String(it?.text || "").trim(),
+          penName: it?.penName ? String(it.penName).trim() : null,
+          totalLikes: Number(it?.totalLikes || 0),
+          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+          mode: (it?.mode === "fun" ? "fun" : (it?.__mode === "fun" ? "fun" : "trivia")),
+          source: "public",
+          hof: true
+        }))
+        .filter(it => it.text)
+        .filter(it => !isNgText(it.text))
+    )
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+
+    return {
+      generatedAt: null,
+      hofThreshold: Number(state.hofThreshold || 20),
+      items: merged.slice(0, limit)
+    };
+  }
 }
 
 // ==============================
@@ -1736,60 +1864,29 @@ async function renderRanking(){
 
     const hofPromise = (async () => {
       try{
-        const [tItems, fItems] = await Promise.all([
-          fetchHallOfFame("trivia", 0, 20),
-          fetchHallOfFame("fun",    0, 20),
-        ]);
+        const hofData = await fetchHallOfFameForRanking(20);
+        const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
+        const hofTh2 = Number(hofData?.hofThreshold || state.hofThreshold || 20);
+        const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
 
-        const tTagged = (Array.isArray(tItems) ? tItems : []).map(it => ({
-          ...it,
-          __mode: "trivia",
-          mode: "trivia",
-          bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
-          text: String(it?.text || "").trim(),
-          penName: it?.penName ? String(it.penName).trim() : null,
-          totalLikes: Number(it?.totalLikes || 0),
-          source: "public"
-        }));
-        const fTagged = (Array.isArray(fItems) ? fItems : []).map(it => ({
-          ...it,
-          __mode: "fun",
-          mode: "fun",
-          bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
-          text: String(it?.text || "").trim(),
-          penName: it?.penName ? String(it.penName).trim() : null,
-          totalLikes: Number(it?.totalLikes || 0),
-          source: "public"
-        }));
-
-        const merged = mergeDisplayItems(
-          [...tTagged, ...fTagged].filter(it => it.text).filter(it => !isNgText(it?.text))
-        )
-        .map(it => ({
-          ...it,
-          __mode: (it.mode === "fun" ? "fun" : "trivia")
-        }))
-        .sort((a,b) => Number(b.totalLikes||0) - Number(a.totalLikes||0));
-
-        const hofTh2 = Number(state.hofThreshold || 20);
-
-        if (!merged.length) {
+        if (!hofItems.length) {
           return `
             <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
               <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh2}以上）</div>
-              <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
+              <div class="muted" style="margin-bottom:8px;">※殿堂入りは日次スナップショット優先。見つからない時だけAPIへフォールバック</div>
               <div class="muted">まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）</div>
             </div>
           `;
         }
 
-        const rows = merged.slice(0, 20).map((it, idx) => {
+        const rows = hofItems.slice(0, 20).map((it, idx) => {
           const pen = penHtmlIfAny(it.penName);
           const totalLikes = Number(it.totalLikes || 0);
+          const md = (it.mode === "fun") ? "fun" : "trivia";
           return `
             <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
               <div style="font-weight:800;">
-                ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.__mode)}
+                ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(md)}
                 <span class="hof-badge">👑殿堂入り</span>
               </div>
               <div class="muted">累計👍：${totalLikes}</div>
@@ -1797,22 +1894,22 @@ async function renderRanking(){
           `;
         }).join("");
 
-        const more = (merged.length > 20)
-          ? `<div class="muted" style="margin-top:8px;">※表示は上位20件まで（全${merged.length}件）</div>`
-          : "";
+        const snapshotNote = generatedAt
+          ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
+          : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが無い時だけAPIへフォールバック</div>`;
 
         return `
           <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-            <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
-            <div>${rows}${more}</div>
+            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh2}以上）</div>
+            ${snapshotNote}
+            <div>${rows}</div>
           </div>
         `;
       } catch (e) {
         return `
           <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-            <div class="muted" style="margin-bottom:8px;">※殿堂入りは累計が閾値を超えると自動で表示</div>
+            <div class="muted" style="margin-bottom:8px;">※殿堂入りは日次スナップショット優先</div>
             <div class="muted">殿堂入り取得に失敗：${escapeHtml(String(e?.message || e))}</div>
           </div>
         `;
@@ -2517,6 +2614,7 @@ async function init(){
   try { ensureRankingDom(); } catch {}
   try { ensureReindexHintDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
+  try { await fetchHallOfFameDaily(20); } catch {}
   try { wireSubmit(); } catch (e) { console.warn(e); }
 
   try { ensureMySubmissionsDom(); } catch {}
