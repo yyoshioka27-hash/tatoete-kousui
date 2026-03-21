@@ -1,16 +1,17 @@
+script_full_v11_no_hof_refetch.js
 // script.js  (FULL)
 // ✅ FIX: 地域検索後にネタがチカチカ入れ替わる問題を抑制
 // ✅ FIX: ランキングを古いレスポンスで上書きしない
 // ✅ FIX: metaphors.js / public / json で同じネタが別表示・別カウントになる問題
 // ✅ FIX: ランキングは検索成功時/モード切替時だけ更新
 // ✅ SPEED: ランキングを段階表示（最新→今日→殿堂入り）に変更
-// ✅ SPEED: 殿堂入りは日次JSON優先 + APIフォールバック
+// ✅ SPEED: 殿堂入り取得件数を 60 → 20 に縮小
 // =========================
 
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-21_hof_daily_snapshot_cache__SCRIPT_FULL_v10";
+const BUILD = "2026-03-21_hof_daily_fixed_on_mode_switch__SCRIPT_FULL_v11";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -18,6 +19,8 @@ const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.work
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
 const HOF_DAILY_JSON_URL = "./hall_of_fame_daily.json";
 const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v1";
+let __hofSnapshotMemory = null;
+let __hofSnapshotHtml = null;
 
 // =========================
 // ✅ 端末ID（いいね巻き添え防止用）
@@ -422,7 +425,6 @@ function sourcePriority(source){
   if (s === "public") return 4;
   if (s === "json") return 3;
   if (s === "base") return 2;
-  if (s === "hof_daily") return 5;
   return 1;
 }
 
@@ -751,7 +753,7 @@ async function fetchRankingTotal(mode, bucket, limit = 3){
   return Array.isArray(data.items) ? data.items : [];
 }
 
-// ✅ 殿堂入り（従来API / フォールバック用）
+// ✅ 殿堂入り（全バケット共通）
 async function fetchHallOfFame(mode, bucket, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
@@ -885,6 +887,61 @@ async function fetchHallOfFameForRanking(limit = 20){
       items: merged.slice(0, limit)
     };
   }
+}
+
+
+function buildHallCardHtmlFromSnapshot(hofData){
+  const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
+  const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
+  const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
+
+  if (!hofItems.length) {
+    return `
+      <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+        <div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>
+        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件）</div>
+      </div>
+    `;
+  }
+
+  const rows = hofItems.slice(0, 20).map((it, idx) => {
+    const pen = penHtmlIfAny(it.penName);
+    const totalLikes = Number(it.totalLikes || 0);
+    const md = (it.mode === "fun") ? "fun" : "trivia";
+    return `
+      <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+        <div style="font-weight:800;">
+          ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(md)}
+          <span class="hof-badge">👑殿堂入り</span>
+        </div>
+        <div class="muted">累計👍：${totalLikes}</div>
+      </div>
+    `;
+  }).join("");
+
+  const snapshotNote = generatedAt
+    ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
+    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>`;
+
+  return `
+    <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+      ${snapshotNote}
+      <div>${rows}</div>
+    </div>
+  `;
+}
+
+async function ensureHallSnapshotLoaded(){
+  if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
+    return __hofSnapshotMemory;
+  }
+
+  const hofData = await fetchHallOfFameForRanking(20);
+  __hofSnapshotMemory = hofData;
+  __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(hofData);
+  return hofData;
 }
 
 // ==============================
@@ -1864,52 +1921,16 @@ async function renderRanking(){
 
     const hofPromise = (async () => {
       try{
-        const hofData = await fetchHallOfFameForRanking(20);
-        const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
-        const hofTh2 = Number(hofData?.hofThreshold || state.hofThreshold || 20);
-        const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
-
-        if (!hofItems.length) {
-          return `
-            <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-              <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh2}以上）</div>
-              <div class="muted" style="margin-bottom:8px;">※殿堂入りは日次スナップショット優先。見つからない時だけAPIへフォールバック</div>
-              <div class="muted">まだ殿堂入りがありません（累計👍${hofTh2}以上が0件）</div>
-            </div>
-          `;
-        }
-
-        const rows = hofItems.slice(0, 20).map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          const totalLikes = Number(it.totalLikes || 0);
-          const md = (it.mode === "fun") ? "fun" : "trivia";
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">
-                ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(md)}
-                <span class="hof-badge">👑殿堂入り</span>
-              </div>
-              <div class="muted">累計👍：${totalLikes}</div>
-            </div>
-          `;
-        }).join("");
-
-        const snapshotNote = generatedAt
-          ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
-          : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが無い時だけAPIへフォールバック</div>`;
-
-        return `
+        await ensureHallSnapshotLoaded();
+        return __hofSnapshotHtml || `
           <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh2}以上）</div>
-            ${snapshotNote}
-            <div>${rows}</div>
+            <div class="muted">殿堂入りデータなし</div>
           </div>
         `;
       } catch (e) {
         return `
           <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-            <div class="muted" style="margin-bottom:8px;">※殿堂入りは日次スナップショット優先</div>
+            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通）</div>
             <div class="muted">殿堂入り取得に失敗：${escapeHtml(String(e?.message || e))}</div>
           </div>
         `;
@@ -2614,7 +2635,7 @@ async function init(){
   try { ensureRankingDom(); } catch {}
   try { ensureReindexHintDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
-  try { await fetchHallOfFameDaily(20); } catch {}
+  try { await ensureHallSnapshotLoaded(); } catch {}
   try { wireSubmit(); } catch (e) { console.warn(e); }
 
   try { ensureMySubmissionsDom(); } catch {}
