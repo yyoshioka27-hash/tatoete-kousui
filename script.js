@@ -795,17 +795,11 @@ function loadHallDailyCache(){
   }
 }
 
-function saveHallDailyCache(payload){
-  try{
-    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
-  }catch{}
-}
-
 async function fetchHallOfFameDaily(limit = 20){
   const today = todayJSTString();
   const cached = loadHallDailyCache();
 
-  if (cached?.day === today && Array.isArray(cached?.items)) {
+  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length > 0) {
     if (cached?.hofThreshold != null) {
       state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
     }
@@ -820,18 +814,14 @@ async function fetchHallOfFameDaily(limit = 20){
     };
   }
 
-  const url = `${HOF_DAILY_JSON_URL}?d=${encodeURIComponent(today)}`;
+  const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
   try{
-    const res = await fetch(url, { method:"GET", cache:"force-cache" });
+    const res = await fetch(url, { method:"GET", cache:"no-store" });
     const data = await res.json().catch(()=>null);
 
-    if (!res.ok || !data) {
-      return {
-        generatedAt: null,
-        hofThreshold: Number(state.hofThreshold || 20),
-        items: []
-      };
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `hof_daily failed ${res.status}`);
     }
 
     const items = (Array.isArray(data?.items) ? data.items : [])
@@ -841,6 +831,11 @@ async function fetchHallOfFameDaily(limit = 20){
 
     const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
     state.hofThreshold = hofThreshold;
+
+    // 空配列は「本日スナップショット未生成」の可能性が高いのでキャッシュしない
+    if (!items.length) {
+      throw new Error(data?.note || "hof_daily empty");
+    }
 
     const payload = {
       day: today,
@@ -856,21 +851,23 @@ async function fetchHallOfFameDaily(limit = 20){
       items: items.slice(0, limit)
     };
   }catch(e){
-    console.warn("hof daily json load failed", e?.message || e);
-    return {
-      generatedAt: null,
-      hofThreshold: Number(state.hofThreshold || 20),
-      items: []
-    };
+    console.warn("hof daily api load failed", e?.message || e);
+    throw e;
   }
-}
-
-async function fetchHallOfFameForRanking(limit = 20){
-  return await fetchHallOfFameDaily(limit);
 }
 async function fetchHallOfFameForRanking(limit = 20){
   try{
-    return await fetchHallOfFameDaily(limit);
+    const daily = await fetchHallOfFameDaily(limit);
+
+    if (Array.isArray(daily?.items) && daily.items.length > 0) {
+      return {
+        generatedAt: daily?.generatedAt || null,
+        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+        items: daily.items.slice(0, limit)
+      };
+    }
+
+    throw new Error("hof_daily empty");
   }catch(e){
     console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
 
@@ -903,7 +900,6 @@ async function fetchHallOfFameForRanking(limit = 20){
     };
   }
 }
-
 function buildHallCardHtmlFromSnapshot(hofData){
   const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
   const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
