@@ -805,14 +805,14 @@ async function fetchHallOfFameDaily(limit = 20){
   const today = todayJSTString();
   const cached = loadHallDailyCache();
 
-  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length){
+  if (cached?.day === today && Array.isArray(cached?.items)) {
     if (cached?.hofThreshold != null) {
       state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
     }
     return {
-      generatedAt: cached.generatedAt || null,
-      hofThreshold: Number(cached.hofThreshold || state.hofThreshold || 20),
-      items: cached.items
+      generatedAt: cached?.generatedAt || null,
+      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
+      items: (cached?.items || [])
         .map(normalizeHallSnapshotItem)
         .filter(Boolean)
         .filter(it => !isNgText(it.text))
@@ -821,36 +821,53 @@ async function fetchHallOfFameDaily(limit = 20){
   }
 
   const url = `${HOF_DAILY_JSON_URL}?d=${encodeURIComponent(today)}`;
-  const res = await fetch(url, { method:"GET", cache:"default" });
-  const data = await res.json().catch(()=>null);
 
-  if (!res.ok || !data) {
-    throw new Error(`hof daily json failed ${res.status}`);
+  try{
+    const res = await fetch(url, { method:"GET", cache:"force-cache" });
+    const data = await res.json().catch(()=>null);
+
+    if (!res.ok || !data) {
+      return {
+        generatedAt: null,
+        hofThreshold: Number(state.hofThreshold || 20),
+        items: []
+      };
+    }
+
+    const items = (Array.isArray(data?.items) ? data.items : [])
+      .map(normalizeHallSnapshotItem)
+      .filter(Boolean)
+      .filter(it => !isNgText(it.text));
+
+    const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
+    state.hofThreshold = hofThreshold;
+
+    const payload = {
+      day: today,
+      generatedAt: data?.generatedAt || null,
+      hofThreshold,
+      items
+    };
+    saveHallDailyCache(payload);
+
+    return {
+      generatedAt: payload.generatedAt,
+      hofThreshold,
+      items: items.slice(0, limit)
+    };
+  }catch(e){
+    console.warn("hof daily json load failed", e?.message || e);
+    return {
+      generatedAt: null,
+      hofThreshold: Number(state.hofThreshold || 20),
+      items: []
+    };
   }
-
-  const items = (Array.isArray(data?.items) ? data.items : [])
-    .map(normalizeHallSnapshotItem)
-    .filter(Boolean)
-    .filter(it => !isNgText(it.text));
-
-  const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
-  state.hofThreshold = hofThreshold;
-
-  const payload = {
-    day: today,
-    generatedAt: data?.generatedAt || null,
-    hofThreshold,
-    items: items
-  };
-  saveHallDailyCache(payload);
-
-  return {
-    generatedAt: payload.generatedAt,
-    hofThreshold,
-    items: items.slice(0, limit)
-  };
 }
 
+async function fetchHallOfFameForRanking(limit = 20){
+  return await fetchHallOfFameDaily(limit);
+}
 async function fetchHallOfFameForRanking(limit = 20){
   try{
     return await fetchHallOfFameDaily(limit);
@@ -896,8 +913,8 @@ function buildHallCardHtmlFromSnapshot(hofData){
     return `
       <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
         <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-        <div class="muted" style="margin-bottom:8px;">※殿堂入りは日次スナップショット優先。見つからない時だけAPIへフォールバック</div>
-        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件）</div>
+        <div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>
+        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件、または本日JSON未生成）</div>
       </div>
     `;
   }
@@ -919,7 +936,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
 
   const snapshotNote = generatedAt
     ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
-    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが無い時だけAPIへフォールバック</div>`;
+    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>`;
 
   return `
     <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
@@ -929,7 +946,6 @@ function buildHallCardHtmlFromSnapshot(hofData){
     </div>
   `;
 }
-
 async function ensureHallSnapshotLoaded(){
   if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
     return __hofSnapshotMemory;
@@ -2629,7 +2645,6 @@ async function init(){
   try { ensureRankingDom(); } catch {}
   try { ensureReindexHintDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
-  try { await ensureHallSnapshotLoaded(); } catch {}
   try { wireSubmit(); } catch (e) { console.warn(e); }
 
   try { ensureMySubmissionsDom(); } catch {}
