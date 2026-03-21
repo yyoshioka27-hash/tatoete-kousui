@@ -16,7 +16,7 @@ const BUILD = "2026-03-21_hof_daily_fixed_on_mode_switch__SCRIPT_FULL_v11";
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
-const HOF_DAILY_JSON_URL = "./hall_of_fame_daily.json";
+const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
 const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v1";
 let __hofSnapshotMemory = null;
 let __hofSnapshotHtml = null;
