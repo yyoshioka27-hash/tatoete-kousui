@@ -10,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-21_hof_daily_fixed_on_mode_switch__SCRIPT_FULL_v11";
+const BUILD = "2026-03-23_hof_daily_allmode_fastcache__SCRIPT_FULL_v12";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -20,6 +20,7 @@ const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
 const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v1";
 let __hofSnapshotMemory = null;
 let __hofSnapshotHtml = null;
+let __hofSnapshotPromise = null;
 
 // =========================
 // ✅ 端末ID（いいね巻き添え防止用）
@@ -146,519 +147,628 @@ function setRankingBusy(on){
 const NG_PHRASES = [
   "共通テスト",
 ];
-
 function isNgText(text){
-  const t = String(text || "");
-  if (!t) return true;
-  return NG_PHRASES.some(ng => ng && t.includes(ng));
-}
-
-// ✅ ネタ本文内の「xx%」がバケットと一致しない場合は除外する
-function hasMismatchedPercent(text, bucket){
-  try{
-    const t = String(text || "");
-    const b = Number(bucket);
-    if (!Number.isFinite(b)) return false;
-
-    const re = /(\d{1,3})\s*[%％]/g;
-    let m;
-    while ((m = re.exec(t)) !== null){
-      const p = Number(m[1]);
-      if (!Number.isFinite(p)) continue;
-      if (p < 0 || p > 100) continue;
-      if (p !== b) return true;
-    }
-    return false;
-  }catch{
-    return false;
-  }
-}
-
-function hasHard100PercentMismatch(text, bucket){
-  try{
-    const t = String(text || "");
-    const b = Number(bucket);
-    if (!Number.isFinite(b)) return false;
-    if (b === 100) return false;
-    return /100\s*(%|％)/.test(t);
-  }catch{
-    return false;
-  }
+  const s = String(text || "");
+  return NG_PHRASES.some(w => s.includes(w));
 }
 
 // =========================
-// ✅ いいね演出CSS + モードバッジCSS
+// ✅ ユーティリティ
 // =========================
-(function injectLikeFxCSS(){
-  const id = "likeFxCSS_v1";
-  if (document.getElementById(id)) return;
-
-  const style = document.createElement("style");
-  style.id = id;
-  style.textContent = `
-    .like-btn-pop { transform: scale(1.0); transition: transform 120ms ease; }
-    .like-btn-pop.__pop { transform: scale(1.10); }
-    .like-plusone {
-      position: absolute;
-      font-weight: 900;
-      pointer-events: none;
-      user-select: none;
-      transform: translateY(0);
-      opacity: 1;
-      transition: transform 520ms ease, opacity 520ms ease;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.10);
-    }
-    .like-plusone.__fly { transform: translateY(-18px); opacity: 0; }
-
-    .pen-muted { opacity: .55; font-weight: 700; }
-
-    .hof-badge{
-      display:inline-block;
-      padding:2px 8px;
-      border-radius:999px;
-      font-weight:900;
-      font-size:12px;
-      border:1px solid rgba(15,23,42,.18);
-      background: rgba(255,255,255,.75);
-      margin-left:6px;
-    }
-
-    .latest-details summary{
-      cursor:pointer;
-      user-select:none;
-      font-weight:900;
-      list-style:none;
-    }
-    .latest-details summary::-webkit-details-marker{ display:none; }
-
-    .mode-badge{
-      display:inline-block;
-      padding:2px 8px;
-      border-radius:999px;
-      font-weight:900;
-      font-size:12px;
-      border:1px solid rgba(15,23,42,.12);
-      margin-left:6px;
-      vertical-align:middle;
-    }
-    .mode-badge.trivia{
-      background: rgba(59,130,246,.14);
-      border-color: rgba(59,130,246,.28);
-      color: rgba(30,58,138,.95);
-    }
-    .mode-badge.fun{
-      background: rgba(34,197,94,.14);
-      border-color: rgba(34,197,94,.28);
-      color: rgba(20,83,45,.95);
-    }
-  `;
-  document.head.appendChild(style);
-})();
-
-function likeFxPop(btnEl){
-  try{
-    btnEl.classList.add("__pop");
-    setTimeout(() => btnEl.classList.remove("__pop"), 140);
-  }catch{}
+function escapeHtml(s){
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
-
-function likeFxPlusOne(btnEl){
-  try{
-    const parent = btnEl.parentElement;
-    if (!parent) return;
-    const cs = window.getComputedStyle(parent);
-    if (cs.position === "static") parent.style.position = "relative";
-
-    const plus = document.createElement("span");
-    plus.className = "like-plusone";
-    plus.textContent = "+1";
-
-    plus.style.left = (btnEl.offsetLeft + btnEl.offsetWidth - 6) + "px";
-    plus.style.top  = (btnEl.offsetTop - 6) + "px";
-
-    parent.appendChild(plus);
-    requestAnimationFrame(() => { plus.classList.add("__fly"); });
-    setTimeout(() => { try{ plus.remove(); }catch{} }, 700);
-  }catch{}
+function bucket10(n){
+  const x = Number(n ?? 0);
+  return Math.max(0, Math.min(100, Math.round(x / 10) * 10));
 }
-// ==============================
-// ✅ 合言葉（PIN）入力欄をJS側で自動生成
-// ==============================
-(function ensurePenPinDom(){
-  const pen = document.getElementById("penName");
-  if (!pen) return;
-  if (document.getElementById("penPin")) return;
+window.bucket10 = bucket10;
 
-  const pin = document.createElement("input");
-  pin.id = "penPin";
-  pin.type = "text";
-  pin.style.webkitTextSecurity = "disc";
-  pin.setAttribute("inputmode", "text");
-  pin.setAttribute("lang", "ja");
-  pin.autocomplete = "off";
-  pin.autocapitalize = "none";
-  pin.autocorrect = "off";
-  pin.spellcheck = false;
-  pin.placeholder = "合言葉（初回登録/別端末ログイン用）";
-  pin.style.width = "100%";
-  pin.style.boxSizing = "border-box";
-  pin.style.marginTop = "8px";
-  pin.style.padding = "12px 14px";
-  pin.style.borderRadius = "12px";
-  pin.style.border = "1px solid rgba(15,23,42,.12)";
-
-  const note = document.createElement("div");
-  note.className = "muted";
-  note.style.marginTop = "6px";
-  note.textContent = "※合言葉は一般公開されません。忘れるとそのペンネームは使えません（救済なし）。";
-
-  pen.insertAdjacentElement("afterend", pin);
-  pin.insertAdjacentElement("afterend", note);
-})();
-
-// ==============================
-// ✅ モバイルで「雑学/お笑い」位置ズレ整列
-// ==============================
-function fixModeToggleAlignment(){
-  try{
-    const inputs = Array.from(document.querySelectorAll('input[name="mode"]'));
-    if (!inputs.length) return;
-
-    const labels = inputs.map(inp => {
-      const a = inp.closest("label");
-      if (a) return a;
-      if (inp.id) {
-        const b = document.querySelector(`label[for="${CSS.escape(inp.id)}"]`);
-        if (b) return b;
-      }
-      return null;
-    }).filter(Boolean);
-
-    if (labels.length < 2) return;
-
-    const parent = labels[0].parentElement;
-    if (parent){
-      parent.style.display = "flex";
-      parent.style.gap = "10px";
-      parent.style.justifyContent = "center";
-      parent.style.alignItems = "stretch";
-      parent.style.flexWrap = "wrap";
-    }
-
-    labels.forEach(lab => {
-      lab.style.display = "inline-flex";
-      lab.style.alignItems = "center";
-      lab.style.justifyContent = "center";
-      lab.style.minWidth = "120px";
-      lab.style.height = "44px";
-      lab.style.lineHeight = "1";
-      lab.style.boxSizing = "border-box";
-      lab.style.padding = "0 12px";
-      lab.style.whiteSpace = "nowrap";
-      lab.style.textAlign = "center";
-    });
-
-    inputs.forEach(inp => { inp.style.marginRight = "6px"; });
-  }catch(e){
-    console.warn("fixModeToggleAlignment error", e);
-  }
+function normalizeMode(m){
+  return (String(m || "").trim() === "fun") ? "fun" : "trivia";
 }
-
-// ==============================
-// UI helper
-// ==============================
-const $ = (id) => document.getElementById(id);
-
-function setStatus(text, kind="muted") {
-  const el = document.getElementById("placeStatus");
-  if (!el) return;
-  el.className = kind;
-  el.textContent = text;
-}
-
-function normalizePlaceName(input) {
-  return input
-    .replace(/[ 　]+/g, " ")
-    .replace(/(都|道|府|県|市|区|町|村)$/g, "")
-    .replace(/(都|道|府|県|市|区|町|村)/g, "")
-    .trim();
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-// ==============================
-// ✅ ネタ重複判定（canonical / dedupe）
-// ==============================
-function normalizeMetaphorText(text){
-  return String(text || "")
-    .normalize("NFKC")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/[ \t\u3000]+/g, " ")
-    .replace(/\n+/g, "\n")
-    .replace(/\s*[%％]\s*/g, "%")
-    .replace(/\s*[:：]\s*/g, "：")
-    .replace(/[‐-‒–—―ー]+/g, "ー")
-    .replace(/[!！?？。．、,，;；]+$/g, "")
-    .trim()
-    .toLowerCase();
-}
-
-function makeMetaphorDedupeKey({ mode, bucket, text }){
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
-  const t = normalizeMetaphorText(text);
-  return `m:${m}|b:${b}|t:${t}`;
-}
-
-function sourcePriority(source){
-  const s = String(source || "");
-  if (s === "public") return 4;
-  if (s === "json") return 3;
-  if (s === "base") return 2;
-  if (s === "hof_daily") return 5;
-  return 1;
-}
-
-function pickBetterText(a, b){
-  const ta = String(a || "").trim();
-  const tb = String(b || "").trim();
-  if (!ta) return tb;
-  if (!tb) return ta;
-  if (tb.length > ta.length) return tb;
-  return ta;
-}
-
-function pickBetterPenName(a, b){
-  const pa = normalizePenName(a);
-  const pb = normalizePenName(b);
-  return pb || pa || null;
-}
-
-function mergeDisplayItems(items, { mode, bucket } = {}){
-  const map = new Map();
-
-  for (const raw of (Array.isArray(items) ? items : [])) {
-    const text = String(raw?.text || "").trim();
-    if (!text) continue;
-
-    const itemMode = (raw?.mode === "fun" ? "fun" : (mode === "fun" ? "fun" : "trivia"));
-    const itemBucket = Number.isFinite(Number(raw?.bucket))
-      ? window.bucket10(Number(raw.bucket))
-      : (Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0);
-
-    const key = makeMetaphorDedupeKey({ mode: itemMode, bucket: itemBucket, text });
-    const current = map.get(key);
-
-    if (!current) {
-      map.set(key, {
-        ...raw,
-        text,
-        mode: itemMode,
-        bucket: itemBucket,
-        source: raw?.source || null,
-        id: raw?.id ? String(raw.id).trim() : null,
-        penName: raw?.penName || null,
-        totalLikes: Number(raw?.totalLikes || 0),
-        likes: Number(raw?.likes || 0),
-        hof: !!raw?.hof,
-        __dedupeKey: key,
-        __canonText: normalizeMetaphorText(text),
-      });
-      continue;
-    }
-
-    const keepIncoming = sourcePriority(raw?.source) > sourcePriority(current?.source);
-
-    current.text = pickBetterText(current.text, text);
-    current.penName = pickBetterPenName(current.penName, raw?.penName);
-    current.totalLikes = Math.max(Number(current.totalLikes || 0), Number(raw?.totalLikes || 0));
-    current.likes = Math.max(Number(current.likes || 0), Number(raw?.likes || 0));
-    current.hof = !!current.hof || !!raw?.hof;
-    current.__canonText = normalizeMetaphorText(current.text);
-
-    if (keepIncoming) {
-      current.source = raw?.source || current.source || null;
-      current.id = raw?.id ? String(raw.id).trim() : (current.id || null);
-      current.mode = itemMode;
-      current.bucket = itemBucket;
-    } else if (!current.id && raw?.id) {
-      current.id = String(raw.id).trim();
-    }
-  }
-
-  return Array.from(map.values());
-}
-
-// =========================
-// ✅ 復旧（reindex）案内UI
-// =========================
-function ensureReindexHintDom(){
-  if (document.getElementById("reindexHint")) return;
-
-  const target = document.getElementById("todayRankingWrap")
-              || document.getElementById("placeStatus")
-              || document.body;
-
-  const box = document.createElement("div");
-  box.id = "reindexHint";
-  box.style.display = "none";
-  box.style.maxWidth = "760px";
-  box.style.margin = "12px auto 0 auto";
-  box.style.padding = "12px 14px";
-  box.style.borderRadius = "14px";
-  box.style.border = "1px solid rgba(239,68,68,.25)";
-  box.style.background = "rgba(254, 226, 226, .75)";
-  box.style.color = "#7f1d1d";
-  box.style.fontWeight = "900";
-  box.style.boxShadow = "0 10px 24px rgba(2,6,23,.08)";
-  box.style.lineHeight = "1.35";
-
-  box.innerHTML = `
-    <div style="font-size:14px;">⚠️ 公開ネタの目次（index）が空の可能性があります</div>
-    <div style="margin-top:6px; font-weight:700; font-size:12px;">
-      管理画面（admin.html）で <b>「復旧（reindex）」</b> を押してください。<br>
-      ※投稿データ本体は消えず、一覧（idx）を作り直す処理です。
-    </div>
-  `;
-
-  if (target && target.id === "todayRankingWrap" && target.parentElement){
-    target.parentElement.insertBefore(box, target);
-  } else if (target && target !== document.body) {
-    target.insertAdjacentElement("afterend", box);
-  } else {
-    document.body.appendChild(box);
-  }
-}
-
-function setReindexHint(need, detailText){
-  try{
-    ensureReindexHintDom();
-    const el = document.getElementById("reindexHint");
-    if (!el) return;
-
-    if (!need){
-      el.style.display = "none";
-      return;
-    }
-
-    if (detailText){
-      const lines = el.querySelectorAll("div");
-      if (lines && lines[1]) {
-        lines[1].innerHTML = `<span style="font-weight:700; font-size:12px;">${escapeHtml(detailText)}</span>`;
-      }
-    }
-
-    el.style.display = "";
-  }catch(e){
-    console.warn("setReindexHint error", e);
-  }
-}
-
-// ✅ ペンネーム表示ルール
-function normalizePenName(name){
-  const n = String(name || "").trim();
-  if (!n) return null;
-  if (n === "匿名") return null;
-  if (n === "初期ネタ") return null;
-  return n;
-}
-function penHtmlIfAny(name){
-  const n = normalizePenName(name);
-  return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
+function modeLabelJa(mode){
+  return normalizeMode(mode) === "fun" ? "お笑い" : "雑学";
 }
 function modeBadgeHtml(mode){
-  const m = (mode === "fun") ? "fun" : "trivia";
-  const label = (m === "fun") ? "お笑い" : "雑学";
-  return ` <span class="mode-badge ${m}">${label}</span>`;
+  const m = normalizeMode(mode);
+  return `<span class="mode-chip ${m}">${m === "fun" ? "お笑い" : "雑学"}</span>`;
+}
+function penHtmlIfAny(penName){
+  const p = String(penName || "").trim();
+  if (!p) return "";
+  return ` <span class="muted">(${escapeHtml(p)})</span>`;
+}
+function num(n){
+  const x = Number(n || 0);
+  return Number.isFinite(x) ? x : 0;
 }
 
-// ==============================
-// 承認待ち投稿（Workers）
-// ==============================
-async function submitToPending(mode, bucket, text, penName, penPin, clientId){
-  const res = await fetch(`${API_BASE}/api/submit`, {
-    method: "POST",
-    cache: "no-store",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ mode, bucket, text, penName, penPin, clientId, from: "mobile" })
-  });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) {
-    const code = data?.code || data?.error || `submit failed ${res.status}`;
-    throw new Error(code);
+function canonicalText(s){
+  return String(s || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .replace(/[！!]+/g, "!")
+    .replace(/[？?]+/g, "?")
+    .trim();
+}
+function makeGlobalId({ mode, bucket, text, source }){
+  return [normalizeMode(mode), bucket10(bucket), canonicalText(text), String(source || "x")].join("::");
+}
+function uniqueBy(arr, keyFn){
+  const m = new Map();
+  for (const it of arr || []){
+    const k = keyFn(it);
+    if (!m.has(k)) m.set(k, it);
   }
+  return [...m.values()];
+}
+function mergeDisplayItems(items){
+  return uniqueBy(items || [], (it) => it?.id || makeGlobalId({
+    mode: it?.mode,
+    bucket: it?.bucket,
+    text: it?.text,
+    source: it?.source || "merged"
+  }));
+}
+
+// =========================
+// ✅ state
+// =========================
+const state = {
+  mode: "trivia",
+  bucket: 0,
+  currentWeatherCode: null,
+  tz: "Asia/Tokyo",
+  nowLabel: "",
+  currentPopText: "",
+  currentPopMeta: null,
+  currentPopSource: "default",
+  publicItems: [],
+  hallItems: [],
+  hofThreshold: 20,
+};
+
+// =========================
+// ✅ DOM helper
+// =========================
+const $ = (id) => document.getElementById(id);
+
+// =========================
+// ✅ weather icon / label
+// =========================
+function weatherEmoji(code){
+  const c = Number(code);
+  if ([0].includes(c)) return "☀️";
+  if ([1,2].includes(c)) return "🌤️";
+  if ([3].includes(c)) return "☁️";
+  if ([45,48].includes(c)) return "🌫️";
+  if ([51,53,55,56,57].includes(c)) return "🌦️";
+  if ([61,63,65,66,67,80,81,82].includes(c)) return "🌧️";
+  if ([71,73,75,77,85,86].includes(c)) return "❄️";
+  if ([95,96,99].includes(c)) return "⛈️";
+  return "🌈";
+}
+function weatherLabel(code){
+  const c = Number(code);
+  if (c === 0) return "快晴";
+  if ([1,2].includes(c)) return "晴れ";
+  if (c === 3) return "くもり";
+  if ([45,48].includes(c)) return "霧";
+  if ([51,53,55,56,57].includes(c)) return "霧雨";
+  if ([61,63,65,66,67,80,81,82].includes(c)) return "雨";
+  if ([71,73,75,77,85,86].includes(c)) return "雪";
+  if ([95,96,99].includes(c)) return "雷雨";
+  return "天気";
+}
+function themeClassFromCode(code){
+  const c = Number(code);
+  if ([95,96,99].includes(c)) return "theme-storm";
+  if ([61,63,65,66,67,80,81,82].includes(c)) return "theme-rain";
+  if ([71,73,75,77,85,86].includes(c)) return "theme-snow";
+  if ([45,48].includes(c)) return "theme-fog";
+  if (c === 0) return "theme-sunny";
+  if ([1,2,3].includes(c)) return "theme-cloudy";
+  return "theme-default";
+}
+function applyThemeByWeatherCode(code){
+  const body = document.body;
+  body.classList.remove(
+    "theme-storm", "theme-rain", "theme-snow",
+    "theme-fog", "theme-sunny", "theme-cloudy", "theme-default"
+  );
+  body.classList.add(themeClassFromCode(code));
+}
+
+// =========================
+// ✅ API fetch helper
+// =========================
+async function fetchJson(url, opt={}){
+  const res = await fetch(url, { cache:"no-store", ...opt });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok) throw new Error(data?.error || `${res.status}`);
   return data;
 }
 
-// ==============================
-// publicネタ取得（Workers）
-// ==============================
-async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
-  const params = new URLSearchParams();
-  if (mode) params.set("mode", mode);
-  if (Number.isFinite(bucket)) params.set("bucket", String(bucket));
-  params.set("limit", String(limit));
+// =========================
+// ✅ weather / search
+// =========================
+async function fetchWeather(){
+  const lat = 38.2682;
+  const lon = 140.8694;
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,weather_code&hourly=precipitation_probability` +
+    `&timezone=Asia%2FTokyo&forecast_days=1`;
 
-  const url = `${API_BASE}/api/public?${params.toString()}`;
-  const res = await fetch(url, { method: "GET", cache: "no-store" });
+  const r = await fetch(url, { cache:"no-store" });
+  const j = await r.json();
 
-  if (!res.ok){
-    setReindexHint(false);
-    throw new Error(`public fetch failed: ${res.status}`);
+  const code = Number(j?.current?.weather_code ?? 0);
+  const now = j?.current?.time || null;
+  const tz = j?.timezone || "Asia/Tokyo";
+
+  let popNow = 0;
+  let hourLabel = "";
+  if (Array.isArray(j?.hourly?.time) && Array.isArray(j?.hourly?.precipitation_probability) && now) {
+    const idx = j.hourly.time.indexOf(now);
+    if (idx >= 0) {
+      popNow = Number(j.hourly.precipitation_probability[idx] ?? 0);
+      const hh = String(new Date(now).getHours()).padStart(2, "0");
+      hourLabel = `${hh}:00`;
+    }
   }
 
-  const data = await res.json().catch(()=>null);
-  if (!data?.ok) {
-    setReindexHint(false);
-    throw new Error("public not ok");
+  return {
+    weatherCode: code,
+    weatherEmoji: weatherEmoji(code),
+    weatherLabel: weatherLabel(code),
+    precipitationProbability: popNow,
+    timeLabel: hourLabel,
+    tz,
+  };
+}
+
+// =========================
+// ✅ shared json
+// =========================
+const SHARED_JSON_URL = "./metaphors.json";
+let sharedItems = [];
+window.JSON_METAPHORS = window.JSON_METAPHORS || [];
+
+async function loadSharedJSON() {
+  try {
+    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`shared json http ${res.status}`);
+
+    const json = await res.json();
+    const arr = Array.isArray(json) ? json
+      : Array.isArray(json?.items) ? json.items
+      : [];
+
+    sharedItems = arr
+      .map(x => ({
+        mode: normalizeMode(x.mode),
+        bucket: bucket10(x.bucket ?? 0),
+        text: String(x.text || "").trim(),
+        penName: x.penName ? String(x.penName).trim() : null,
+        source: "shared_json",
+        id: makeGlobalId({
+          mode: x.mode,
+          bucket: x.bucket ?? 0,
+          text: x.text || "",
+          source: "shared_json"
+        })
+      }))
+      .filter(x => x.text && !isNgText(x.text));
+
+    window.JSON_METAPHORS = sharedItems.slice();
+  } catch (e) {
+    console.warn("loadSharedJSON failed", e?.message || e);
+    sharedItems = [];
+    window.JSON_METAPHORS = [];
   }
+}
+
+// =========================
+// ✅ public / latest
+// =========================
+async function fetchLatestPublic(mode="trivia", limit=10){
+  const m = normalizeMode(mode);
+  const url = `${API_BASE}/api/public/latest?mode=${encodeURIComponent(m)}&limit=${encodeURIComponent(limit)}`;
+  const data = await fetchJson(url);
+
+  const items = Array.isArray(data?.items) ? data.items : [];
+  return items
+    .map(raw => ({
+      id: raw?.id ? String(raw.id).trim() : makeGlobalId({
+        mode: m,
+        bucket: Number(raw?.bucket || 0),
+        text: raw?.text || "",
+        source: "public_latest"
+      }),
+      mode: normalizeMode(raw?.mode || m),
+      bucket: bucket10(raw?.bucket ?? 0),
+      text: String(raw?.text || "").trim(),
+      penName: raw?.penName ? String(raw.penName).trim() : null,
+      likes: Number(raw?.likes || 0),
+      totalLikes: Number(raw?.totalLikes || 0),
+      source: "public_latest",
+      approvedAt: raw?.approvedAt || raw?.createdAt || null
+    }))
+    .filter(x => x.text && !isNgText(x.text));
+}
+
+// =========================
+// ✅ ranking today
+// =========================
+async function fetchTodayRanking(mode="trivia", limit=3){
+  const m = normalizeMode(mode);
+  const url =
+    `${API_BASE}/api/ranking_today?mode=${encodeURIComponent(m)}` +
+    `&limit=${encodeURIComponent(limit)}&agg_all_buckets=1`;
+
+  const data = await fetchJson(url);
+  const items = Array.isArray(data?.items) ? data.items : [];
+
+  return items
+    .map(raw => ({
+      id: raw?.id ? String(raw.id).trim() : makeGlobalId({
+        mode: m,
+        bucket: Number(raw?.bucket || 0),
+        text: raw?.text || "",
+        source: "ranking_today"
+      }),
+      mode: normalizeMode(raw?.mode || m),
+      bucket: bucket10(raw?.bucket ?? 0),
+      text: String(raw?.text || "").trim(),
+      penName: raw?.penName ? String(raw.penName).trim() : null,
+      likesToday: Number(raw?.likesToday || 0),
+      source: "ranking_today"
+    }))
+    .filter(x => x.text && !isNgText(x.text));
+}
+
+// =========================
+// ✅ hall of fame
+// =========================
+async function fetchHallOfFame(mode="trivia", offset=0, limit=20){
+  const m = normalizeMode(mode);
+  const url =
+    `${API_BASE}/api/hof?mode=${encodeURIComponent(m)}&scope=all` +
+    `&offset=${encodeURIComponent(offset)}&limit=${encodeURIComponent(limit)}`;
+
+  const data = await fetchJson(url);
+
+  if (data?.hofThreshold != null) {
+    state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+  }
+
+  const items = Array.isArray(data?.items) ? data.items : [];
+  return items
+    .map(raw => ({
+      id: raw?.id ? String(raw.id).trim() : makeGlobalId({
+        mode: raw?.mode || m,
+        bucket: Number(raw?.bucket || 0),
+        text: raw?.text || "",
+        source: "hof_api"
+      }),
+      mode: normalizeMode(raw?.mode || m),
+      bucket: bucket10(raw?.bucket ?? 0),
+      text: String(raw?.text || "").trim(),
+      penName: raw?.penName ? String(raw.penName).trim() : null,
+      totalLikes: Number(raw?.totalLikes || 0),
+      likes: Number(raw?.likes || 0),
+      hof: true,
+      source: "hof_api"
+    }))
+    .filter(x => x.text && !isNgText(x.text));
+}
+
+function normalizeHallSnapshotItem(raw){
+  const mode = (raw?.mode === "fun" ? "fun" : "trivia");
+  const text = String(raw?.text || "").trim();
+  if (!text) return null;
+
+  return {
+    id: raw?.id ? String(raw.id).trim() : makeGlobalId({
+      mode,
+      bucket: Number.isFinite(Number(raw?.bucket)) ? Number(raw.bucket) : 0,
+      text,
+      source: "hof_daily"
+    }),
+    text,
+    penName: raw?.penName ? String(raw.penName).trim() : null,
+    totalLikes: Number(raw?.totalLikes || 0),
+    likes: Number(raw?.likes || 0),
+    bucket: Number.isFinite(Number(raw?.bucket)) ? window.bucket10(Number(raw.bucket)) : 0,
+    mode,
+    hof: true,
+    source: "hof_daily"
+  };
+}
+
+function loadHallDailyCache(){
+  try{
+    return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
+  }catch{
+    return null;
+  }
+}
+
+function saveHallDailyCache(payload){
+  try{
+    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify({
+      ...payload,
+      _savedAt: Date.now(),
+    }));
+  }catch{}
+}
+
+async function fetchHallOfFameDaily(limit = 20){
+  const today = todayJSTString();
+  const cached = loadHallDailyCache();
+
+  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length > 0) {
+    if (cached?.hofThreshold != null) {
+      state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
+    }
+    return {
+      generatedAt: cached?.generatedAt || null,
+      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
+      items: (cached?.items || [])
+        .map(normalizeHallSnapshotItem)
+        .filter(Boolean)
+        .filter(it => !isNgText(it.text))
+        .slice(0, limit)
+    };
+  }
+
+  const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
   try{
-    const note = String(data?.note || "");
-    const itemsRaw = Array.isArray(data?.items) ? data.items : [];
-    if (data?.ok === true && note === "no_index_or_empty" && itemsRaw.length === 0){
-      setReindexHint(true, "公開ネタが0件です（no_index_or_empty）。管理画面で「復旧（reindex）」を実行してください。");
-    } else {
-      setReindexHint(false);
+    const res = await fetch(url, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `hof_daily failed ${res.status}`);
     }
-  }catch{}
 
-  state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+    const items = (Array.isArray(data?.items) ? data.items : [])
+      .map(normalizeHallSnapshotItem)
+      .filter(Boolean)
+      .filter(it => !isNgText(it.text));
 
-  const items = Array.isArray(data.items) ? data.items : [];
-  const deduped = mergeDisplayItems(
-    items
-      .map(it => ({
-        id: String(it.id || "").trim(),
-        text: String(it.text || "").trim(),
-        penName: (it.penName ? String(it.penName).trim() : null),
-        totalLikes: Number(it.totalLikes || 0),
-        likes: Number(it.likes || 0),
-        hof: !!it.hof,
-        source: "public",
-        mode: (mode === "fun" ? "fun" : "trivia"),
-        bucket: window.bucket10(Number(bucket))
+    const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
+    state.hofThreshold = hofThreshold;
+
+    if (!items.length) {
+      throw new Error(data?.note || "hof_daily empty");
+    }
+
+    const payload = {
+      day: today,
+      generatedAt: data?.generatedAt || null,
+      hofThreshold,
+      items
+    };
+    saveHallDailyCache(payload);
+
+    return {
+      generatedAt: payload.generatedAt,
+      hofThreshold,
+      items: items.slice(0, limit)
+    };
+  }catch(e){
+    console.warn("hof daily api load failed", e?.message || e);
+    throw e;
+  }
+}
+
+async function fetchHallOfFameForRanking(limit = 20){
+  try{
+    const daily = await fetchHallOfFameDaily(limit);
+
+    if (Array.isArray(daily?.items) && daily.items.length > 0) {
+      return {
+        generatedAt: daily?.generatedAt || null,
+        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+        items: daily.items.slice(0, limit)
+      };
+    }
+
+    throw new Error("hof_daily empty");
+  }catch(e){
+    console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
+
+    const [tItems, fItems] = await Promise.all([
+      fetchHallOfFame("trivia", 0, limit),
+      fetchHallOfFame("fun",    0, limit),
+    ]);
+
+    const merged = mergeDisplayItems(
+      [...(Array.isArray(tItems) ? tItems : []), ...(Array.isArray(fItems) ? fItems : [])]
+        .map(it => ({
+          ...it,
+          text: String(it?.text || "").trim(),
+          penName: it?.penName ? String(it.penName).trim() : null,
+          totalLikes: Number(it?.totalLikes || 0),
+          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+          mode: (it?.mode === "fun" ? "fun" : (it?.__mode === "fun" ? "fun" : "trivia")),
+          source: "public",
+          hof: true
+        }))
+        .filter(it => it.text)
+        .filter(it => !isNgText(it.text))
+    )
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+
+    return {
+      generatedAt: null,
+      hofThreshold: Number(state.hofThreshold || 20),
+      items: merged.slice(0, limit)
+    };
+  }
+}
+
+function buildHallCardHtmlFromSnapshot(hofData){
+  const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
+  const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
+  const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
+
+  if (!hofItems.length) {
+    return `
+      <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+        <div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>
+        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件、または本日JSON未生成）</div>
+      </div>
+    `;
+  }
+
+  const rows = hofItems.slice(0, 20).map((it, idx) => {
+    const pen = penHtmlIfAny(it.penName);
+    const totalLikes = Number(it.totalLikes || 0);
+    const md = (it.mode === "fun") ? "fun" : "trivia";
+    return `
+      <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+        <div style="font-weight:800;">
+          ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(md)}
+          <span class="hof-badge">👑殿堂入り</span>
+        </div>
+        <div class="muted">累計👍：${totalLikes}</div>
+      </div>
+    `;
+  }).join("");
+
+  const snapshotNote = generatedAt
+    ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
+    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>`;
+
+  return `
+    <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+      ${snapshotNote}
+      <div>${rows}</div>
+    </div>
+  `;
+}
+
+async function ensureHallSnapshotLoaded(){
+  if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
+    return __hofSnapshotMemory;
+  }
+  if (__hofSnapshotPromise) {
+    return __hofSnapshotPromise;
+  }
+
+  __hofSnapshotPromise = fetchHallOfFameForRanking(20)
+    .then((hofData) => {
+      __hofSnapshotMemory = hofData;
+      __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(hofData);
+      return hofData;
+    })
+    .finally(() => {
+      __hofSnapshotPromise = null;
+    });
+
+  return __hofSnapshotPromise;
+}
+// ==============================
+// 共有ネタ（GitHub PagesのJSON / metaphors.json）
+// ==============================
+const SHARED_JSON_URL = "./metaphors.json";
+let sharedItems = [];
+window.JSON_METAPHORS = window.JSON_METAPHORS || [];
+
+async function loadSharedJSON() {
+  try {
+    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`shared json http ${res.status}`);
+
+    const json = await res.json();
+    const arr = Array.isArray(json) ? json
+      : Array.isArray(json?.items) ? json.items
+      : [];
+
+    sharedItems = arr
+      .map(x => ({
+        mode: normalizeMode(x.mode),
+        bucket: bucket10(x.bucket ?? 0),
+        text: String(x.text || "").trim(),
+        penName: x.penName ? String(x.penName).trim() : null,
+        source: "shared_json",
+        id: makeGlobalId({
+          mode: x.mode,
+          bucket: x.bucket ?? 0,
+          text: x.text || "",
+          source: "shared_json"
+        })
       }))
-      .filter(x => x.id && x.text)
-      .filter(x => !isNgText(x.text)),
-    { mode, bucket }
-  );
+      .filter(x => x.text && !isNgText(x.text));
 
-  return deduped.map(x => ({
-    id: x.id,
-    text: x.text,
-    penName: x.penName || null,
-    totalLikes: Number(x.totalLikes || 0),
-    hof: !!x.hof
-  }));
+    window.JSON_METAPHORS = sharedItems.slice();
+  } catch (e) {
+    console.warn("loadSharedJSON failed", e?.message || e);
+    sharedItems = [];
+    window.JSON_METAPHORS = [];
+  }
+}
+
+// ==============================
+// 公開ネタ（API）
+// ==============================
+async function fetchPublic(mode, bucket){
+  const m = normalizeMode(mode);
+  const b = bucket10(bucket);
+  const url = `${API_BASE}/api/public?mode=${encodeURIComponent(m)}&bucket=${encodeURIComponent(b)}&limit=300`;
+
+  try{
+    const res = await fetch(url, { cache: "no-store" });
+    const data = await res.json().catch(()=>null);
+    if (!res.ok || !data?.ok) throw new Error(`public http ${res.status}`);
+
+    return (Array.isArray(data.items) ? data.items : [])
+      .map(raw => ({
+        id: raw?.id ? String(raw.id).trim() : makeGlobalId({
+          mode: m,
+          bucket: b,
+          text: raw?.text || "",
+          source: "public"
+        }),
+        mode: normalizeMode(raw?.mode || m),
+        bucket: bucket10(raw?.bucket ?? b),
+        text: String(raw?.text || "").trim(),
+        penName: raw?.penName ? String(raw.penName).trim() : null,
+        likes: num(raw?.likes),
+        totalLikes: num(raw?.totalLikes),
+        source: "public",
+        hof: !!raw?.hof,
+      }))
+      .filter(x => x.text && !isNgText(x.text));
+  }catch(e){
+    console.warn("fetchPublic failed", e?.message || e);
+    return [];
+  }
+}
+
+// ==============================
+// いいね
+// ==============================
+async function likeItem(item){
+  if (!item?.id) return;
+  const cid = getClientId();
+
+  const res = await fetch(`${API_BASE}/api/like`, {
+    method: "POST",
+    cache: "no-store",
+
+      .filter(x => x.id && x.text)
+      .filter(x => !isNgText(x.text));
 }
 // ==============================
 // ✅ 最新public（Workers /api/public_latest）
@@ -795,6 +905,15 @@ function loadHallDailyCache(){
   }
 }
 
+function saveHallDailyCache(payload){
+  try{
+    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify({
+      ...payload,
+      _savedAt: Date.now(),
+    }));
+  }catch{}
+}
+
 async function fetchHallOfFameDaily(limit = 20){
   const today = todayJSTString();
   const cached = loadHallDailyCache();
@@ -855,6 +974,7 @@ async function fetchHallOfFameDaily(limit = 20){
     throw e;
   }
 }
+
 async function fetchHallOfFameForRanking(limit = 20){
   try{
     const daily = await fetchHallOfFameDaily(limit);
@@ -900,6 +1020,7 @@ async function fetchHallOfFameForRanking(limit = 20){
     };
   }
 }
+
 function buildHallCardHtmlFromSnapshot(hofData){
   const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
   const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
@@ -942,6 +1063,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
     </div>
   `;
 }
+
 async function ensureHallSnapshotLoaded(){
   if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
     return __hofSnapshotMemory;
@@ -952,6 +1074,7 @@ async function ensureHallSnapshotLoaded(){
   __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(hofData);
   return hofData;
 }
+
 // ==============================
 // 共有ネタ（GitHub PagesのJSON / metaphors.json）
 // ==============================
@@ -1441,510 +1564,9 @@ function renderEmpty() {
     };
     updateLikeUI(k);
     updateDeleteUI(k);
-  });
-
-  if (metaAll) metaAll.textContent = "地点を選んでください";
-}
-
-// =========================
-// render（メイン）
-// =========================
-function render() {
-  const hintEl = document.getElementById("popHint");
-  const sourceTag = document.getElementById("sourceTag");
-  const tzTag = document.getElementById("tzTag");
-  const metaAll = document.getElementById("metaphor");
-  const footEl = document.getElementById("metaFoot");
-
-  if (sourceTag) sourceTag.textContent = state.source;
-  if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
-
-  const setSlot = (slotKey, value, label) => {
-    const popEl = document.getElementById(`pop_${slotKey}`);
-    const metaEl = document.getElementById(`meta_${slotKey}`);
-
-    if (value == null) {
-      if (popEl) popEl.textContent = "--%";
-      if (metaEl) metaEl.textContent = "データなし";
-      setIcon(slotKey, null);
-
-      state.currentPhrases[slotKey] = {
-        text: null, source: null, id: null, penName: null,
-        likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
-      };
-      updateLikeUI(slotKey);
-      updateDeleteUI(slotKey);
-      return null;
-    }
-
-    const rounded = window.bucket10(value);
-    if (popEl) popEl.textContent = `${rounded}%`;
-    setIcon(slotKey, rounded);
-
-    const mode = getSelectedMode();
-    let picked;
-
-    const prev = state.currentPhrases[slotKey] || {};
-    const sameContext =
-      !!prev.text &&
-      prev.mode === mode &&
-      Number(prev.bucket) === Number(rounded) &&
-      !isNgText(prev.text);
-
-    if (!window.__forceRepick && sameContext) {
-      picked = prev;
-    } else if (__freezeMetaphor && prev?.text) {
-      picked = prev;
-    } else {
-      picked = pickMetaphor(mode, rounded);
-    }
-
-    for (let i = 0; i < 5 && picked?.text && isNgText(picked.text); i++) {
-      picked = pickMetaphor(mode, rounded);
-    }
-
-    if (picked?.text && isNgText(picked.text)) {
-      picked = {
-        text: "（非表示ワードが含まれるため表示できません）",
-        source: null,
-        id: null,
-        penName: null,
-        totalLikes: 0,
-        hof: false,
-        bucket: rounded,
-        mode,
-        dedupeKey: null
-      };
-    }
-
-    try {
-      const mbKey = keyMB(mode, rounded);
-      const pubArr = publicCache.get(mbKey);
-
-      if (Array.isArray(pubArr) && pubArr.length && picked?.text) {
-        const canon = normalizeMetaphorText(picked.text);
-        const hit = pubArr.find(it => normalizeMetaphorText(it?.text || "") === canon);
-
-        if (hit) {
-          picked = {
-            ...picked,
-            source: "public",
-            id: String(hit.id || picked.id || "").trim() || null,
-            penName: (hit.penName != null ? String(hit.penName).trim() : picked.penName),
-            totalLikes: Number(hit.totalLikes || 0),
-            hof: !!hit.hof,
-            dedupeKey: makeMetaphorDedupeKey({ mode, bucket: rounded, text: hit.text || picked.text })
-          };
-        }
-      }
-    } catch (e) {
-      console.warn("public upgrade failed", e);
-    }
-
-    const displayPen = (picked.penName && String(picked.penName).trim())
-      ? String(picked.penName).trim()
-      : "匿名";
-
-    const totalLikesPicked = Number(picked.totalLikes || 0);
-    const hofPicked = !!picked.hof || (totalLikesPicked >= Number(state.hofThreshold || 20));
-
-    if (metaEl) {
-      const penHtml = penHtmlIfAny(displayPen);
-      const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
-      metaEl.innerHTML =
-        `${escapeHtml(label)}：${escapeHtml(picked.text)}${penHtml}${hofHtml}` +
-        ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source || "base")} b:${rounded}]</span>`;
-    }
-
-    const prevId = state.currentPhrases[slotKey]?.id || null;
-    const nextId = picked.id || null;
-
-    const nextLikesToday = (prevId && nextId && prevId === nextId)
-      ? Number(state.currentPhrases[slotKey]?.likesToday || 0)
-      : 0;
-
-    const nextTotalLikes = (prevId && nextId && prevId === nextId)
-      ? Number(state.currentPhrases[slotKey]?.totalLikes || totalLikesPicked || 0)
-      : Number(totalLikesPicked || 0);
-
-    state.currentPhrases[slotKey] = {
-      text: picked.text,
-      source: picked.source || null,
-      id: nextId,
-      penName: displayPen,
-      likesToday: nextLikesToday,
-      totalLikes: nextTotalLikes,
-      hof: hofPicked,
-      mode,
-      bucket: rounded,
-      dedupeKey: picked.dedupeKey || makeMetaphorDedupeKey({ mode, bucket: rounded, text: picked.text || "" })
-    };
-
-    updateLikeUI(slotKey);
-    updateDeleteUI(slotKey);
-
-    try { applyTheme(rounded); } catch {}
-
-    return { slotKey, value: rounded, text: picked.text, label };
-  };
-
-  if (!state.pops) {
-    if (hintEl) hintEl.textContent = "地点を選ぶと自動取得します";
-    renderEmpty();
-    if (footEl) footEl.textContent = "";
-    try { ensureMySubmissionsDom(); } catch {}
-    try { renderMySubmissions(); } catch (e) { console.warn("renderMySubmissions error", e); }
     return;
   }
-
-  if (hintEl) hintEl.textContent = state.placeLabel ? `地点：${state.placeLabel}` : "地点：--";
-
-  const a = setSlot("m", state.pops.m, "朝");
-  const b = setSlot("d", state.pops.d, "昼");
-  const c = setSlot("e", state.pops.e, "夜");
-
-  const candidates = [a, b, c].filter(Boolean);
-  if (!candidates.length) {
-    if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
-    if (footEl) footEl.textContent = "";
-    return;
-  }
-
-  const maxOne = candidates.reduce((x, y) => (y.value > x.value ? y : x));
-  if (metaAll) {
-    const p = state.currentPhrases?.[maxOne.slotKey] || {};
-    const src = p.source || "base";
-    const bkt = Number(p.bucket ?? maxOne.value);
-
-    metaAll.innerHTML =
-      `今日いちばん怪しいのは【${escapeHtml(maxOne.label)}】：${escapeHtml(String(maxOne.value))}% → ${escapeHtml(String(maxOne.text))}` +
-      ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(src)} b:${escapeHtml(String(bkt))}]</span>`;
-  }
-
-  if (footEl) {
-    footEl.textContent = "※降水確率を0/10/…/100%に丸め、公開ネタ（public/base/json）からランダム表示";
-  }
-}
-
-// =========================
-// API: geocode
-// =========================
-async function geocode(name) {
-  const url = new URL(GEO);
-  url.searchParams.set("name", name);
-  url.searchParams.set("count", "10");
-  url.searchParams.set("language", "ja");
-  url.searchParams.set("format", "json");
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error("地点検索に失敗しました");
-  return await res.json();
-}
-
-// ✅（内部）天気取得本体
-async function fetchPopsBySlotsNetwork(lat, lon, timeoutMs = 4500) {
-  const url = new URL(FC);
-  url.searchParams.set("latitude", String(lat));
-  url.searchParams.set("longitude", String(lon));
-  url.searchParams.set("hourly", "precipitation_probability");
-  url.searchParams.set("timezone", "auto");
-  url.searchParams.set("forecast_days", "2");
-
-  const res = await fetchWithTimeout(url.toString(), timeoutMs);
-  if (!res.ok) throw new Error("天気取得に失敗しました");
-  const data = await res.json();
-
-  const times = data.hourly?.time || [];
-  const pops  = data.hourly?.precipitation_probability || [];
-  const tz    = data.timezone || null;
-
-  const today = (times[0] || "").slice(0, 10);
-  const bucket = { m: [], d: [], e: [] };
-
-  for (let i = 0; i < Math.min(times.length, pops.length); i++) {
-    const t = times[i];
-    const p = pops[i];
-    if (typeof p !== "number") continue;
-    if (!t || t.slice(0, 10) !== today) continue;
-
-    const hour = Number(t.slice(11, 13));
-    if (hour >= 6 && hour <= 11) bucket.m.push(p);
-    else if (hour >= 12 && hour <= 17) bucket.d.push(p);
-    else if (hour >= 18 && hour <= 23) bucket.e.push(p);
-  }
-
-  const maxOrNull = (arr) => arr.length ? Math.round(Math.max(...arr)) : null;
-
-  return {
-    pops: { m: maxOrNull(bucket.m), d: maxOrNull(bucket.d), e: maxOrNull(bucket.e) },
-    tz
-  };
-}
-
-// ✅（表）SWR（キャッシュ即表示→裏で更新）
-async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}) {
-  const key = wxKey(lat, lon);
-  const cache = loadWxCache();
-  const hit = cache?.[key];
-
-  const now = Date.now();
-  const isFresh = hit && hit.ts && (now - hit.ts) < WX_CACHE_TTL_MS;
-
-  if (hit?.pops && typeof onCached === "function") {
-    onCached({ pops: hit.pops, tz: hit.tz || null, cached: true, fresh: !!isFresh });
-  }
-
-  const out = await fetchPopsBySlotsNetwork(lat, lon, timeoutMs);
-  cache[key] = { ts: Date.now(), pops: out.pops, tz: out.tz || null };
-  saveWxCache(cache);
-
-  return out;
-}
-// =========================
-// ✅ ランキングDOM
-// =========================
-function ensureRankingDom(){
-  let wrap = document.getElementById("todayRankingWrap");
-  if (!wrap) {
-    const refreshBtn = document.getElementById("refresh");
-    if (!refreshBtn) return;
-
-    wrap = document.createElement("div");
-    wrap.id = "todayRankingWrap";
-    wrap.style.marginTop = "14px";
-    wrap.innerHTML = `
-      <div id="rankStatus">更新中…</div>
-      <div class="rankBody" id="rankBody"></div>
-    `;
-    refreshBtn.insertAdjacentElement("afterend", wrap);
-  }
-
-  if (!document.getElementById("rankStatus")) {
-    const st = document.createElement("div");
-    st.id = "rankStatus";
-    st.textContent = "更新中…";
-    wrap.prepend(st);
-  }
-  if (!document.getElementById("rankBody")) {
-    const body = document.createElement("div");
-    body.className = "rankBody";
-    body.id = "rankBody";
-    wrap.appendChild(body);
-  }
-}
-
-// =========================
-// ✅ 最新枠（折り畳み）の開閉状態を保存
-// =========================
-const LATEST_OPEN_KEY = "latest_open_v1";
-function loadLatestOpen(){
-  try { return localStorage.getItem(LATEST_OPEN_KEY) === "1"; } catch { return false; }
-}
-function saveLatestOpen(open){
-  try { localStorage.setItem(LATEST_OPEN_KEY, open ? "1" : "0"); } catch {}
-}
-
-// =========================
-// ✅ ランキング固定（検索成功 or モード変更 のときだけ更新）
-// =========================
-let __rankingRenderedKey = null;
-
-function makeRankingKey({ mode, bucket, lat, lon }){
-  const mv = String(mode || "").trim();
-  const m = (mv === "fun" || mv === "お笑い") ? "fun" : "trivia";
-  const b = (bucket == null) ? "null" : String(window.bucket10(bucket));
-  const la = (lat == null) ? "null" : String(Math.round(Number(lat) * 10000) / 10000);
-  const lo = (lon == null) ? "null" : String(Math.round(Number(lon) * 10000) / 10000);
-  return `${m}|${b}|${la},${lo}`;
-}
-
-function invalidateRanking(){
-  __rankingRenderedKey = null;
-}
-
-function getRankingKeyNow(){
-  const mode = getSelectedMode();
-  const bucket = getCurrentMainBucket();
-  const lat = state.selectedLat;
-  const lon = state.selectedLon;
-  if (bucket == null || lat == null || lon == null) return null;
-  return makeRankingKey({ mode, bucket, lat, lon });
-}
-
-async function renderRankingOnce(key){
-  if (!key) return;
-  if (__rankingRenderedKey === key) return;
-  __rankingRenderedKey = key;
-  await renderRanking();
-}
-
-// =========================
-// ランキング表示（中身）
-// ✅ 表示は「最新（折り畳み）＋今日の総合TOP3＋殿堂入り」だけ
-// ✅ FIX: 古いレスポンスで上書きしない
-// ✅ FIX: 更新中でも今の内容は消さない
-// ✅ SPEED: 段階表示
-// =========================
-async function renderRanking(){
-  try{
-    ensureRankingDom();
-    const wrap = document.getElementById("todayRankingWrap");
-    const rankBody = document.getElementById("rankBody");
-    if (!wrap || !rankBody) return;
-
-    const reqId = ++__rankingReqSeq;
-    setRankingBusy(true);
-
-    const mode = getSelectedMode();
-    const hofTh = Number(state.hofThreshold || 20);
-    const latestOpen = loadLatestOpen();
-
-    rankBody.innerHTML = `
-      <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div class="muted">最新の公開ネタを読み込み中…</div>
-      </div>
-
-      <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div class="muted">今日のランキングを読み込み中…</div>
-      </div>
-
-      <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div class="muted">殿堂入りを読み込み中…</div>
-      </div>
-    `;
-
-    const latestPromise = (async () => {
-      try{
-        const latestRaw = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
-        const items = mergeDisplayItems(latestRaw, { mode });
-
-        if (!items.length) {
-          return `
-            <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-              <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
-                <summary style="display:flex; align-items:center; justify-content:space-between;">
-                  <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-                  <span class="muted" style="font-size:12px;">（開くと10件）</span>
-                </summary>
-                <div class="muted" style="margin-top:10px;">最新の公開ネタがまだありません</div>
-              </details>
-            </div>
-          `;
-        }
-
-        const rows = items.slice(0, 10).map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          const bkt = Number(it.bucket ?? 0);
-          const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${bktTag}</div>
-            </div>
-          `;
-        }).join("");
-
-        return `
-          <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
-              <summary style="display:flex; align-items:center; justify-content:space-between;">
-                <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-                <span class="muted" style="font-size:12px;">（開くと10件）</span>
-              </summary>
-              <div style="margin-top:10px;">${rows}</div>
-            </details>
-          </div>
-        `;
-      } catch (e) {
-        return `
-          <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
-              <summary style="display:flex; align-items:center; justify-content:space-between;">
-                <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-                <span class="muted" style="font-size:12px;">（開くと10件）</span>
-              </summary>
-              <div class="muted" style="margin-top:10px;">最新の取得に失敗：${escapeHtml(String(e?.message || e))}</div>
-            </details>
-          </div>
-        `;
-      }
-    })();
-
-    const todayPromise = (async () => {
-      try{
-        const rankingRaw = (await fetchRankingTodayAll(mode, 20))
-          .map(it => ({
-            ...it,
-            mode,
-            bucket: Number.isFinite(Number(it?.bucket)) ? Number(it.bucket) : 0,
-            text: String(it?.text || "").trim(),
-            penName: it?.penName ? String(it.penName).trim() : null,
-            likes: Number(it?.likes || 0),
-            source: "public"
-          }))
-          .filter(it => it.text)
-          .filter(it => !isNgText(it?.text));
-
-        const items = mergeDisplayItems(rankingRaw, { mode })
-          .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0))
-          .slice(0, 3);
-
-        if (!items.length) {
-          return `
-            <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-              <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
-              <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
-              <div class="muted">まだランキングがありません（今日の👍が0件）</div>
-            </div>
-          `;
-        }
-
-        const rows = items.map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}位：${escapeHtml(it.text)}${pen}${modeBadgeHtml(mode)}</div>
-              <div class="muted">今日の👍：${Number(it.likes||0)}</div>
-            </div>
-          `;
-        }).join("");
-
-        return `
-          <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
-            <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
-            <div>${rows}</div>
-          </div>
-        `;
-      } catch (e) {
-        return `
-          <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
-            <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
-            <div class="muted">総合ランキング取得に失敗：${escapeHtml(String(e?.message || e))}</div>
-          </div>
-        `;
-      }
-    })();
-
-    const hofPromise = (async () => {
-      try{
-        await ensureHallSnapshotLoaded();
-        return __hofSnapshotHtml || `
-          <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div class="muted">殿堂入りデータなし</div>
-          </div>
-        `;
-      } catch (e) {
-        return `
-          <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通）</div>
-            <div class="muted">殿堂入り取得に失敗：${escapeHtml(String(e?.message || e))}</div>
-          </div>
-        `;
-      }
-    })();
-
-    latestPromise.then((html) => {
-      if (reqId !== __rankingReqSeq) return;
+        if (reqId !== __rankingReqSeq) return;
       const el = document.getElementById("rankLatestCard");
       if (el) el.outerHTML = html;
       try{
@@ -2296,39 +1918,39 @@ function ensureFireworksCanvas(){
     const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     __fwCanvas.width  = Math.floor(window.innerWidth  * dpr);
     __fwCanvas.height = Math.floor(window.innerHeight * dpr);
-    __fwCtx.setTransform(1, 0, 0, 1, 0, 0);
-    __fwCtx.scale(dpr, dpr);
+    __fwCanvas.style.width = `${window.innerWidth}px`;
+    __fwCanvas.style.height = `${window.innerHeight}px`;
+    __fwCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
-
   resize();
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", resize, { passive:true });
 }
 
 function rand(min, max){ return Math.random() * (max - min) + min; }
 
 function spawnBurst(x, y){
-  const count = Math.floor(rand(40, 70));
-  for (let i=0; i<count; i++){
-    const a = rand(0, Math.PI * 2);
-    const sp = rand(2.0, 6.0);
+  const count = Math.floor(rand(50, 95));
+  const hueBase = rand(0, 360);
+  for (let i = 0; i < count; i++){
+    const ang = rand(0, Math.PI * 2);
+    const spd = rand(1.5, 5.5);
     __fwParticles.push({
       x, y,
-      vx: Math.cos(a) * sp,
-      vy: Math.sin(a) * sp,
-      life: rand(40, 70),
-      r: rand(1.2, 2.6),
-      hue: rand(0, 360),
-      alpha: 1
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - rand(0.2, 1.4),
+      r: rand(1.5, 3.8),
+      life: rand(40, 75),
+      alpha: 1,
+      hue: (hueBase + rand(-25, 25) + 360) % 360
     });
   }
 }
 
 function fireworksOnce(){
   ensureFireworksCanvas();
-  if (!__fwCtx || !__fwCanvas) return;
+  if (!__fwCanvas || !__fwCtx) return;
 
   const now = performance.now();
-
   if (__fwActive){
     __fwStartAt = now;
     __fwDuration = 8000;
@@ -2648,32 +2270,25 @@ async function init(){
   try { await syncMySubmissionsStatus(); } catch {}
   try { setInterval(syncMySubmissionsStatus, 30000); } catch {}
 
-  try { fixModeToggleAlignment(); } catch {}
-  try { scheduleRender(); } catch {}
+  try{
+    const rankingKey = getRankingKeyNow();
+    await renderRankingOnce(rankingKey);
+  }catch(e){
+    console.warn("init renderRankingOnce error", e);
+  }
+
+  try{
+    renderEmpty();
+  }catch(e){
+    console.warn("init renderEmpty error", e);
+  }
 }
 
-if (document.readyState === "loading") {
-  window.addEventListener("DOMContentLoaded", init, { once: true });
+if (document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", init, { once:true });
 } else {
   init();
 }
 
-// =========================
-// ✅ アプリを開くQR（トップ下）
-// =========================
-(function renderOpenAppQr(){
-  const el = document.getElementById("openAppQr");
-  if (!el || !window.QRCode) return;
-
-  const url = "https://yyoshioka27-hash.github.io/tatoete-kousui/";
-
-  el.innerHTML = "";
-  new QRCode(el, {
-    text: url,
-    width: 150,
-    height: 150,
-    correctLevel: QRCode.CorrectLevel.M
-  });
-})();
-
 // # END
+  
