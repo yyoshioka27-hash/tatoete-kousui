@@ -1023,7 +1023,14 @@ try{
   console.warn("publicItems collect failed", e);
 }
 
-const hofItems = buildHallCanonicalTop20();
+const hofItems = mergeDisplayItems([
+  ...snapItems,
+  ...liveItems,
+  ...publicItems
+])
+  .filter(it => Number(it.totalLikes || 0) >= hofTh)
+  .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
+  .slice(0, 20);
 
   if (!hofItems.length) {
     return `
