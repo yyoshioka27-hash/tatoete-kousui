@@ -1007,6 +1007,31 @@ function buildHallCardHtmlFromSnapshot(hofData){
     .filter(it => Number(it.totalLikes || 0) >= hofTh)
     .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
     .slice(0, 20);
+  const snapItems = Array.isArray(hofData?.items) ? hofData.items : [];
+
+  const liveItems = Object.values(state.currentPhrases || {})
+    .filter(Boolean)
+    .map(it => ({
+      id: it?.id ? String(it.id).trim() : null,
+      text: String(it?.text || "").trim(),
+      penName: it?.penName ? String(it.penName).trim() : null,
+      totalLikes: Number(it?.totalLikes || 0),
+      likes: Number(it?.likesToday || 0),
+      bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+      mode: (it?.mode === "fun" ? "fun" : "trivia"),
+      hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
+      source: it?.source || "live"
+    }))
+    .filter(it => it.text)
+    .filter(it => !isNgText(it.text));
+
+  const hofItems = mergeDisplayItems([
+    ...snapItems,
+    ...liveItems
+  ])
+    .filter(it => Number(it.totalLikes || 0) >= hofTh)
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
+    .slice(0, 20);
 
   if (!hofItems.length) {
     return `
