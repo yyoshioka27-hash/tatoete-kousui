@@ -16,7 +16,7 @@ const BUILD = "2026-03-21_hof_daily_fixed_on_mode_switch__SCRIPT_FULL_v11";
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
-const HOF_DAILY_JSON_URL = "./hall_of_fame_daily.json";
+const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
 const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v1";
 let __hofSnapshotMemory = null;
 let __hofSnapshotHtml = null;
@@ -281,7 +281,6 @@ function likeFxPlusOne(btnEl){
     setTimeout(() => { try{ plus.remove(); }catch{} }, 700);
   }catch{}
 }
-
 // ==============================
 // ✅ 合言葉（PIN）入力欄をJS側で自動生成
 // ==============================
@@ -661,7 +660,6 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
     hof: !!x.hof
   }));
 }
-
 // ==============================
 // ✅ 最新public（Workers /api/public_latest）
 // ==============================
@@ -797,24 +795,18 @@ function loadHallDailyCache(){
   }
 }
 
-function saveHallDailyCache(payload){
-  try{
-    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
-  }catch{}
-}
-
 async function fetchHallOfFameDaily(limit = 20){
   const today = todayJSTString();
   const cached = loadHallDailyCache();
 
-  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length){
+  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length > 0) {
     if (cached?.hofThreshold != null) {
       state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
     }
     return {
-      generatedAt: cached.generatedAt || null,
-      hofThreshold: Number(cached.hofThreshold || state.hofThreshold || 20),
-      items: cached.items
+      generatedAt: cached?.generatedAt || null,
+      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
+      items: (cached?.items || [])
         .map(normalizeHallSnapshotItem)
         .filter(Boolean)
         .filter(it => !isNgText(it.text))
@@ -822,40 +814,60 @@ async function fetchHallOfFameDaily(limit = 20){
     };
   }
 
-  const url = `${HOF_DAILY_JSON_URL}?d=${encodeURIComponent(today)}`;
-  const res = await fetch(url, { method:"GET", cache:"default" });
-  const data = await res.json().catch(()=>null);
+  const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
-  if (!res.ok || !data) {
-    throw new Error(`hof daily json failed ${res.status}`);
+  try{
+    const res = await fetch(url, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `hof_daily failed ${res.status}`);
+    }
+
+    const items = (Array.isArray(data?.items) ? data.items : [])
+      .map(normalizeHallSnapshotItem)
+      .filter(Boolean)
+      .filter(it => !isNgText(it.text));
+
+    const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
+    state.hofThreshold = hofThreshold;
+
+    // 空配列は「本日スナップショット未生成」の可能性が高いのでキャッシュしない
+    if (!items.length) {
+      throw new Error(data?.note || "hof_daily empty");
+    }
+
+    const payload = {
+      day: today,
+      generatedAt: data?.generatedAt || null,
+      hofThreshold,
+      items
+    };
+    saveHallDailyCache(payload);
+
+    return {
+      generatedAt: payload.generatedAt,
+      hofThreshold,
+      items: items.slice(0, limit)
+    };
+  }catch(e){
+    console.warn("hof daily api load failed", e?.message || e);
+    throw e;
   }
-
-  const items = (Array.isArray(data?.items) ? data.items : [])
-    .map(normalizeHallSnapshotItem)
-    .filter(Boolean)
-    .filter(it => !isNgText(it.text));
-
-  const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
-  state.hofThreshold = hofThreshold;
-
-  const payload = {
-    day: today,
-    generatedAt: data?.generatedAt || null,
-    hofThreshold,
-    items: items
-  };
-  saveHallDailyCache(payload);
-
-  return {
-    generatedAt: payload.generatedAt,
-    hofThreshold,
-    items: items.slice(0, limit)
-  };
 }
-
 async function fetchHallOfFameForRanking(limit = 20){
   try{
-    return await fetchHallOfFameDaily(limit);
+    const daily = await fetchHallOfFameDaily(limit);
+
+    if (Array.isArray(daily?.items) && daily.items.length > 0) {
+      return {
+        generatedAt: daily?.generatedAt || null,
+        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+        items: daily.items.slice(0, limit)
+      };
+    }
+
+    throw new Error("hof_daily empty");
   }catch(e){
     console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
 
@@ -888,7 +900,6 @@ async function fetchHallOfFameForRanking(limit = 20){
     };
   }
 }
-
 function buildHallCardHtmlFromSnapshot(hofData){
   const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
   const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
@@ -898,8 +909,8 @@ function buildHallCardHtmlFromSnapshot(hofData){
     return `
       <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
         <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-        <div class="muted" style="margin-bottom:8px;">※殿堂入りは日次スナップショット優先。見つからない時だけAPIへフォールバック</div>
-        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件）</div>
+        <div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>
+        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件、または本日JSON未生成）</div>
       </div>
     `;
   }
@@ -921,7 +932,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
 
   const snapshotNote = generatedAt
     ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
-    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが無い時だけAPIへフォールバック</div>`;
+    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>`;
 
   return `
     <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
@@ -931,7 +942,6 @@ function buildHallCardHtmlFromSnapshot(hofData){
     </div>
   `;
 }
-
 async function ensureHallSnapshotLoaded(){
   if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
     return __hofSnapshotMemory;
@@ -942,7 +952,6 @@ async function ensureHallSnapshotLoaded(){
   __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(hofData);
   return hofData;
 }
-
 // ==============================
 // 共有ネタ（GitHub PagesのJSON / metaphors.json）
 // ==============================
@@ -1328,7 +1337,6 @@ function getCurrentMainBucket(){
   if (!arr.length) return null;
   return window.bucket10(Math.max(...arr));
 }
-
 // =========================
 // ✅ いいねUI（public/base/jsonすべてOK）
 // =========================
@@ -1691,7 +1699,6 @@ async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}
 
   return out;
 }
-
 // =========================
 // ✅ ランキングDOM
 // =========================
@@ -2634,7 +2641,6 @@ async function init(){
   try { ensureRankingDom(); } catch {}
   try { ensureReindexHintDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
-  try { await ensureHallSnapshotLoaded(); } catch {}
   try { wireSubmit(); } catch (e) { console.warn(e); }
 
   try { ensureMySubmissionsDom(); } catch {}
