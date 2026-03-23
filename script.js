@@ -835,6 +835,11 @@ async function fetchHallModeFromApiOnce(mode, limit = 20){
       .filter(it => !isNgText(it.text))
   ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 }
+function saveHallDailyCache(payload){
+  try{
+    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
+  }catch{}
+}
 function loadHallDailyCache(){
   try{
     return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
