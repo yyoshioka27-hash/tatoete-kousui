@@ -196,7 +196,7 @@ function canonicalText(s){
     .replace(/[？?]+/g, "?")
     .trim();
 }
-function makeGlobalId({ mode, bucket, text, source }){
+function makeGlobalId({mode, bucket, text, source}){
   return [normalizeMode(mode), bucket10(bucket), canonicalText(text), String(source || "x")].join("::");
 }
 function uniqueBy(arr, keyFn){
@@ -615,49 +615,6 @@ async function fetchHallOfFameForRanking(limit = 20){
   }
 }
 
-function buildHallCardHtmlFromSnapshot(hofData){
-  const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
-  const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
-  const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
-
-  if (!hofItems.length) {
-    return `
-      <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-        <div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>
-        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件、または本日JSON未生成）</div>
-      </div>
-    `;
-  }
-
-  const rows = hofItems.slice(0, 20).map((it, idx) => {
-    const pen = penHtmlIfAny(it.penName);
-    const totalLikes = Number(it.totalLikes || 0);
-    const md = (it.mode === "fun") ? "fun" : "trivia";
-    return `
-      <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-        <div style="font-weight:800;">
-          ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(md)}
-          <span class="hof-badge">👑殿堂入り</span>
-        </div>
-        <div class="muted">累計👍：${totalLikes}</div>
-      </div>
-    `;
-  }).join("");
-
-  const snapshotNote = generatedAt
-    ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
-    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>`;
-
-  return `
-    <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-      ${snapshotNote}
-      <div>${rows}</div>
-    </div>
-  `;
-}
-
 async function ensureHallSnapshotLoaded(){
   if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
     return __hofSnapshotMemory;
@@ -678,348 +635,6 @@ async function ensureHallSnapshotLoaded(){
 
   return __hofSnapshotPromise;
 }
-// ==============================
-// 共有ネタ（GitHub PagesのJSON / metaphors.json）
-// ==============================
-const SHARED_JSON_URL = "./metaphors.json";
-let sharedItems = [];
-window.JSON_METAPHORS = window.JSON_METAPHORS || [];
-
-async function loadSharedJSON() {
-  try {
-    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`shared json http ${res.status}`);
-
-    const json = await res.json();
-    const arr = Array.isArray(json) ? json
-      : Array.isArray(json?.items) ? json.items
-      : [];
-
-    sharedItems = arr
-      .map(x => ({
-        mode: normalizeMode(x.mode),
-        bucket: bucket10(x.bucket ?? 0),
-        text: String(x.text || "").trim(),
-        penName: x.penName ? String(x.penName).trim() : null,
-        source: "shared_json",
-        id: makeGlobalId({
-          mode: x.mode,
-          bucket: x.bucket ?? 0,
-          text: x.text || "",
-          source: "shared_json"
-        })
-      }))
-      .filter(x => x.text && !isNgText(x.text));
-
-    window.JSON_METAPHORS = sharedItems.slice();
-  } catch (e) {
-    console.warn("loadSharedJSON failed", e?.message || e);
-    sharedItems = [];
-    window.JSON_METAPHORS = [];
-  }
-}
-
-// ==============================
-// 公開ネタ（API）
-// ==============================
-async function fetchPublic(mode, bucket){
-  const m = normalizeMode(mode);
-  const b = bucket10(bucket);
-  const url = `${API_BASE}/api/public?mode=${encodeURIComponent(m)}&bucket=${encodeURIComponent(b)}&limit=300`;
-
-  try{
-    const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json().catch(()=>null);
-    if (!res.ok || !data?.ok) throw new Error(`public http ${res.status}`);
-
-    return (Array.isArray(data.items) ? data.items : [])
-      .map(raw => ({
-        id: raw?.id ? String(raw.id).trim() : makeGlobalId({
-          mode: m,
-          bucket: b,
-          text: raw?.text || "",
-          source: "public"
-        }),
-        mode: normalizeMode(raw?.mode || m),
-        bucket: bucket10(raw?.bucket ?? b),
-        text: String(raw?.text || "").trim(),
-        penName: raw?.penName ? String(raw.penName).trim() : null,
-        likes: num(raw?.likes),
-        totalLikes: num(raw?.totalLikes),
-        source: "public",
-        hof: !!raw?.hof,
-      }))
-      .filter(x => x.text && !isNgText(x.text));
-  }catch(e){
-    console.warn("fetchPublic failed", e?.message || e);
-    return [];
-  }
-}
-
-// ==============================
-// いいね
-// ==============================
-async function likeItem(item){
-  if (!item?.id) return;
-  const cid = getClientId();
-
-  const res = await fetch(`${API_BASE}/api/like`, {
-    method: "POST",
-    cache: "no-store",
-
-      .filter(x => x.id && x.text)
-      .filter(x => !isNgText(x.text));
-}
-// ==============================
-// ✅ 最新public（Workers /api/public_latest）
-// ==============================
-async function fetchPublicLatest(mode, limit = 10){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("limit", String(limit));
-
-  const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `public_latest failed ${res.status}`);
-
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-
-  const items = Array.isArray(data.items) ? data.items : [];
-  return items
-    .map(it => ({
-      id: String(it.id || "").trim(),
-      text: String(it.text || "").trim(),
-      penName: it.penName ? String(it.penName).trim() : null,
-      bucket: Number(it.bucket ?? 0),
-      approvedAt: it.approvedAt ?? null,
-      mode: (it.mode === "fun" ? "fun" : "trivia"),
-      source: "public"
-    }))
-    .filter(x => x.id && x.text)
-    .filter(x => !isNgText(x.text));
-}
-
-// ==============================
-// ✅ いいね（Workers）
-// ==============================
-async function likeAny(payload){
-  const cid = getClientId();
-  const res = await fetch(`${API_BASE}/api/like`, {
-    method: "POST",
-    cache: "no-store",
-    headers: {
-      "Content-Type":"application/json",
-      "x-client-id": cid,
-    },
-    body: JSON.stringify({
-      ...payload,
-      clientId: cid,
-    })
-  });
-
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
-
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return data;
-}
-
-// ==============================
-// 今日のランキング（Workers）
-// ==============================
-async function fetchRankingToday(mode, bucket, limit = 3){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("bucket", String(bucket));
-  params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking failed ${res.status}`);
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-// ✅ 今日の総合ランキング（全バケット共通）
-async function fetchRankingTodayAll(mode, limit = 3){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/today_all?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking today_all failed ${res.status}`);
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-async function fetchRankingTotal(mode, bucket, limit = 3){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("bucket", String(bucket));
-  params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/total?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking total failed ${res.status}`);
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-// ✅ 殿堂入り（従来API / フォールバック用）
-async function fetchHallOfFame(mode, bucket, limit = 50){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("limit", String(limit));
-  params.set("scope", "all");
-  const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-function normalizeHallSnapshotItem(raw){
-  const mode = (raw?.mode === "fun" ? "fun" : "trivia");
-  const text = String(raw?.text || "").trim();
-  if (!text) return null;
-
-  return {
-    id: raw?.id ? String(raw.id).trim() : makeGlobalId({
-      mode,
-      bucket: Number.isFinite(Number(raw?.bucket)) ? Number(raw.bucket) : 0,
-      text,
-      source: "hof_daily"
-    }),
-    text,
-    penName: raw?.penName ? String(raw.penName).trim() : null,
-    totalLikes: Number(raw?.totalLikes || 0),
-    likes: Number(raw?.likes || 0),
-    bucket: Number.isFinite(Number(raw?.bucket)) ? window.bucket10(Number(raw.bucket)) : 0,
-    mode,
-    hof: true,
-    source: "hof_daily"
-  };
-}
-
-function loadHallDailyCache(){
-  try{
-    return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
-  }catch{
-    return null;
-  }
-}
-
-function saveHallDailyCache(payload){
-  try{
-    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify({
-      ...payload,
-      _savedAt: Date.now(),
-    }));
-  }catch{}
-}
-
-async function fetchHallOfFameDaily(limit = 20){
-  const today = todayJSTString();
-  const cached = loadHallDailyCache();
-
-  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length > 0) {
-    if (cached?.hofThreshold != null) {
-      state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
-    }
-    return {
-      generatedAt: cached?.generatedAt || null,
-      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
-      items: (cached?.items || [])
-        .map(normalizeHallSnapshotItem)
-        .filter(Boolean)
-        .filter(it => !isNgText(it.text))
-        .slice(0, limit)
-    };
-  }
-
-  const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
-
-  try{
-    const res = await fetch(url, { method:"GET", cache:"no-store" });
-    const data = await res.json().catch(()=>null);
-
-    if (!res.ok || !data?.ok) {
-      throw new Error(data?.error || `hof_daily failed ${res.status}`);
-    }
-
-    const items = (Array.isArray(data?.items) ? data.items : [])
-      .map(normalizeHallSnapshotItem)
-      .filter(Boolean)
-      .filter(it => !isNgText(it.text));
-
-    const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
-    state.hofThreshold = hofThreshold;
-
-    // 空配列は「本日スナップショット未生成」の可能性が高いのでキャッシュしない
-    if (!items.length) {
-      throw new Error(data?.note || "hof_daily empty");
-    }
-
-    const payload = {
-      day: today,
-      generatedAt: data?.generatedAt || null,
-      hofThreshold,
-      items
-    };
-    saveHallDailyCache(payload);
-
-    return {
-      generatedAt: payload.generatedAt,
-      hofThreshold,
-      items: items.slice(0, limit)
-    };
-  }catch(e){
-    console.warn("hof daily api load failed", e?.message || e);
-    throw e;
-  }
-}
-
-async function fetchHallOfFameForRanking(limit = 20){
-  try{
-    const daily = await fetchHallOfFameDaily(limit);
-
-    if (Array.isArray(daily?.items) && daily.items.length > 0) {
-      return {
-        generatedAt: daily?.generatedAt || null,
-        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
-        items: daily.items.slice(0, limit)
-      };
-    }
-
-    throw new Error("hof_daily empty");
-  }catch(e){
-    console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
-
-    const [tItems, fItems] = await Promise.all([
-      fetchHallOfFame("trivia", 0, limit),
-      fetchHallOfFame("fun",    0, limit),
-    ]);
-
-    const merged = mergeDisplayItems(
-      [...(Array.isArray(tItems) ? tItems : []), ...(Array.isArray(fItems) ? fItems : [])]
-        .map(it => ({
-          ...it,
-          text: String(it?.text || "").trim(),
-          penName: it?.penName ? String(it.penName).trim() : null,
-          totalLikes: Number(it?.totalLikes || 0),
-          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
-          mode: (it?.mode === "fun" ? "fun" : (it?.__mode === "fun" ? "fun" : "trivia")),
-          source: "public",
-          hof: true
-        }))
-        .filter(it => it.text)
-        .filter(it => !isNgText(it.text))
-    )
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-    return {
-      generatedAt: null,
-      hofThreshold: Number(state.hofThreshold || 20),
-      items: merged.slice(0, limit)
-    };
-  }
-}
 
 function buildHallCardHtmlFromSnapshot(hofData){
   const hofItems = Array.isArray(hofData?.items) ? hofData.items : [];
@@ -1064,49 +679,9 @@ function buildHallCardHtmlFromSnapshot(hofData){
   `;
 }
 
-async function ensureHallSnapshotLoaded(){
-  if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
-    return __hofSnapshotMemory;
-  }
-
-  const hofData = await fetchHallOfFameForRanking(20);
-  __hofSnapshotMemory = hofData;
-  __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(hofData);
-  return hofData;
-}
-
 // ==============================
 // 共有ネタ（GitHub PagesのJSON / metaphors.json）
 // ==============================
-const SHARED_JSON_URL = "./metaphors.json";
-let sharedItems = [];
-window.JSON_METAPHORS = window.JSON_METAPHORS || [];
-
-async function loadSharedJSON() {
-  try {
-    const res = await fetch(`${SHARED_JSON_URL}?v=${Date.now()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`shared json http ${res.status}`);
-
-    const json = await res.json();
-    const items = Array.isArray(json?.items) ? json.items : [];
-
-    sharedItems = items
-      .map(it => ({
-        mode: (it.mode === "fun" ? "fun" : "trivia"),
-        bucket: window.bucket10(Number(it.bucket)),
-        text: String(it.text || "").trim(),
-        source: "json"
-      }))
-      .filter(it => it.text)
-      .filter(it => !isNgText(it.text));
-
-    window.JSON_METAPHORS = items || [];
-  } catch {
-    sharedItems = [];
-    window.JSON_METAPHORS = [];
-  }
-}
-
 function getSharedItems(mode, bucket) {
   const m = (mode === "fun" ? "fun" : "trivia");
   const b = window.bucket10(bucket);
@@ -1229,7 +804,7 @@ async function fetchWithTimeout(url, ms = 4500){
 // =========================
 // state
 // =========================
-let state = {
+let state2 = {
   pops: null,
   placeLabel: null,
   tz: null,
@@ -1253,7 +828,7 @@ function fnv1a32(str){
   }
   return (h >>> 0).toString(16);
 }
-function makeGlobalId({mode, bucket, text, source}){
+function makeGlobalId2({mode, bucket, text, source}){
   const m = (mode === "fun" ? "fun" : "trivia");
   const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
   const t = normalizeMetaphorText(text);
@@ -1363,7 +938,7 @@ function buildCandidatePool(mode, bucket) {
   const baseItems = getBaseTexts(m, b).map(text => ({
     text,
     source: "base",
-    id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
+    id: makeGlobalId2({ mode: m, bucket: b, text, source: "base" }),
     penName: null,
     totalLikes: 0,
     hof: false,
@@ -1374,7 +949,7 @@ function buildCandidatePool(mode, bucket) {
   const jsonItems = getSharedItems(m, b).map(x => ({
     text: x.text,
     source: "json",
-    id: makeGlobalId({ mode: m, bucket: b, text: x.text, source: "json" }),
+    id: makeGlobalId2({ mode: m, bucket: b, text: x.text, source: "json" }),
     penName: null,
     totalLikes: 0,
     hof: false,
@@ -1388,13 +963,13 @@ function buildCandidatePool(mode, bucket) {
     bucket: b
   }));
 
-  const merged = mergeDisplayItems([...publicItems, ...jsonItems, ...baseItems], { mode: m, bucket: b });
+  const merged = mergeDisplayItems([...publicItems, ...jsonItems, ...baseItems]);
 
   return merged
     .map(item => ({
       text: String(item?.text || "").trim(),
       source: item.source || "base",
-      id: item.id || makeGlobalId({ mode: m, bucket: b, text: item?.text || "", source: item.source || "base" }),
+      id: item.id || makeGlobalId2({ mode: m, bucket: b, text: item?.text || "", source: item.source || "base" }),
       penName: item.penName || null,
       totalLikes: Number(item.totalLikes || 0),
       hof: !!item.hof,
@@ -1455,8 +1030,8 @@ function pickMetaphor(mode, bucket) {
 }
 
 function getCurrentMainBucket(){
-  if (!state?.pops) return null;
-  const arr = [state.pops.m, state.pops.d, state.pops.e].filter(v => v != null);
+  if (!state2?.pops) return null;
+  const arr = [state2.pops.m, state2.pops.d, state2.pops.e].filter(v => v != null);
   if (!arr.length) return null;
   return window.bucket10(Math.max(...arr));
 }
@@ -1466,7 +1041,7 @@ function getCurrentMainBucket(){
 function updateLikeUI(slot) {
   ensureLikeDom(slot);
 
-  const phraseObj = state.currentPhrases[slot];
+  const phraseObj = state2.currentPhrases[slot];
   const btnEl = document.getElementById(`like_${slot}`);
   const countEl = document.getElementById(`likeCount_${slot}`);
   const totalEl = document.getElementById(`likeTotal_${slot}`);
@@ -1489,7 +1064,7 @@ function updateLikeUI(slot) {
 
   const likesToday = Number(phraseObj.likesToday || 0);
   const totalLikes = Number(phraseObj.totalLikes || 0);
-  const hof = !!phraseObj.hof || (totalLikes >= Number(state.hofThreshold || 20));
+  const hof = !!phraseObj.hof || (totalLikes >= Number(state2.hofThreshold || 20));
 
   if (countEl) countEl.textContent = String(likesToday);
   if (totalEl) totalEl.textContent = `累計👍${totalLikes}`;
@@ -1524,9 +1099,9 @@ function updateLikeUI(slot) {
       likeFxPop(btnEl);
       likeFxPlusOne(btnEl);
 
-      state.currentPhrases[slot].likesToday = Number(out.likesToday || 0);
-      state.currentPhrases[slot].totalLikes = Number(out.totalLikes || state.currentPhrases[slot].totalLikes || 0);
-      state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
+      state2.currentPhrases[slot].likesToday = Number(out.likesToday || 0);
+      state2.currentPhrases[slot].totalLikes = Number(out.totalLikes || state2.currentPhrases[slot].totalLikes || 0);
+      state2.currentPhrases[slot].hof = !!out.hof || (state2.currentPhrases[slot].totalLikes >= Number(state2.hofThreshold || 20));
 
       updateLikeUI(slot);
     }catch(e){
@@ -1544,9 +1119,6 @@ function updateDeleteUI(slotKey) {
   btn.onclick = null;
 }
 
-// =========================
-// renderEmpty
-// =========================
 function renderEmpty() {
   const metaAll = document.getElementById("metaphor");
 
@@ -1558,15 +1130,495 @@ function renderEmpty() {
     if (metaEl) metaEl.textContent = "データなし";
     setIcon(k, null);
 
-    state.currentPhrases[k] = {
+    state2.currentPhrases[k] = {
       text: null, source: null, id: null, penName: null,
       likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
     };
     updateLikeUI(k);
     updateDeleteUI(k);
-    return;
+  });
+
+  if (metaAll) metaAll.textContent = "地点を選んでください";
+}
+
+function render() {
+  const hintEl = document.getElementById("popHint");
+  const sourceTag = document.getElementById("sourceTag");
+  const tzTag = document.getElementById("tzTag");
+  const metaAll = document.getElementById("metaphor");
+  const footEl = document.getElementById("metaFoot");
+
+  if (sourceTag) sourceTag.textContent = state2.source;
+  if (tzTag) tzTag.textContent = state2.tz ? `TZ: ${state2.tz}` : "TZ: --";
+
+  const setSlot = (slotKey, value, label) => {
+    const popEl = document.getElementById(`pop_${slotKey}`);
+    const metaEl = document.getElementById(`meta_${slotKey}`);
+
+    if (value == null) {
+      if (popEl) popEl.textContent = "--%";
+      if (metaEl) metaEl.textContent = "データなし";
+      setIcon(slotKey, null);
+
+      state2.currentPhrases[slotKey] = {
+        text: null, source: null, id: null, penName: null,
+        likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
+      };
+      updateLikeUI(slotKey);
+      updateDeleteUI(slotKey);
+      return null;
+    }
+
+    const rounded = window.bucket10(value);
+    if (popEl) popEl.textContent = `${rounded}%`;
+    setIcon(slotKey, rounded);
+
+    const mode = getSelectedMode();
+    let picked;
+
+    const prev = state2.currentPhrases[slotKey] || {};
+    const sameContext =
+      !!prev.text &&
+      prev.mode === mode &&
+      Number(prev.bucket) === Number(rounded) &&
+      !isNgText(prev.text);
+
+    if (!window.__forceRepick && sameContext) {
+      picked = prev;
+    } else if (__freezeMetaphor && prev?.text) {
+      picked = prev;
+    } else {
+      picked = pickMetaphor(mode, rounded);
+    }
+
+    for (let i = 0; i < 5 && picked?.text && isNgText(picked.text); i++) {
+      picked = pickMetaphor(mode, rounded);
+    }
+
+    if (picked?.text && isNgText(picked.text)) {
+      picked = {
+        text: "（非表示ワードが含まれるため表示できません）",
+        source: null,
+        id: null,
+        penName: null,
+        totalLikes: 0,
+        hof: false,
+        bucket: rounded,
+        mode,
+        dedupeKey: null
+      };
+    }
+
+    try {
+      const mbKey = keyMB(mode, rounded);
+      const pubArr = publicCache.get(mbKey);
+
+      if (Array.isArray(pubArr) && pubArr.length && picked?.text) {
+        const canon = normalizeMetaphorText(picked.text);
+        const hit = pubArr.find(it => normalizeMetaphorText(it?.text || "") === canon);
+
+        if (hit) {
+          picked = {
+            ...picked,
+            source: "public",
+            id: String(hit.id || picked.id || "").trim() || null,
+            penName: (hit.penName != null ? String(hit.penName).trim() : picked.penName),
+            totalLikes: Number(hit.totalLikes || 0),
+            hof: !!hit.hof,
+            dedupeKey: makeMetaphorDedupeKey({ mode, bucket: rounded, text: hit.text || picked.text })
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("public upgrade failed", e);
+    }
+
+    const displayPen = (picked.penName && String(picked.penName).trim())
+      ? String(picked.penName).trim()
+      : "匿名";
+
+    const totalLikesPicked = Number(picked.totalLikes || 0);
+    const hofPicked = !!picked.hof || (totalLikesPicked >= Number(state2.hofThreshold || 20));
+
+    if (metaEl) {
+      const penHtml = penHtmlIfAny(displayPen);
+      const hofHtml = hofPicked ? ` <span class="hof-badge">👑殿堂入り</span>` : "";
+      metaEl.innerHTML =
+        `${escapeHtml(label)}：${escapeHtml(picked.text)}${penHtml}${hofHtml}` +
+        ` <span class="muted" style="font-size:12px;">[src:${escapeHtml(picked.source || "base")} b:${rounded}]</span>`;
+    }
+
+    const prevId = state2.currentPhrases[slotKey]?.id || null;
+    const nextId = picked.id || null;
+
+    const nextLikesToday = (prevId && nextId && prevId === nextId)
+      ? Number(state2.currentPhrases[slotKey]?.likesToday || 0)
+      : 0;
+
+    const nextTotalLikes = (prevId && nextId && prevId === nextId)
+      ? Number(state2.currentPhrases[slotKey]?.totalLikes || totalLikesPicked || 0)
+      : Number(totalLikesPicked || 0);
+
+    state2.currentPhrases[slotKey] = {
+      text: picked.text,
+      source: picked.source || null,
+      id: nextId,
+      penName: displayPen,
+      likesToday: nextLikesToday,
+      totalLikes: nextTotalLikes,
+      hof: hofPicked,
+      mode,
+      bucket: rounded,
+      dedupeKey: picked.dedupeKey || makeMetaphorDedupeKey({ mode, bucket: rounded, text: picked.text || "" })
+    };
+
+    updateLikeUI(slotKey);
+    updateDeleteUI(slotKey);
+
+    try { applyTheme(rounded); } catch {}
+
+    return { slotKey, value: rounded, picked };
+  };
+
+  const m = setSlot("m", state2?.pops?.m ?? null, "朝");
+  const d = setSlot("d", state2?.pops?.d ?? null, "昼");
+  const e = setSlot("e", state2?.pops?.e ?? null, "夜");
+
+  if (hintEl) {
+    hintEl.textContent = state2.placeLabel
+      ? `${state2.placeLabel} の降水確率`
+      : "地点を検索してください";
   }
-        if (reqId !== __rankingReqSeq) return;
+
+  if (footEl) {
+    const main = [m, d, e].filter(Boolean)[0];
+    footEl.textContent = main?.picked?.source
+      ? `表示ネタの出典: ${main.picked.source}`
+      : "";
+  }
+
+  if (metaAll) {
+    const texts = [m, d, e]
+      .filter(Boolean)
+      .map(x => `${x.slotKey === "m" ? "朝" : x.slotKey === "d" ? "昼" : "夜"}：${x.value}% → ${x.picked?.text || ""}`);
+    metaAll.textContent = texts.join(" / ");
+  }
+}
+
+// =========================
+// UI status
+// =========================
+function setStatus(msg, kind="muted"){
+  const el = document.getElementById("status");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.className = kind || "muted";
+}
+
+// =========================
+// Search helpers
+// =========================
+function normalizePlaceName(q){
+  return String(q || "").trim();
+}
+
+async function geocode(query){
+  const url = `${GEO}?name=${encodeURIComponent(query)}&count=8&language=ja&format=json`;
+  const res = await fetchWithTimeout(url, 4500);
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data) throw new Error(`geocode failed ${res.status}`);
+  return data;
+}
+
+async function fetchPopsBySlotsSWR(lat, lon, opt={}){
+  const key = wxKey(lat, lon);
+  const cache = loadWxCache();
+  const hit = cache[key];
+  const now = Date.now();
+
+  if (hit && (now - Number(hit.ts || 0) < WX_CACHE_TTL_MS)) {
+    return { pops: hit.pops, tz: hit.tz || "Asia/Tokyo" };
+  }
+
+  if (typeof opt.onCached === "function" && hit?.pops) {
+    try { opt.onCached({ pops: hit.pops, tz: hit.tz || "Asia/Tokyo" }); } catch {}
+  }
+
+  const url =
+    `${FC}?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}` +
+    `&hourly=precipitation_probability&timezone=Asia%2FTokyo&forecast_days=1`;
+
+  const res = await fetchWithTimeout(url, 4500);
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data) throw new Error(`forecast failed ${res.status}`);
+
+  const times = Array.isArray(data?.hourly?.time) ? data.hourly.time : [];
+  const pops  = Array.isArray(data?.hourly?.precipitation_probability) ? data.hourly.precipitation_probability : [];
+
+  const slotHour = { m: 9, d: 12, e: 18 };
+  const out = { m:null, d:null, e:null };
+
+  for (const [slot, hh] of Object.entries(slotHour)) {
+    const idx = times.findIndex(t => {
+      const d = new Date(t);
+      return d.getHours() === hh;
+    });
+    out[slot] = idx >= 0 ? Number(pops[idx] ?? 0) : null;
+  }
+
+  cache[key] = { ts: now, pops: out, tz: data?.timezone || "Asia/Tokyo" };
+  saveWxCache(cache);
+
+  return { pops: out, tz: data?.timezone || "Asia/Tokyo" };
+}
+
+// =========================
+// text normalization helpers
+// =========================
+function normalizeMetaphorText(s){
+  return String(s || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .replace(/[！!]+/g, "!")
+    .replace(/[？?]+/g, "?")
+    .trim();
+}
+
+function makeMetaphorDedupeKey({ mode, bucket, text }){
+  return `${normalizeMode(mode)}|${bucket10(bucket)}|${normalizeMetaphorText(text)}`;
+}
+
+function hasHard100PercentMismatch(text, bucket){
+  const t = normalizeMetaphorText(text);
+  if (bucket === 100) return false;
+  return /100\s*[%％]/.test(t);
+}
+
+function hasMismatchedPercent(text, bucket){
+  const t = normalizeMetaphorText(text);
+  const m = t.match(/([0-9]{1,3})\s*[%％]/);
+  if (!m) return false;
+  const p = bucket10(Number(m[1]));
+  return p !== bucket10(bucket);
+}
+
+function normalizePenName(name){
+  const s = String(name || "").trim();
+  return s || null;
+}
+
+// =========================
+// like effects
+// =========================
+function likeFxPop(btn){
+  try{
+    btn.animate(
+      [
+        { transform:"scale(1)" },
+        { transform:"scale(1.2)" },
+        { transform:"scale(1)" }
+      ],
+      { duration:220, easing:"ease-out" }
+    );
+  }catch{}
+}
+
+function likeFxPlusOne(btn){
+  try{
+    const rect = btn.getBoundingClientRect();
+    const el = document.createElement("div");
+    el.textContent = "+1";
+    el.style.position = "fixed";
+    el.style.left = `${rect.left + rect.width/2}px`;
+    el.style.top = `${rect.top}px`;
+    el.style.transform = "translate(-50%, -50%)";
+    el.style.fontWeight = "900";
+    el.style.color = "#f59e0b";
+    el.style.zIndex = "9999";
+    document.body.appendChild(el);
+
+    el.animate(
+      [
+        { opacity:1, transform:"translate(-50%, -50%) translateY(0)" },
+        { opacity:0, transform:"translate(-50%, -50%) translateY(-24px)" }
+      ],
+      { duration:700, easing:"ease-out" }
+    ).onfinish = () => el.remove();
+  }catch{}
+}
+
+async function fetchPublicMetaphors({ mode, bucket, limit=80 }){
+  const params = new URLSearchParams();
+  params.set("mode", normalizeMode(mode));
+  params.set("bucket", String(bucket10(bucket)));
+  params.set("limit", String(limit));
+
+  const res = await fetch(`${API_BASE}/api/public?${params.toString()}`, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `public failed ${res.status}`);
+
+  if (data.hofThreshold != null) state2.hofThreshold = Number(data.hofThreshold || state2.hofThreshold || 20);
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items.map(it => ({
+    id: String(it.id || "").trim(),
+    text: String(it.text || "").trim(),
+    penName: it.penName ? String(it.penName).trim() : null,
+    totalLikes: Number(it.totalLikes || 0),
+    likes: Number(it.likes || 0),
+    hof: !!it.hof,
+    mode: normalizeMode(it.mode),
+    bucket: bucket10(it.bucket),
+    source: "public"
+  })).filter(x => x.id && x.text).filter(x => !isNgText(x.text));
+}
+
+function getRankingKeyNow(){
+  return `${getSelectedMode()}|${state2.placeLabel || ""}|${JSON.stringify(state2.pops || {})}`;
+}
+
+let __rankingCacheKey = null;
+
+function invalidateRanking(){
+  __rankingCacheKey = null;
+  __hofSnapshotMemory = null;
+  __hofSnapshotHtml = null;
+}
+
+function ensureRankingDom(){
+  if (document.getElementById("todayRankingWrap")) return;
+
+  const wrap = document.createElement("div");
+  wrap.id = "todayRankingWrap";
+  wrap.className = "card";
+  wrap.style.marginTop = "12px";
+  wrap.style.maxWidth = "760px";
+  wrap.style.marginLeft = "auto";
+  wrap.style.marginRight = "auto";
+  wrap.innerHTML = `
+    <div id="rankLatestCard" class="card" style="margin:0 0 12px 0;"></div>
+    <div id="rankTodayCard" class="card" style="margin:0 0 12px 0;"></div>
+    <div id="rankHofCard" class="card" style="margin:0;"></div>
+  `;
+
+  const anchor =
+    document.getElementById("mySubmissionsWrap") ||
+    document.getElementById("searchCard") ||
+    document.body.lastElementChild;
+
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+  } else {
+    document.body.appendChild(wrap);
+  }
+}
+
+function ensureReindexHintDom(){
+  if (document.getElementById("reindexHint")) return;
+
+  const el = document.createElement("div");
+  el.id = "reindexHint";
+  el.className = "muted";
+  el.style.maxWidth = "760px";
+  el.style.margin = "8px auto 0";
+  el.style.fontSize = "12px";
+  el.textContent = "";
+
+  const wrap = document.getElementById("todayRankingWrap");
+  if (wrap && wrap.parentNode) {
+    wrap.parentNode.insertBefore(el, wrap.nextSibling);
+  } else {
+    document.body.appendChild(el);
+  }
+}
+
+function saveLatestOpen(open){
+  try{
+    localStorage.setItem("latest_public_open_v1", open ? "1" : "0");
+  }catch{}
+}
+function loadLatestOpen(){
+  try{
+    return localStorage.getItem("latest_public_open_v1") === "1";
+  }catch{
+    return false;
+  }
+}
+
+function buildLatestPublicHtml(items){
+  const open = loadLatestOpen();
+  const rows = (items || []).slice(0, 10).map((it, idx) => {
+    const pen = penHtmlIfAny(it.penName);
+    return `
+      <div style="padding:10px 0; border-top:${idx===0 ? "none" : "1px solid rgba(15,23,42,0.10)"};">
+        <div style="font-weight:700;">
+          ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(it.mode)}
+        </div>
+        <div class="muted" style="margin-top:4px;">
+          ${it.approvedAt ? `公開: ${escapeHtml(String(it.approvedAt))}` : "公開済み"}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div id="rankLatestCard" class="card" style="margin:0 0 12px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <details id="latestDetails" ${open ? "open" : ""}>
+        <summary style="cursor:pointer; font-weight:900; font-size:16px; list-style:none;">
+          最新の公開ネタ（折り畳み） / ${modeLabelJa(getSelectedMode())}
+        </summary>
+        <div class="muted" style="margin:8px 0 10px;">（開くと10件）</div>
+        ${rows || `<div class="muted">まだ公開ネタがありません</div>`}
+      </details>
+    </div>
+  `;
+}
+
+function buildTodayRankingHtml(items){
+  const mode = getSelectedMode();
+  const rows = (items || []).slice(0, 3).map((it, idx) => {
+    const pen = penHtmlIfAny(it.penName);
+    return `
+      <div style="padding:10px 0; border-top:${idx===0 ? "none" : "1px solid rgba(15,23,42,0.10)"};">
+        <div style="font-weight:800;">
+          ${idx+1}位：${escapeHtml(String(it.text || ""))}${pen}
+        </div>
+        <div class="muted" style="margin-top:4px;">今日の👍：${Number(it.likesToday || 0)}</div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div id="rankTodayCard" class="card" style="margin:0 0 12px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${modeLabelJa(mode)}）</div>
+      <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
+      ${rows || `<div class="muted">まだランキングがありません</div>`}
+    </div>
+  `;
+}
+
+async function renderRankingOnce(key){
+  ensureRankingDom();
+  ensureReindexHintDom();
+
+  if (__rankingCacheKey === key) return;
+  __rankingCacheKey = key;
+
+  const reqId = ++__rankingReqSeq;
+  setRankingBusy(true);
+
+  try{
+    const mode = getSelectedMode();
+
+    const latestPromise = fetchLatestPublic(mode, 10).then(buildLatestPublicHtml);
+    const todayPromise  = fetchTodayRanking(mode, 3).then(buildTodayRankingHtml);
+    const hofPromise    = ensureHallSnapshotLoaded().then((hofData) => {
+      if (__hofSnapshotHtml) return __hofSnapshotHtml;
+      return buildHallCardHtmlFromSnapshot(hofData);
+    });
+
+    latestPromise.then((html) => {
+      if (reqId !== __rankingReqSeq) return;
       const el = document.getElementById("rankLatestCard");
       if (el) el.outerHTML = html;
       try{
@@ -1580,7 +1632,7 @@ function renderEmpty() {
       }catch{}
     });
 
-    todayPromise.then((html) => {
+        todayPromise.then((html) => {
       if (reqId !== __rankingReqSeq) return;
       const el = document.getElementById("rankTodayCard");
       if (el) el.outerHTML = html;
@@ -1681,10 +1733,10 @@ function fireIfApprovedOnNextSearch(){
         const lat = Number(opt.dataset.lat);
         const lon = Number(opt.dataset.lon);
 
-        state.selectedLat = lat;
-        state.selectedLon = lon;
-        state.placeLabel = opt.textContent;
-        state.source = "API: Open-Meteo";
+        state2.selectedLat = lat;
+        state2.selectedLon = lon;
+        state2.placeLabel = opt.textContent;
+        state2.source = "API: Open-Meteo";
 
         invalidateRanking();
         setRankingBusy(true);
@@ -1713,14 +1765,14 @@ function fireIfApprovedOnNextSearch(){
 
           if (mySeq !== __searchSeq) return;
 
-          state.pops = nextPops;
-          state.tz = nextTz;
+          state2.pops = nextPops;
+          state2.tz = nextTz;
 
-          const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
+          const any = (state2.pops.m != null) || (state2.pops.d != null) || (state2.pops.e != null);
           if (!any) {
             setStatus("降水確率が取得できませんでした（別地点で試してください）", "ng");
-            state.source = "API: 取得失敗";
-            state.pops = null;
+            state2.source = "API: 取得失敗";
+            state2.pops = null;
             scheduleRender();
             return;
           }
@@ -1754,9 +1806,9 @@ function fireIfApprovedOnNextSearch(){
 
             if (mySeq !== __searchSeq) return;
 
-            state.pops = cachedOut.pops;
-            state.tz = cachedOut.tz || null;
-            state.source = "API: キャッシュ";
+            state2.pops = cachedOut.pops;
+            state2.tz = cachedOut.tz || null;
+            state2.source = "API: キャッシュ";
 
             __freezeMetaphor = false;
             window.__forceRepick = true;
@@ -1777,8 +1829,8 @@ function fireIfApprovedOnNextSearch(){
           }
 
           setStatus(e.message || "天気取得エラー", "ng");
-          state.source = "API: エラー";
-          state.pops = null;
+          state2.source = "API: エラー";
+          state2.pops = null;
           scheduleRender();
         } finally {
           if (mySeq === __searchSeq) {
@@ -1806,7 +1858,7 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
   r.addEventListener("change", async () => {
     invalidateRanking();
 
-    if (!state?.pops) {
+    if (!state2?.pops) {
       __freezeMetaphor = false;
       window.__forceRepick = true;
       scheduleRender();
@@ -1820,7 +1872,7 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
       setRankingBusy(true);
 
       const mode = getSelectedMode();
-      const buckets = uniqueBucketsFromPops(state.pops);
+      const buckets = uniqueBucketsFromPops(state2.pops);
       await Promise.all(buckets.map(b => warmPublicCache(mode, b)));
 
       __freezeMetaphor = false;
@@ -2065,7 +2117,7 @@ function wireSubmit(){
     btn.textContent = "送信中…";
 
     try{
-      const clientId = makeGlobalId({ mode, bucket: window.bucket10(bucket), text, source: "local" });
+      const clientId = makeGlobalId2({ mode, bucket: window.bucket10(bucket), text, source: "local" });
 
       const out = await submitToPending(
         mode,
@@ -2254,6 +2306,25 @@ function renderMySubmissions(){
       `;
     })
     .join("");
+}
+
+async function submitToPending(mode, bucket, text, penName, penPin, clientId){
+  const res = await fetch(`${API_BASE}/api/submit_pending`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({
+      mode: normalizeMode(mode),
+      bucket: bucket10(bucket),
+      text: String(text || "").trim(),
+      penName: normalizePenName(penName),
+      penPin: penPin ? String(penPin) : null,
+      clientId: clientId || null,
+    })
+  });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `submit_pending failed ${res.status}`);
+  return data;
 }
 
 // ==============================
