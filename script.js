@@ -1023,10 +1023,7 @@ try{
   console.warn("publicItems collect failed", e);
 }
 
-const hofItems = mergeDisplayItems([
-  ...snapItems,
-  ...liveItems,
-  ...publicItems
+const hofItems = buildHallCanonicalTop20();
 ])
   .filter(it => Number(it.totalLikes || 0) >= hofTh)
   .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
@@ -1369,6 +1366,35 @@ function getBaseTexts(mode, bucket) {
 }
 
 function buildCandidatePool(mode, bucket) {
+  function buildHallCanonicalTop20(){
+  const hofTh = Number(state.hofThreshold || 20);
+  const all = [];
+
+  for (const mode of ["trivia", "fun"]) {
+    for (let b = 0; b <= 100; b += 10) {
+      const pool = buildCandidatePool(mode, b);
+      for (const it of pool) {
+        if (!it?.text) continue;
+        all.push({
+          id: it.id || makeGlobalId({ mode, bucket: b, text: it.text, source: it.source || "base" }),
+          text: String(it.text || "").trim(),
+          penName: it.penName || null,
+          totalLikes: Number(it.totalLikes || 0),
+          likes: Number(it.likes || 0),
+          bucket: b,
+          mode,
+          hof: !!it.hof || (Number(it.totalLikes || 0) >= hofTh),
+          source: it.source || "base"
+        });
+      }
+    }
+  }
+
+  return mergeDisplayItems(all)
+    .filter(it => Number(it.totalLikes || 0) >= hofTh)
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
+    .slice(0, 20);
+}
   const b = window.bucket10(bucket);
   const m = (mode === "fun" ? "fun" : "trivia");
 
