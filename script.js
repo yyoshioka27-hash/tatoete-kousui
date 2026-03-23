@@ -1360,21 +1360,6 @@ function getBaseTexts(mode, bucket) {
     .filter(Boolean)
     .filter(t => !isNgText(t));
 }
-
-function buildCandidatePool(mode, bucket) {
-    const b = window.bucket10(bucket);
-  const m = (mode === "fun" ? "fun" : "trivia");
-
-  const baseItems = getBaseTexts(m, b).map(text => ({
-    text,
-    source: "base",
-    id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
-    penName: null,
-    totalLikes: 0,
-    hof: false,
-    mode: m,
-    bucket: b
-  }));
 function buildHallCanonicalTop20(){
   const hofTh = Number(state.hofThreshold || 20);
   const all = [];
@@ -1401,9 +1386,26 @@ function buildHallCanonicalTop20(){
 
   return mergeDisplayItems(all)
     .filter(it => Number(it.totalLikes || 0) >= hofTh)
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
-    .slice(0, 20);
-}
+    }
+function buildCandidatePool(mode, bucket) {
+    const b = window.bucket10(bucket);
+  const m = (mode === "fun" ? "fun" : "trivia");
+
+  const baseItems = getBaseTexts(m, b).map(text => ({
+    text,
+    source: "base",
+    id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
+    penName: null,
+    totalLikes: 0,
+    hof: false,
+    mode: m,
+    bucket: b
+  }));
+
+
+  return mergeDisplayItems(all)
+    .filter(it => Number(it.totalLikes || 0) >= hofTh)
+    }
   const jsonItems = getSharedItems(m, b).map(x => ({
     text: x.text,
     source: "json",
