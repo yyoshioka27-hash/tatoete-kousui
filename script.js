@@ -820,7 +820,7 @@ function hasHallMode(items, mode){
   return (Array.isArray(items) ? items : []).some(it => (it?.mode === "fun" ? "fun" : "trivia") === m);
 }
 
-async function fetchHallModeFromApiOnce(mode, limit = 20){
+async function fetchHallModeFromApiOnce(mode, limit = 100){
   const arr = await fetchHallOfFame(mode, 0, limit);
 
   return mergeDisplayItems(
@@ -848,7 +848,7 @@ function loadHallDailyCache(){
   }
 }
 
-async function fetchHallOfFameDaily(limit = 20){
+async function fetchHallOfFameDaily(limit = 100){
   const today = todayJSTString();
   const cached = loadHallDailyCache();
 
@@ -924,7 +924,7 @@ async function fetchHallOfFameDaily(limit = 20){
     throw e;
   }
 }
-async function fetchHallOfFameForRanking(limit = 20){
+async function fetchHallOfFameForRanking(limit = 100){
   try{
     const daily = await fetchHallOfFameDaily(limit);
 
@@ -1000,13 +1000,37 @@ function buildHallCardHtmlFromSnapshot(hofData){
     .filter(it => it.text)
     .filter(it => !isNgText(it.text));
 
-  const hofItems = mergeDisplayItems([
-    ...snapItems,
-    ...liveItems
-  ])
-    .filter(it => Number(it.totalLikes || 0) >= hofTh)
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
-    .slice(0, 20);
+  const publicItems = [];
+try{
+  for (const arr of publicCache.values()) {
+    if (!Array.isArray(arr)) continue;
+    for (const it of arr) {
+      if (!it?.text) continue;
+      publicItems.push({
+        id: it?.id ? String(it.id).trim() : null,
+        text: String(it.text || "").trim(),
+        penName: it?.penName ? String(it.penName).trim() : null,
+        totalLikes: Number(it?.totalLikes || 0),
+        likes: Number(it?.likes || 0),
+        bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+        mode: (it?.mode === "fun" ? "fun" : "trivia"),
+        hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
+        source: it?.source || "public"
+      });
+    }
+  }
+}catch(e){
+  console.warn("publicItems collect failed", e);
+}
+
+const hofItems = mergeDisplayItems([
+  ...snapItems,
+  ...liveItems,
+  ...publicItems
+])
+  .filter(it => Number(it.totalLikes || 0) >= hofTh)
+  .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
+  .slice(0, 20);
 
   if (!hofItems.length) {
     return `
@@ -1053,7 +1077,7 @@ async function ensureHallSnapshotLoaded(){
     return __hofSnapshotMemory;
   }
 
-  const hofData = await fetchHallOfFameForRanking(20);
+  const hofData = await fetchHallOfFameForRanking(100);
   __hofSnapshotMemory = {
     day: today,
     generatedAt: hofData?.generatedAt || null,
