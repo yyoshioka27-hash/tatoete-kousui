@@ -762,7 +762,7 @@ async function fetchHallOfFame(mode, bucket, limit = 50){
   if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return Array.isArray(data.items) ? data.items : [];
-}３
+}
 
 function normalizeHallSnapshotItem(raw){
   const mode = (raw?.mode === "fun" ? "fun" : "trivia");
