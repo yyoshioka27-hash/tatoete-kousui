@@ -1045,7 +1045,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
     </div>
   `;
 }
-  const rows = hofItems.slice(0, 20).map((it, idx) => {
+    const rows = hofItems.slice(0, 20).map((it, idx) => {
     const pen = penHtmlIfAny(it.penName);
     const totalLikes = Number(it.totalLikes || 0);
     const md = (it.mode === "fun") ? "fun" : "trivia";
