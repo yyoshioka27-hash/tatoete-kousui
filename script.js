@@ -1386,9 +1386,12 @@ function buildHallCanonicalTop20(){
 
   return mergeDisplayItems(all)
     .filter(it => Number(it.totalLikes || 0) >= hofTh)
-    }
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
+    .slice(0, 20);
+}
+
 function buildCandidatePool(mode, bucket) {
-    const b = window.bucket10(bucket);
+  const b = window.bucket10(bucket);
   const m = (mode === "fun" ? "fun" : "trivia");
 
   const baseItems = getBaseTexts(m, b).map(text => ({
@@ -1402,10 +1405,6 @@ function buildCandidatePool(mode, bucket) {
     bucket: b
   }));
 
-
-  return mergeDisplayItems(all)
-    .filter(it => Number(it.totalLikes || 0) >= hofTh)
-    }
   const jsonItems = getSharedItems(m, b).map(x => ({
     text: x.text,
     source: "json",
@@ -1432,6 +1431,7 @@ function buildCandidatePool(mode, bucket) {
       id: item.id || makeGlobalId({ mode: m, bucket: b, text: item?.text || "", source: item.source || "base" }),
       penName: item.penName || null,
       totalLikes: Number(item.totalLikes || 0),
+      likes: Number(item.likes || 0),
       hof: !!item.hof,
       bucket: b,
       mode: m,
@@ -1442,7 +1442,6 @@ function buildCandidatePool(mode, bucket) {
     .filter(item => !hasHard100PercentMismatch(item.text, b))
     .filter(item => !hasMismatchedPercent(item.text, b));
 }
-
 const lastPickKey = {};
 
 function pickMetaphor(mode, bucket) {
