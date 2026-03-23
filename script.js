@@ -1024,10 +1024,6 @@ try{
 }
 
 const hofItems = buildHallCanonicalTop20();
-])
-  .filter(it => Number(it.totalLikes || 0) >= hofTh)
-  .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
-  .slice(0, 20);
 
   if (!hofItems.length) {
     return `
@@ -1366,7 +1362,20 @@ function getBaseTexts(mode, bucket) {
 }
 
 function buildCandidatePool(mode, bucket) {
-  function buildHallCanonicalTop20(){
+    const b = window.bucket10(bucket);
+  const m = (mode === "fun" ? "fun" : "trivia");
+
+  const baseItems = getBaseTexts(m, b).map(text => ({
+    text,
+    source: "base",
+    id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
+    penName: null,
+    totalLikes: 0,
+    hof: false,
+    mode: m,
+    bucket: b
+  }));
+function buildHallCanonicalTop20(){
   const hofTh = Number(state.hofThreshold || 20);
   const all = [];
 
@@ -1395,20 +1404,6 @@ function buildCandidatePool(mode, bucket) {
     .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
     .slice(0, 20);
 }
-  const b = window.bucket10(bucket);
-  const m = (mode === "fun" ? "fun" : "trivia");
-
-  const baseItems = getBaseTexts(m, b).map(text => ({
-    text,
-    source: "base",
-    id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
-    penName: null,
-    totalLikes: 0,
-    hof: false,
-    mode: m,
-    bucket: b
-  }));
-
   const jsonItems = getSharedItems(m, b).map(x => ({
     text: x.text,
     source: "json",
