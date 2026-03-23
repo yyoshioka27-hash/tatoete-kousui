@@ -10,14 +10,14 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-21_hof_daily_fixed_on_mode_switch__SCRIPT_FULL_v11";
+const BUILD = "2026-03-23_hof_mixed_daily_cache_patch_v12";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
 const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
-const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v1";
+const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v2";
 let __hofSnapshotMemory = null;
 let __hofSnapshotHtml = null;
 
@@ -762,7 +762,7 @@ async function fetchHallOfFame(mode, bucket, limit = 50){
   if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return Array.isArray(data.items) ? data.items : [];
-}
+}３
 
 function normalizeHallSnapshotItem(raw){
   const mode = (raw?.mode === "fun" ? "fun" : "trivia");
@@ -786,7 +786,55 @@ function normalizeHallSnapshotItem(raw){
     source: "hof_daily"
   };
 }
+function extractHallSnapshotItemsFromPayload(data){
+  const a = Array.isArray(data?.items) ? data.items : [];
+  const t = Array.isArray(data?.triviaItems) ? data.triviaItems : (Array.isArray(data?.trivia) ? data.trivia : []);
+  const f = Array.isArray(data?.funItems) ? data.funItems : (Array.isArray(data?.fun) ? data.fun : []);
 
+  return mergeDisplayItems(
+    [
+      ...a.map(it => ({
+        ...it,
+        mode: (it?.mode === "fun" ? "fun" : "trivia"),
+        source: "hof_daily"
+      })),
+      ...t.map(it => ({
+        ...it,
+        mode: "trivia",
+        source: "hof_daily"
+      })),
+      ...f.map(it => ({
+        ...it,
+        mode: "fun",
+        source: "hof_daily"
+      }))
+    ]
+      .map(normalizeHallSnapshotItem)
+      .filter(Boolean)
+      .filter(it => !isNgText(it.text))
+  ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+}
+
+function hasHallMode(items, mode){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  return (Array.isArray(items) ? items : []).some(it => (it?.mode === "fun" ? "fun" : "trivia") === m);
+}
+
+async function fetchHallModeFromApiOnce(mode, limit = 20){
+  const arr = await fetchHallOfFame(mode, 0, limit);
+
+  return mergeDisplayItems(
+    (Array.isArray(arr) ? arr : [])
+      .map(it => ({
+        ...it,
+        mode: (mode === "fun" ? "fun" : "trivia"),
+        source: "public"
+      }))
+      .map(normalizeHallSnapshotItem)
+      .filter(Boolean)
+      .filter(it => !isNgText(it.text))
+  ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+}
 function loadHallDailyCache(){
   try{
     return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
@@ -803,14 +851,18 @@ async function fetchHallOfFameDaily(limit = 20){
     if (cached?.hofThreshold != null) {
       state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
     }
-    return {
-      generatedAt: cached?.generatedAt || null,
-      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
-      items: (cached?.items || [])
+
+    const cachedItems = mergeDisplayItems(
+      cached.items
         .map(normalizeHallSnapshotItem)
         .filter(Boolean)
         .filter(it => !isNgText(it.text))
-        .slice(0, limit)
+    ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+
+    return {
+      generatedAt: cached?.generatedAt || null,
+      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
+      items: cachedItems.slice(0, limit)
     };
   }
 
@@ -824,15 +876,27 @@ async function fetchHallOfFameDaily(limit = 20){
       throw new Error(data?.error || `hof_daily failed ${res.status}`);
     }
 
-    const items = (Array.isArray(data?.items) ? data.items : [])
-      .map(normalizeHallSnapshotItem)
-      .filter(Boolean)
-      .filter(it => !isNgText(it.text));
+    let items = extractHallSnapshotItemsFromPayload(data);
+
+    const needTrivia = !hasHallMode(items, "trivia");
+    const needFun = !hasHallMode(items, "fun");
+
+    if (needTrivia || needFun){
+      const [triviaFill, funFill] = await Promise.all([
+        needTrivia ? fetchHallModeFromApiOnce("trivia", limit) : Promise.resolve([]),
+        needFun ? fetchHallModeFromApiOnce("fun", limit) : Promise.resolve([])
+      ]);
+
+      items = mergeDisplayItems([
+        ...items,
+        ...triviaFill,
+        ...funFill
+      ]).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+    }
 
     const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
     state.hofThreshold = hofThreshold;
 
-    // 空配列は「本日スナップショット未生成」の可能性が高いのでキャッシュしない
     if (!items.length) {
       throw new Error(data?.note || "hof_daily empty");
     }
@@ -877,21 +941,30 @@ async function fetchHallOfFameForRanking(limit = 20){
     ]);
 
     const merged = mergeDisplayItems(
-      [...(Array.isArray(tItems) ? tItems : []), ...(Array.isArray(fItems) ? fItems : [])]
+      [
+        ...(Array.isArray(tItems) ? tItems : []).map(it => ({
+          ...it,
+          mode: "trivia",
+          source: "public",
+          hof: true
+        })),
+        ...(Array.isArray(fItems) ? fItems : []).map(it => ({
+          ...it,
+          mode: "fun",
+          source: "public",
+          hof: true
+        }))
+      ]
         .map(it => ({
           ...it,
           text: String(it?.text || "").trim(),
           penName: it?.penName ? String(it.penName).trim() : null,
           totalLikes: Number(it?.totalLikes || 0),
-          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
-          mode: (it?.mode === "fun" ? "fun" : (it?.__mode === "fun" ? "fun" : "trivia")),
-          source: "public",
-          hof: true
+          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0
         }))
         .filter(it => it.text)
         .filter(it => !isNgText(it.text))
-    )
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+    ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
     return {
       generatedAt: null,
@@ -931,9 +1004,9 @@ function buildHallCardHtmlFromSnapshot(hofData){
   }).join("");
 
   const snapshotNote = generatedAt
-    ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
-    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>`;
-
+  ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
+  : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが片側欠けのときだけ不足分をAPI補完</div>`;
+  
   return `
     <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
       <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
@@ -943,14 +1016,21 @@ function buildHallCardHtmlFromSnapshot(hofData){
   `;
 }
 async function ensureHallSnapshotLoaded(){
-  if (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items)) {
+  const today = todayJSTString();
+
+  if (__hofSnapshotMemory?.day === today && Array.isArray(__hofSnapshotMemory.items)) {
     return __hofSnapshotMemory;
   }
 
   const hofData = await fetchHallOfFameForRanking(20);
-  __hofSnapshotMemory = hofData;
-  __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(hofData);
-  return hofData;
+  __hofSnapshotMemory = {
+    day: today,
+    generatedAt: hofData?.generatedAt || null,
+    hofThreshold: Number(hofData?.hofThreshold || state.hofThreshold || 20),
+    items: Array.isArray(hofData?.items) ? hofData.items : []
+  };
+  __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(__hofSnapshotMemory);
+  return __hofSnapshotMemory;
 }
 // ==============================
 // 共有ネタ（GitHub PagesのJSON / metaphors.json）
