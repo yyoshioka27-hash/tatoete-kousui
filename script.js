@@ -2180,7 +2180,9 @@ function mergeDisplayItemsAdvanced(items, fallback = {}){
 
   return [...map.values()];
 }
-
+function mergedDisplayItems(items, fallback = {}){
+  return mergeDisplayItemsAdvanced(items, fallback);
+}
 function makeMetaphorDedupeKey({ mode, bucket, text }){
   const m = (mode === "fun" ? "fun" : "trivia");
   const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
