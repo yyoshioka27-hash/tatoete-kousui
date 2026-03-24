@@ -337,7 +337,6 @@ const state = {
   hofThreshold: 20,
 };
 
-const publicCache = new Map();
 let __rankRenderToken = 0;
 
 // =========================
@@ -418,6 +417,9 @@ async function likeAny(payload){
   });
 }
 
+// 後半の warmPublicCache / getPublicItems でも共通利用するのでここでは宣言だけ外しておく
+const publicCache = new Map();
+
 async function fetchPublic(mode, bucket){
   const b = bucket10(bucket);
   const key = `${mode}:${b}`;
@@ -450,802 +452,7 @@ async function fetchRankingTotal(mode, bucket, limit = 10){
   return Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : []);
 }
 
-async function fetchHallOfFame(mode, bucket = 0, limit = 20){
-  const b = bucket10(bucket);
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("bucket", b);
-  params.set("limit", limit);
-  const res = await apiGet(`/api/hof?${params.toString()}`);
-  const items = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : []);
-  return items.map(it => ({
-    ...it,
-    mode,
-    bucket: Number.isFinite(Number(it?.bucket)) ? bucket10(Number(it.bucket)) : b,
-    totalLikes: Number(it?.totalLikes || it?.likes_total || 0),
-    likesToday: Number(it?.likes || it?.likesToday || 0),
-    hof: true
-  }));
-}
-
-async function fetchHallOfFameDaily(limit = 100){
-  const res = await fetch(HOF_DAILY_JSON_URL, { cache: "no-store" });
-  if (!res.ok) throw new Error(`hof_daily ${res.status}`);
-  const j = await res.json();
-  const items = Array.isArray(j?.items) ? j.items : [];
-  state.hofThreshold = Number(j?.hofThreshold || state.hofThreshold || 20);
-  return {
-    generatedAt: j?.generatedAt || null,
-    hofThreshold: Number(j?.hofThreshold || state.hofThreshold || 20),
-    items: items.slice(0, limit).map(normalizeHallSnapshotItem).filter(Boolean)
-  };
-}
-
-function normalizeHallSnapshotItem(it){
-  if (!it) return null;
-  const mode = (it.mode === "fun") ? "fun" : "trivia";
-  const bucket = Number.isFinite(Number(it.bucket)) ? bucket10(Number(it.bucket)) : 0;
-  const text = String(it.text || "").trim();
-  if (!text) return null;
-  return {
-    id: String(it.id || makeGlobalId({ mode, bucket, text, source: it.source || "snapshot" })),
-    text,
-    penName: it.penName ? String(it.penName).trim() : null,
-    totalLikes: Number(it.totalLikes || it.likes_total || 0),
-    likes: Number(it.likes || it.likesToday || 0),
-    bucket,
-    mode,
-    hof: true,
-    source: it.source || "snapshot"
-  };
-}
-
-function mergeDisplayItems(items){
-  const map = new Map();
-
-  for (const raw of (Array.isArray(items) ? items : [])) {
-    if (!raw?.text) continue;
-    const mode = raw.mode === "fun" ? "fun" : "trivia";
-    const text = String(raw.text).trim();
-    if (!text || isNgText(text)) continue;
-
-    const cid = canonicalId(mode, text);
-    const prev = map.get(cid);
-
-    const next = {
-      id: String(raw.id || cid),
-      canonicalId: cid,
-      text,
-      penName: raw.penName ? String(raw.penName).trim() : null,
-      totalLikes: Number(raw.totalLikes || raw.likes_total || 0),
-      likes: Number(raw.likes || raw.likesToday || 0),
-      bucket: Number.isFinite(Number(raw.bucket)) ? bucket10(Number(raw.bucket)) : 0,
-      mode,
-      hof: !!raw.hof,
-      source: raw.source || "public",
-      seedLike: isSeedLike(raw)
-    };
-
-    if (!prev) {
-      map.set(cid, next);
-      continue;
-    }
-
-    const betterId = !prev.seedLike && next.seedLike ? prev.id
-      : (prev.seedLike && !next.seedLike ? next.id
-      : prev.id);
-
-    map.set(cid, {
-      ...prev,
-      ...next,
-      id: betterId,
-      totalLikes: Math.max(Number(prev.totalLikes || 0), Number(next.totalLikes || 0)),
-      likes: Math.max(Number(prev.likes || 0), Number(next.likes || 0)),
-      hof: !!prev.hof || !!next.hof,
-      penName: prev.penName || next.penName || null,
-      source: (!prev.seedLike && next.seedLike) ? prev.source
-            : (prev.seedLike && !next.seedLike) ? next.source
-            : prev.source,
-      seedLike: prev.seedLike && next.seedLike
-    });
-  }
-
-  return [...map.values()];
-}
-
-function buildRankingItemHtml(it, rank, kind = "today"){
-  const total = Number(it.totalLikes || 0);
-  const likes = Number(it.likes || it.likesToday || 0);
-  const modeLabel = toModeLabel(it.mode);
-  const pen = it.penName ? ` / ${escHtml(it.penName)}` : "";
-  const meta = kind === "today"
-    ? `今日 ${likes} / 累計 ${total}`
-    : `累計 ${total}`;
-  return `
-    <div class="rank-item">
-      <div class="rank-no">${rank}</div>
-      <div class="rank-main">
-        <div class="rank-text">${escHtml(it.text)}</div>
-        <div class="rank-meta">${modeLabel}${pen} / ${meta}</div>
-      </div>
-    </div>
-  `;
-}
-
-function buildHallCardHtmlFromSnapshot(hofData){
-  const items = Array.isArray(hofData?.items) ? hofData.items : [];
-  const threshold = Number(hofData?.hofThreshold || state.hofThreshold || 20);
-  const generatedAt = hofData?.generatedAt ? `生成: ${escHtml(hofData.generatedAt)}` : "生成: -";
-
-  const rows = items.length
-    ? items.map((it, i) => buildRankingItemHtml(it, i + 1, "total")).join("")
-    : `<div class="rank-empty">殿堂入りはまだありません</div>`;
-
-  return `
-    <section class="rank-card" id="rankHofCard">
-      <div class="rank-head">
-        <h3>殿堂入り</h3>
-        <div class="rank-sub">累計 ${threshold} 以上 / ${generatedAt}</div>
-      </div>
-      <div class="rank-body">${rows}</div>
-    </section>
-  `;
-}
-
-function canonMode(mode){
-  return (mode === "fun") ? "fun" : "trivia";
-}
-
-function canonBucket(bucket){
-  return Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
-}
-
-function sameCanonicalMetaphor(a, b){
-  const am = canonMode(a?.mode);
-  const bm = canonMode(b?.mode);
-  if (am !== bm) return false;
-
-  const at = normalizeMetaphorText(a?.text || "");
-  const bt = normalizeMetaphorText(b?.text || "");
-  return !!at && at === bt;
-}
-
-function refreshHallSnapshotHtml(){
-  try{
-    const base = (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items))
-      ? __hofSnapshotMemory
-      : {
-          day: todayJSTString(),
-          generatedAt: null,
-          hofThreshold: Number(state.hofThreshold || 20),
-          items: []
-        };
-
-    base.hofThreshold = Number(state.hofThreshold || base.hofThreshold || 20);
-    __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(base);
-
-    const el = document.getElementById("rankHofCard");
-    if (el && __hofSnapshotHtml) {
-      el.outerHTML = __hofSnapshotHtml;
-    }
-  }catch(e){
-    console.warn("refreshHallSnapshotHtml error", e);
-  }
-}
-
-function syncLikedItemToCaches(liked){
-  try{
-    if (!liked?.text) return;
-
-    const nextMode  = canonMode(liked.mode);
-    const nextBucket = canonBucket(liked.bucket);
-    const nextToday = Number(liked.likesToday || 0);
-    const nextTotal = Number(liked.totalLikes || 0);
-    const nextHof   = !!liked.hof || (nextTotal >= Number(state.hofThreshold || 20));
-
-    // 1) 画面上の3枠へ反映
-    for (const slot of ["m", "d", "e"]) {
-      const cur = state.currentPhrases?.[slot];
-      if (!cur?.text) continue;
-      if (!sameCanonicalMetaphor(cur, liked)) continue;
-
-      state.currentPhrases[slot] = {
-        ...cur,
-        mode: nextMode,
-        bucket: canonBucket(cur.bucket ?? nextBucket),
-        likesToday: Math.max(Number(cur.likesToday || 0), nextToday),
-        totalLikes: Math.max(Number(cur.totalLikes || 0), nextTotal),
-        hof: !!cur.hof || nextHof
-      };
-      updateLikeUI(slot);
-    }
-
-    // 2) publicCacheへ反映
-    for (const [k, arr] of publicCache.entries()) {
-      if (!Array.isArray(arr)) continue;
-
-      publicCache.set(k, arr.map(it => {
-        if (!it?.text) return it;
-        const candidate = { ...it, mode: it?.mode || nextMode };
-        if (!sameCanonicalMetaphor(candidate, liked)) return it;
-
-        return {
-          ...it,
-          mode: canonMode(it?.mode || nextMode),
-          bucket: canonBucket(it?.bucket ?? nextBucket),
-          totalLikes: Math.max(Number(it?.totalLikes || 0), nextTotal),
-          likes: Math.max(Number(it?.likes || 0), nextToday),
-          hof: !!it?.hof || nextHof
-        };
-      }));
-    }
-
-    // 3) 殿堂入りメモリへ反映
-    if (!__hofSnapshotMemory || !Array.isArray(__hofSnapshotMemory.items)) {
-      __hofSnapshotMemory = {
-        day: todayJSTString(),
-        generatedAt: null,
-        hofThreshold: Number(state.hofThreshold || 20),
-        items: []
-      };
-    }
-
-    let found = false;
-
-    __hofSnapshotMemory.items = (__hofSnapshotMemory.items || []).map(it => {
-      if (!it?.text) return it;
-      if (!sameCanonicalMetaphor(it, liked)) return it;
-
-      found = true;
-      return {
-        ...it,
-        mode: canonMode(it?.mode || nextMode),
-        bucket: canonBucket(it?.bucket ?? nextBucket),
-        totalLikes: Math.max(Number(it?.totalLikes || 0), nextTotal),
-        likes: Math.max(Number(it?.likes || 0), nextToday),
-        hof: true
-      };
-    });
-
-    if (!found && nextHof) {
-      __hofSnapshotMemory.items.push({
-        id: liked?.id ? String(liked.id).trim() : makeGlobalId({
-          mode: nextMode,
-          bucket: nextBucket,
-          text: liked.text,
-          source: "live"
-        }),
-        text: String(liked.text || "").trim(),
-        penName: liked?.penName ? String(liked.penName).trim() : null,
-        totalLikes: nextTotal,
-        likes: nextToday,
-        bucket: nextBucket,
-        mode: nextMode,
-        hof: true,
-        source: "live"
-      });
-    }
-
-    __hofSnapshotMemory.day = todayJSTString();
-    __hofSnapshotMemory.hofThreshold = Number(state.hofThreshold || __hofSnapshotMemory.hofThreshold || 20);
-    __hofSnapshotMemory.items = mergeDisplayItems(__hofSnapshotMemory.items)
-      .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-    saveHallDailyCache({
-      day: __hofSnapshotMemory.day,
-      generatedAt: __hofSnapshotMemory.generatedAt || null,
-      hofThreshold: __hofSnapshotMemory.hofThreshold,
-      items: __hofSnapshotMemory.items,
-      merged: true
-    });
-
-    refreshHallSnapshotHtml();
-  }catch(e){
-    console.warn("syncLikedItemToCaches error", e);
-  }
-}
-
-async function fetchHallOfFameForRanking(limit = 100){
-  const today = todayJSTString();
-  const cached = loadHallDailyCache();
-
-  // ✅ すでに「日次スナップショット + API補完済み」なら最優先で使う
-  if (
-    cached?.day === today &&
-    cached?.merged === true &&
-    Array.isArray(cached?.items) &&
-    cached.items.length > 0
-  ) {
-    const items = mergeDisplayItems(
-      cached.items
-        .map(normalizeHallSnapshotItem)
-        .filter(Boolean)
-        .filter(it => !isNgText(it.text))
-    ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-    state.hofThreshold = Number(cached?.hofThreshold || state.hofThreshold || 20);
-
-    return {
-      generatedAt: cached?.generatedAt || null,
-      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
-      items: items.slice(0, limit)
-    };
-  }
-
-  let daily = null;
-  try{
-    daily = await fetchHallOfFameDaily(limit);
-  }catch(e){
-    console.warn("fetchHallOfFameDaily failed in fetchHallOfFameForRanking", e?.message || e);
-  }
-
-  // ✅ 初回だけ API の真データで両モード補完
-  const [triviaRes, funRes] = await Promise.allSettled([
-    fetchHallOfFame("trivia", 0, limit),
-    fetchHallOfFame("fun", 0, limit)
-  ]);
-
-  const apiItems = mergeDisplayItems(
-    [
-      ...(triviaRes.status === "fulfilled" ? triviaRes.value : []).map(it => ({
-        ...it,
-        mode: "trivia",
-        source: "public",
-        hof: true
-      })),
-      ...(funRes.status === "fulfilled" ? funRes.value : []).map(it => ({
-        ...it,
-        mode: "fun",
-        source: "public",
-        hof: true
-      }))
-    ]
-      .map(it => ({
-        ...it,
-        text: String(it?.text || "").trim(),
-        penName: it?.penName ? String(it.penName).trim() : null,
-        totalLikes: Number(it?.totalLikes || 0),
-        likes: Number(it?.likes || 0),
-        bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0
-      }))
-      .filter(it => it.text)
-      .filter(it => !isNgText(it.text))
-  ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-  const merged = mergeDisplayItems([
-    ...(Array.isArray(daily?.items) ? daily.items : []),
-    ...apiItems
-  ])
-    .filter(it => Number(it.totalLikes || 0) >= Number(state.hofThreshold || daily?.hofThreshold || 20))
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-  if (!merged.length) {
-    throw new Error("hof empty");
-  }
-
-  const hofThreshold = Number(
-    daily?.hofThreshold ||
-    state.hofThreshold ||
-    20
-  );
-  state.hofThreshold = hofThreshold;
-
-  const payload = {
-    day: today,
-    generatedAt: daily?.generatedAt || null,
-    hofThreshold,
-    items: merged,
-    merged: true
-  };
-  saveHallDailyCache(payload);
-
-  return {
-    generatedAt: payload.generatedAt,
-    hofThreshold,
-    items: merged.slice(0, limit)
-  };
-}
-
-// =========================
-// ✅ 地点候補
-// =========================
-async function fetchRegionSuggestions(q){
-  const s = String(q || "").trim();
-  if (!s) return [];
-  const url = `https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(s)}`;
-  const r = await fetch(url);
-  if(!r.ok) throw new Error("地名検索に失敗");
-  const j = await r.json();
-  const arr = Array.isArray(j) ? j : [];
-  return arr.slice(0, 8).map(x => ({
-    name: x.properties?.title || x.properties?.address || s,
-    lat: Number(x.geometry?.coordinates?.[1]),
-    lon: Number(x.geometry?.coordinates?.[0]),
-  })).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon));
-}
-
-async function fetchWeatherByLatLon(lat, lon){
-  const url = new URL("https://api.open-meteo.com/v1/forecast");
-  url.searchParams.set("latitude", lat);
-  url.searchParams.set("longitude", lon);
-  url.searchParams.set("daily", "precipitation_probability_max,weathercode");
-  url.searchParams.set("timezone", "Asia/Tokyo");
-  const r = await fetch(url, { cache: "no-store" });
-  if(!r.ok) throw new Error("天気取得に失敗");
-  const j = await r.json();
-  const p = Number(j?.daily?.precipitation_probability_max?.[0] ?? 0);
-  const c = Number(j?.daily?.weathercode?.[0] ?? 0);
-  return { precipProb: p, weatherCode: c };
-}
-
-// =========================
-// ✅ UI helpers
-// =========================
-function setText(sel, text){
-  const el = $(sel);
-  if (el) el.textContent = text;
-}
-
-function setHtml(sel, html){
-  const el = $(sel);
-  if (el) el.innerHTML = html;
-}
-
-function likeFxPop(btn){
-  btn.classList.remove("like-pop");
-  void btn.offsetWidth;
-  btn.classList.add("like-pop");
-}
-
-function likeFxPlusOne(btn){
-  const span = document.createElement("span");
-  span.className = "like-plusone";
-  span.textContent = "+1";
-  btn.appendChild(span);
-  setTimeout(() => span.remove(), 900);
-}
-
-function selectRandom(arr){
-  if (!Array.isArray(arr) || !arr.length) return null;
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function candidateFromSeed(mode, bucket){
-  const map = modeMetaphors(mode);
-  const arr = map?.[bucket10(bucket)] || [];
-  const text = selectRandom(arr);
-  if (!text) return null;
-  return {
-    id: makeGlobalId({ mode, bucket, text, source: "seed" }),
-    text,
-    penName: "元ネタ",
-    totalLikes: 0,
-    likesToday: 0,
-    bucket: bucket10(bucket),
-    mode,
-    source: "seed",
-    hof: false
-  };
-}
-
-async function getCandidates(mode, bucket){
-  const publicItems = await fetchPublic(mode, bucket).catch(() => []);
-  const merged = mergeDisplayItems([
-    ...publicItems,
-    ...(candidateFromSeed(mode, bucket) ? [candidateFromSeed(mode, bucket)] : [])
-  ]);
-  return merged.filter(it => !isNgText(it.text));
-}
-
-function pickPhrase(mode, bucket, usedTexts = new Set()){
-  return getCandidates(mode, bucket).then(cands => {
-    const available = cands.filter(it => !usedTexts.has(normalizeMetaphorText(it.text)));
-    return selectRandom(available.length ? available : cands);
-  });
-}
-
-function renderWeather(){
-  setText("#weatherLabel", weatherCodeLabel(state.weatherCode));
-  setText("#probLabel", `${bucket10(state.precipProb)}%`);
-  setText("#placeLabel", state.pointName || "地点未設定");
-}
-
-function renderPhrases(){
-  const slots = [
-    ["m", "#phraseMorning", "朝 6〜11時"],
-    ["d", "#phraseDay", "昼 12〜17時"],
-    ["e", "#phraseEvening", "夜 18〜23時"],
-  ];
-
-  for (const [slot, sel, title] of slots) {
-    const p = state.currentPhrases[slot];
-    const html = p ? `
-      <div class="phrase-card">
-        <div class="phrase-head">${title}</div>
-        <div class="phrase-text">${escHtml(p.text)}：${bucket10(state.precipProb)}％</div>
-        <div class="phrase-meta">${toModeLabel(p.mode)} / 累計 ${Number(p.totalLikes || 0)} / 今日 ${Number(p.likesToday || 0)}</div>
-        <button class="like-btn" id="likeBtn_${slot}">いいね <span id="likeCount_${slot}">${Number(p.likesToday || 0)}</span></button>
-      </div>
-    ` : `
-      <div class="phrase-card">
-        <div class="phrase-head">${title}</div>
-        <div class="phrase-text">---</div>
-      </div>
-    `;
-    setHtml(sel, html);
-    updateLikeUI(slot);
-  }
-}
-
-function updateLikeUI(slot){
-  const phraseObj = state.currentPhrases[slot];
-  const btnEl = document.getElementById(`likeBtn_${slot}`);
-  const countEl = document.getElementById(`likeCount_${slot}`);
-  if (!phraseObj || !btnEl || !countEl) return;
-
-  countEl.textContent = String(Number(phraseObj.likesToday || 0));
-
-  btnEl.onclick = async () => {
-    btnEl.disabled = true;
-    try{
-      const prevToday = Number(state.currentPhrases[slot]?.likesToday || 0);
-      const prevTotal = Number(state.currentPhrases[slot]?.totalLikes || 0);
-
-      const out = await likeAny({
-        id: phraseObj.id,
-        mode: phraseObj.mode || currentMode(),
-        bucket: Number(phraseObj.bucket ?? 0),
-        text: phraseObj.text,
-        penName: normalizePenName(phraseObj.penName),
-        source: phraseObj.source || null,
-        clientId: getClientId(),
-      });
-
-      likeFxPop(btnEl);
-      likeFxPlusOne(btnEl);
-
-      // ✅ サーバ値が一時的に低く返っても、画面上では減らさない
-      const nextToday = Math.max(Number(out.likesToday || 0), prevToday + 1);
-      const nextTotal = Math.max(Number(out.totalLikes || 0), prevTotal + 1);
-
-      state.currentPhrases[slot].likesToday = nextToday;
-      state.currentPhrases[slot].totalLikes = nextTotal;
-      state.currentPhrases[slot].hof =
-        !!out.hof || (nextTotal >= Number(state.hofThreshold || 20));
-
-      updateLikeUI(slot);
-
-      // ✅ publicCache / 殿堂入りメモリ / 殿堂入りHTML を即時同期
-      syncLikedItemToCaches({
-        id: state.currentPhrases[slot].id,
-        text: state.currentPhrases[slot].text,
-        penName: state.currentPhrases[slot].penName,
-        mode: state.currentPhrases[slot].mode,
-        bucket: state.currentPhrases[slot].bucket,
-        likesToday: nextToday,
-        totalLikes: nextTotal,
-        hof: state.currentPhrases[slot].hof,
-        source: state.currentPhrases[slot].source
-      });
-
-    }catch(e){
-      alert(`いいね失敗：${e?.message || e}`);
-    }finally{
-      btnEl.disabled = false;
-    }
-  };
-}
-
-// =========================
-// ✅ ランキング描画
-// =========================
-async function renderRankings(){
-  const token = ++__rankRenderToken;
-  const mode = currentMode();
-  const bucket = bucket10(state.precipProb ?? 0);
-
-  const latestEl = $("#rankLatest");
-  const todayEl  = $("#rankToday");
-  const hallWrap = $("#rankHallWrap");
-
-  if (latestEl) latestEl.innerHTML = `<div class="rank-empty">読み込み中...</div>`;
-  if (todayEl)  todayEl.innerHTML  = `<div class="rank-empty">読み込み中...</div>`;
-  if (hallWrap) hallWrap.innerHTML = `<div class="rank-empty">読み込み中...</div>`;
-
-  const [latestItems, todayItems, hallData] = await Promise.allSettled([
-    fetchPublic(mode, bucket),
-    fetchRankingToday(mode, bucket, 10),
-    fetchHallOfFameForRanking(20)
-  ]);
-
-  if (token !== __rankRenderToken) return;
-
-  // 最新
-  if (latestEl) {
-    const arr = latestItems.status === "fulfilled"
-      ? mergeDisplayItems(latestItems.value || [])
-          .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
-          .slice(0, 10)
-      : [];
-
-    latestEl.innerHTML = arr.length
-      ? arr.map((it, i) => buildRankingItemHtml(it, i + 1, "total")).join("")
-      : `<div class="rank-empty">最新ネタはまだありません</div>`;
-  }
-
-  // 今日
-  if (todayEl) {
-    const arr = todayItems.status === "fulfilled"
-      ? mergeDisplayItems(
-          (todayItems.value || []).map(it => ({
-            ...it,
-            mode,
-            bucket,
-            totalLikes: Number(it.totalLikes || it.likes_total || 0),
-            likes: Number(it.likes || it.likesToday || 0)
-          }))
-        ).slice(0, 10)
-      : [];
-
-    todayEl.innerHTML = arr.length
-      ? arr.map((it, i) => buildRankingItemHtml(it, i + 1, "today")).join("")
-      : `<div class="rank-empty">今日のランキングはまだありません</div>`;
-  }
-
-  // 殿堂入り
-  if (hallWrap) {
-    if (hallData.status === "fulfilled") {
-      __hofSnapshotMemory = {
-        day: todayJSTString(),
-        generatedAt: hallData.value.generatedAt || null,
-        hofThreshold: Number(hallData.value.hofThreshold || state.hofThreshold || 20),
-        items: hallData.value.items || []
-      };
-      __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(__hofSnapshotMemory);
-      hallWrap.innerHTML = __hofSnapshotHtml;
-    } else {
-      hallWrap.innerHTML = `
-        <section class="rank-card" id="rankHofCard">
-          <div class="rank-head">
-            <h3>殿堂入り</h3>
-            <div class="rank-sub">取得失敗</div>
-          </div>
-          <div class="rank-body">
-            <div class="rank-empty">殿堂入りの取得に失敗しました</div>
-          </div>
-        </section>
-      `;
-    }
-  }
-}
-
-// =========================
-// ✅ メイン更新
-// =========================
-async function refreshAllByPoint(point){
-  state.pointName = point.name;
-  state.lat = point.lat;
-  state.lon = point.lon;
-
-  const w = await fetchWeatherByLatLon(point.lat, point.lon);
-  state.precipProb = Number(w.precipProb || 0);
-  state.weatherCode = Number(w.weatherCode || 0);
-
-  renderWeather();
-
-  const mode = currentMode();
-  const bucket = bucket10(state.precipProb);
-  const used = new Set();
-
-  const m = await pickPhrase(mode, bucket, used);
-  if (m) used.add(normalizeMetaphorText(m.text));
-  const d = await pickPhrase(mode, bucket, used);
-  if (d) used.add(normalizeMetaphorText(d.text));
-  const e = await pickPhrase(mode, bucket, used);
-
-  state.currentPhrases = { m, d, e };
-  renderPhrases();
-
-  await renderRankings();
-  await pingUsageOncePerDay("weather_ok");
-}
-
-// =========================
-// ✅ イベント
-// =========================
-async function onSearch(){
-  const q = String($("#regionInput")?.value || "").trim();
-  if (!q) {
-    alert("地域名を入力してください");
-    return;
-  }
-
-  const list = await fetchRegionSuggestions(q);
-  const box = $("#suggestions");
-  if (!box) return;
-
-  if (!list.length) {
-    box.innerHTML = `<div class="suggest-empty">候補が見つかりません</div>`;
-    return;
-  }
-
-  box.innerHTML = list.map((it, idx) => `
-    <button class="suggest-item" data-idx="${idx}">
-      ${escHtml(it.name)}
-    </button>
-  `).join("");
-
-  [...box.querySelectorAll(".suggest-item")].forEach(btn => {
-    btn.onclick = async () => {
-      const idx = Number(btn.dataset.idx);
-      const point = list[idx];
-      box.innerHTML = "";
-      $("#regionInput").value = point.name;
-      await refreshAllByPoint(point);
-    };
-  });
-}
-
-async function onReroll(){
-  const mode = currentMode();
-  const bucket = bucket10(state.precipProb ?? 0);
-  const used = new Set();
-
-  const m = await pickPhrase(mode, bucket, used);
-  if (m) used.add(normalizeMetaphorText(m.text));
-  const d = await pickPhrase(mode, bucket, used);
-  if (d) used.add(normalizeMetaphorText(d.text));
-  const e = await pickPhrase(mode, bucket, used);
-
-  state.currentPhrases = { m, d, e };
-  renderPhrases();
-}
-
-function bindEvents(){
-  $("#searchBtn")?.addEventListener("click", onSearch);
-  $("#rerollBtn")?.addEventListener("click", onReroll);
-
-  $$('input[name="mode"]').forEach(r => {
-    r.addEventListener("change", async () => {
-      if (!state.pointName || !Number.isFinite(state.lat) || !Number.isFinite(state.lon)) return;
-
-      const mode = currentMode();
-      const bucket = bucket10(state.precipProb ?? 0);
-      const used = new Set();
-
-      const m = await pickPhrase(mode, bucket, used);
-      if (m) used.add(normalizeMetaphorText(m.text));
-      const d = await pickPhrase(mode, bucket, used);
-      if (d) used.add(normalizeMetaphorText(d.text));
-      const e = await pickPhrase(mode, bucket, used);
-
-      state.currentPhrases = { m, d, e };
-      renderPhrases();
-      await renderRankings();
-    });
-  });
-}
-
-// =========================
-// ✅ 初期化
-// =========================
-async function init(){
-  bindEvents();
-
-  try{
-    const health = await apiGet("/api/health");
-    console.log("health", health);
-  }catch(e){
-    console.warn("health failed", e);
-  }
-
-  setText("#buildLabel", BUILD);
-}
-
-document.addEventListener("DOMContentLoaded", init);
-
-// ✅ 殿堂入り（従来API / フォールバック用）
-async function fetchHallOfFame(mode, bucket, limit = 50){
+async function fetchHallOfFame(mode, bucket = 0, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
   params.set("limit", String(limit));
@@ -1327,18 +534,6 @@ async function fetchHallModeFromApiOnce(mode, limit = 100){
       .filter(Boolean)
       .filter(it => !isNgText(it.text))
   ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-}
-function saveHallDailyCache(payload){
-  try{
-    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
-  }catch{}
-}
-function loadHallDailyCache(){
-  try{
-    return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
-  }catch{
-    return null;
-  }
 }
 
 async function fetchHallOfFameDaily(limit = 100){
@@ -1708,7 +903,7 @@ function syncLikedItemToCaches(liked){
     console.warn("syncLikedItemToCaches error", e);
   }
 }
-    
+
 async function ensureHallSnapshotLoaded(){
   const today = todayJSTString();
 
@@ -1779,7 +974,6 @@ function getSharedItems(mode, bucket) {
 // ==============================
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
-const publicCache = new Map();
 const publicInFlight = new Map();
 
 function keyMB(mode, bucket){
@@ -1877,24 +1071,6 @@ async function fetchWithTimeout(url, ms = 4500){
   }
 }
 
-// =========================
-// state
-// =========================
-let state = {
-  pops: null,
-  placeLabel: null,
-  tz: null,
-  source: "API: 未接続",
-  hofThreshold: 20,
-  selectedLat: null,
-  selectedLon: null,
-  currentPhrases: {
-    m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
-    d: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
-    e: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null }
-  }
-};
-
 // ✅ 全ネタ一意ID（base/jsonも集計対象）
 function fnv1a32(str){
   let h = 0x811c9dc5;
@@ -1903,12 +1079,6 @@ function fnv1a32(str){
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0).toString(16);
-}
-function makeGlobalId({mode, bucket, text, source}){
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
-  const t = normalizeMetaphorText(text);
-  return `t_${m}_${b}_${fnv1a32(`${m}|${b}|${t}`)}`;
 }
 
 // アイコン
@@ -1991,11 +1161,6 @@ function ensureLikeDom(slot){
 function getSelectedMode() {
   const el = document.querySelector('input[name="mode"]:checked');
   const v = (el ? String(el.value || "").trim() : "");
-  if (v === "fun" || v === "お笑い") return "fun";
-  if (v === "trivia" || v === "雑学") return "trivia";
-  return "trivia";
-}
-
   if (v === "fun" || v === "お笑い") return "fun";
   if (v === "trivia" || v === "雑学") return "trivia";
   return "trivia";
@@ -2149,7 +1314,7 @@ function getCurrentMainBucket(){
 // =========================
 // ✅ いいねUI（public/base/jsonすべてOK）
 // =========================
-function updateLikeUI(slot) {
+function updateLikeUIFull(slot) {
   ensureLikeDom(slot);
 
   const phraseObj = state.currentPhrases[slot];
@@ -2233,7 +1398,7 @@ function updateLikeUI(slot) {
         source: state.currentPhrases[slot].source
       });
 
-      updateLikeUI(slot);
+      updateLikeUIFull(slot);
     }catch(e){
       alert(`いいね失敗：${e?.message || e}`);
     }finally{
@@ -2267,7 +1432,7 @@ function renderEmpty() {
       text: null, source: null, id: null, penName: null,
       likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
     };
-    updateLikeUI(k);
+    if (document.getElementById(`like_${k}`)) updateLikeUIFull(k);
     updateDeleteUI(k);
   });
 
@@ -2284,7 +1449,7 @@ function render() {
   const metaAll = document.getElementById("metaphor");
   const footEl = document.getElementById("metaFoot");
 
-  if (sourceTag) sourceTag.textContent = state.source;
+  if (sourceTag) sourceTag.textContent = state.source || "API";
   if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
 
   const setSlot = (slotKey, value, label) => {
@@ -2300,7 +1465,7 @@ function render() {
         text: null, source: null, id: null, penName: null,
         likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
       };
-      updateLikeUI(slotKey);
+      if (document.getElementById(`like_${slotKey}`)) updateLikeUIFull(slotKey);
       updateDeleteUI(slotKey);
       return null;
     }
@@ -2321,7 +1486,7 @@ function render() {
 
     if (!window.__forceRepick && sameContext) {
       picked = prev;
-    } else if (__freezeMetaphor && prev?.text) {
+    } else if (window.__freezeMetaphor && prev?.text) {
       picked = prev;
     } else {
       picked = pickMetaphor(mode, rounded);
@@ -2408,7 +1573,7 @@ function render() {
       dedupeKey: picked.dedupeKey || makeMetaphorDedupeKey({ mode, bucket: rounded, text: picked.text || "" })
     };
 
-    updateLikeUI(slotKey);
+    if (document.getElementById(`like_${slotKey}`)) updateLikeUIFull(slotKey);
     updateDeleteUI(slotKey);
 
     try { applyTheme(rounded); } catch {}
@@ -2613,6 +1778,17 @@ async function renderRankingOnce(key){
 // ✅ FIX: 更新中でも今の内容は消さない
 // ✅ SPEED: 段階表示
 // =========================
+let __rankingReqSeq = 0;
+
+function setRankingBusy(on){
+  try{
+    const wrap = document.getElementById("todayRankingWrap");
+    if (wrap) wrap.classList.toggle("is-updating", !!on);
+  }catch(e){
+    console.warn("setRankingBusy error", e);
+  }
+}
+
 async function renderRanking(){
   try{
     ensureRankingDom();
@@ -2748,7 +1924,7 @@ async function renderRanking(){
           <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
             <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
-                        <div class="muted">取得失敗：${escapeHtml(String(e?.message || e))}</div>
+            <div class="muted">取得失敗：${escapeHtml(String(e?.message || e))}</div>
           </div>
         `;
       }
@@ -2817,14 +1993,6 @@ async function renderRanking(){
 // =========================
 // ✅ ランキングAPI
 // =========================
-let __rankingReqSeq = 0;
-
-function setRankingBusy(busy){
-  const st = document.getElementById("rankStatus");
-  if (!st) return;
-  st.textContent = busy ? "ランキング更新中…" : "ランキング更新完了";
-}
-
 async function fetchRankingTodayAll(mode, limit = 20){
   const params = new URLSearchParams();
   params.set("mode", mode);
@@ -2911,20 +2079,6 @@ function normalizeTextForCompare(s){
     .trim();
 }
 
-function normalizeMetaphorText(s){
-  return normalizeTextForCompare(s)
-    .replace(/[：:]\s*\d+\s*[%％]\s*$/u, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function makeMetaphorDedupeKey({ mode, bucket, text }){
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
-  const t = normalizeMetaphorText(text);
-  return `${m}|${b}|${t}`;
-}
-
 function extractEmbeddedPercents(text){
   const t = String(text || "").normalize("NFKC");
   const out = [];
@@ -2951,18 +2105,7 @@ function hasHard100PercentMismatch(text, bucket){
   return nums.includes(100);
 }
 
-function isNgText(text){
-  const t = String(text || "").normalize("NFKC").trim();
-  if (!t) return true;
-
-  const ngWords = [
-    "共通テスト"
-  ];
-
-  return ngWords.some(w => t.includes(w));
-}
-
-function normalizePenName(name){
+function normalizePenNameStrict(name){
   const s = String(name || "").normalize("NFKC").trim();
   return s || "匿名";
 }
@@ -2970,25 +2113,7 @@ function normalizePenName(name){
 // =========================
 // ✅ 重複統合
 // =========================
-function canonicalId(mode, text){
-  const m = (mode === "fun" ? "fun" : "trivia");
-  return `cid_${fnv1a32(`${m}|${normalizeMetaphorText(text)}`)}`;
-}
-
-function isSeedLike(item){
-  const id = String(item?.id || "");
-  const source = String(item?.source || "").toLowerCase();
-  const penName = String(item?.penName || "");
-  return (
-    id.startsWith("seedjs_") ||
-    source === "seed" ||
-    source === "base" ||
-    source === "json" ||
-    penName.includes("元ネタ")
-  );
-}
-
-function mergeDisplayItems(items, fallback = {}){
+function mergeDisplayItemsAdvanced(items, fallback = {}){
   const map = new Map();
 
   for (const raw of (Array.isArray(items) ? items : [])) {
@@ -3054,6 +2179,13 @@ function mergeDisplayItems(items, fallback = {}){
   }
 
   return [...map.values()];
+}
+
+function makeMetaphorDedupeKey({ mode, bucket, text }){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
+  const t = normalizeMetaphorText(text);
+  return `${m}|${b}|${t}`;
 }
 
 // =========================
