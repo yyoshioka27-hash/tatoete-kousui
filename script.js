@@ -479,8 +479,8 @@ function mergeDisplayItems(items, { mode, bucket } = {}){
 
     current.text = pickBetterText(current.text, text);
     current.penName = pickBetterPenName(current.penName, raw?.penName);
-    current.totalLikes = Number(current.totalLikes || 0) + Number(raw?.totalLikes || 0);
-    current.likes = Number(current.likes || 0) + Number(raw?.likes || 0);
+    current.totalLikes = Math.max(Number(current.totalLikes || 0), Number(raw?.totalLikes || 0));
+    current.likes = Math.max(Number(current.likes || 0), Number(raw?.likes || 0));
     current.hof = !!current.hof || !!raw?.hof;
     current.__canonText = normalizeMetaphorText(current.text);
 
