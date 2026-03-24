@@ -10,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-24_hof_cache_sync_patch_v13";
+const BUILD = "2026-03-23_hof_mixed_daily_cache_patch_v12";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -38,421 +38,721 @@ function getClientId(){
 // ✅ 今日の使用者カウント（DAU）
 // ==============================
 function todayJSTString(){
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric", month: "2-digit", day: "2-digit"
-  });
-  return fmt.format(new Date()); // YYYY-MM-DD
+  const d = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
 }
-function getUsageDeviceId(){
-  let id = localStorage.getItem("usage_device_id_v1");
-  if(!id){
-    id = (crypto.randomUUID ? crypto.randomUUID() : `dev-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    localStorage.setItem("usage_device_id_v1", id);
-  }
-  return id;
-}
-async function pingUsageOncePerDay(reason = "weather_ok"){
+
+function getOrCreateDeviceId(){
+  const key = "usage_device_id_v1";
   try{
-    const today = todayJSTString();
-    if (localStorage.getItem("usage_ping_day_v1") === today) return;
+    let v = localStorage.getItem(key);
+    if (v && v.length >= 16) return v;
+    const r = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+    v = `d_${r()}${r()}`;
+    localStorage.setItem(key, v);
+    return v;
+  }catch{
+    const r = () => Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+    return `d_${r()}${r()}`;
+  }
+}
 
-    const d = getUsageDeviceId();
-    const url = `${API_BASE}/api/usage/ping?d=${encodeURIComponent(d)}&reason=${encodeURIComponent(reason)}&build=${encodeURIComponent(BUILD)}`;
+async function pingUsageOncePerDay(reason="wx_ok"){
+  const dayKey = "usage_ping_day_v1";
+  const day = todayJSTString();
 
-    let ok = false;
+  try{
+    const done = localStorage.getItem(dayKey);
+    if (done === day) return;
+  }catch{}
+
+  const deviceId = getOrCreateDeviceId();
+  const url = `${API_BASE}/api/usage/ping?d=${encodeURIComponent(deviceId)}&r=${encodeURIComponent(reason)}&v=${encodeURIComponent(BUILD)}`;
+
+  try{
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 4000);
+
+    let res, data;
     try{
-      const r = await fetch(url, { cache: "no-store" });
-      ok = r.ok;
-    }catch(_){ }
-
-    if (!ok) {
-      try{
-        const r2 = await fetch(`${API_BASE}/api/usage/ping`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ d, reason, build: BUILD })
-        });
-        ok = r2.ok;
-      }catch(_){ }
+      res = await fetch(url, {
+        method:"POST",
+        cache:"no-store",
+        signal: ac.signal,
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ deviceId, reason, v: BUILD })
+      });
+      data = await res.json().catch(()=>null);
+    } finally {
+      clearTimeout(t);
     }
 
-    if (ok) localStorage.setItem("usage_ping_day_v1", today);
-  }catch(_){ }
+    if (res.ok && data?.ok) {
+      try{ localStorage.setItem(dayKey, day); }catch{}
+      return;
+    }
+
+    console.warn("usage ping not ok", res?.status, data);
+  }catch(e){
+    console.warn("usage ping failed", e?.message || e);
+  }
 }
 
 // =========================
-// ✅ 添付/直打ちメタファーのフォールバック
-// （metaphors.js が未読込でも最低限動く）
+// ✅ render 多重呼び出し防止
 // =========================
-window.METAPHORS = window.METAPHORS || {
-  0: [
-    "傘の出番がない日の予定",
-    "冷蔵庫の製氷機の休暇",
-    "砂漠の水たまり",
-    "会議で全員が一言で終わる確率"
-  ],
-  10: [
-    "ATMで旧札が混ざる確率",
-    "エレベーターが一発で来る感じ",
-    "信号が青続きで着く朝",
-    "会議が定時で終わる見込み"
-  ],
-  20: [
-    "カレーうどんで白シャツが無事な見込み",
-    "スーパーでレジ待ちが短い感じ",
-    "ガチャで欲しいのが来る雰囲気",
-    "洗車した日に降られない期待"
-  ],
-  30: [
-    "席替えで窓側を引く感じ",
-    "動画の広告が1本で済む確率",
-    "居酒屋で静かな席に通される見込み",
-    "会議で雑談だけで終わらない可能性"
-  ],
-  40: [
-    "昼休みに外へ出たらちょうど晴れる感じ",
-    "駐車場で入口近くが空いている見込み",
-    "コンビニで温めが絶妙な感じ",
-    "今日の仕事が“そこそこ”進む期待"
-  ],
-  50: [
-    "コイントスくらい",
-    "洗濯するか迷う空",
-    "じゃんけん一発勝負",
-    "会議で結論が出るか出ないか"
-  ],
-  60: [
-    "アラーム1回で起きられる見込み",
-    "人気店に並んでも思ったより早い感じ",
-    "買った傘を今年それなりに使う確率",
-    "上司の機嫌がまずまずな日"
-  ],
-  70: [
-    "テストで“たぶん大丈夫”な手応え",
-    "週末の予定がそのまま実行される見込み",
-    "冷凍ご飯がちょうどよく温まる感じ",
-    "今日の作業が予定線まで行く期待"
-  ],
-  80: [
-    "ほぼ当たりのくじ",
-    "目的の店が開いてる安心感",
-    "電車で座れそうな気配",
-    "締切前日にちゃんと焦り始める確率"
-  ],
-  90: [
-    "通知を見たらだいたい仕事の連絡",
-    "朝コンビニでコーヒーを買う流れ",
-    "月曜に“まだ休みたい”と思う感じ",
-    "会議で誰かが『一旦持ち帰ります』と言う確率"
-  ],
-  100: [
-    "蛇口をひねったら水が出るくらい確実",
-    "月曜の朝に眠いのと同じ",
-    "カップ麺にお湯を入れたら待つ展開",
-    "会議が延びるときの延び方"
-  ]
-};
-
-window.FUN_METAPHORS = window.FUN_METAPHORS || {
-  0: [
-    "二度寝してから始発に間に合う人",
-    "会議中に寝てたのに議事録係に選ばれる人",
-    "冷蔵庫を開けただけで痩せる人",
-    "財布を忘れたのに堂々と会計を終える人"
-  ],
-  10: [
-    "エレベーターの『閉』を押した瞬間に誰も来ない日",
-    "雨雲レーダーを見て洗濯したら本当に助かる日",
-    "コンビニで温め時間がちょうどいい日",
-    "会社で『一言だけ』の話が本当に一言で終わる日"
-  ],
-  20: [
-    "寝坊したのに、なぜか余裕の顔で到着する人",
-    "レシートを捨てた瞬間に返品したくなる日",
-    "会議で『それ前も言いました』が優しく聞こえる日",
-    "USBを一回で正しく挿せる人"
-  ],
-  30: [
-    "やる気スイッチが朝から見つかる日",
-    "置いた場所を覚えてるままメガネを探さない人",
-    "スーパーで一番速いレジを一発で引く人",
-    "昼休みに外へ出ただけで人生が整う人"
-  ],
-  40: [
-    "『あと5分』で本当に5分だけ休む人",
-    "買った傘をその日のうちに無くさない人",
-    "上司の『軽く相談』が軽かった日",
-    "会議資料を印刷したらページ順が完璧な日"
-  ],
-  50: [
-    "ちょうど半々の運",
-    "やる気と眠気が引き分けてる朝",
-    "今日いける気もするし無理な気もする感じ",
-    "定時で帰れるか、ひと仕事増えるかの境目"
-  ],
-  60: [
-    "アラーム1回で起きてそのまま活動する人",
-    "洗濯物を干した直後に雨を呼ばない人",
-    "会議で『一旦整理しましょう』が本当に整理になる日",
-    "靴下が片方だけ消えない朝"
-  ],
-  70: [
-    "『今日はツイてる』が夕方まで続く日",
-    "買い物メモを忘れず、その紙も無くさない人",
-    "電車で座れそうな場所に立てる人",
-    "レンジで温めたご飯が端までちゃんと温かい日"
-  ],
-  80: [
-    "かなりいい流れの日",
-    "仕事も雑談もほどよくうまくいく日",
-    "提出直前で誤字に自力で気づける人",
-    "休憩のつもりが本当に休憩で終わる日"
-  ],
-  90: [
-    "ほぼそうなる日",
-    "月曜の朝に眠いくらい確実",
-    "通知を見たら仕事の連絡なくらいの確率",
-    "会議で誰かが『持ち帰ります』と言う日"
-  ],
-  100: [
-    "ほぼ確定の流れ",
-    "蛇口をひねれば水が出るくらい自然",
-    "締切前日に急に本気を出す感じ",
-    "カップ麺にお湯を入れたら待つのと同じ"
-  ]
-};
+let __renderQueued = false;
+function scheduleRender(){
+  if (__renderQueued) return;
+  __renderQueued = true;
+  requestAnimationFrame(() => {
+    __renderQueued = false;
+    try { render(); } catch (e) { console.warn("render error", e); }
+  });
+}
 
 // =========================
-// ✅ ユーティリティ
+// ✅ 検索/ランキング request guard
 // =========================
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
+let __searchSeq = 0;
+let __rankingReqSeq = 0;
+let __freezeMetaphor = false;
+window.__forceRepick = false;
 
-function bucket10(n){
-  n = Number(n);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, Math.round(n / 10) * 10));
-}
-window.bucket10 = bucket10;
+function setSearchBusy(on){
+  try{
+    const card = document.getElementById("searchCard");
+    if (card) card.classList.toggle("is-searching", !!on);
 
-function normText(s){
-  return String(s || "")
-    .normalize("NFKC")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeMetaphorText(s){
-  return normText(s)
-    .replace(/[：:]\s*\d+％?$/u, "")
-    .replace(/[：:]\s*\d+%$/u, "")
-    .trim();
+    const btn = document.getElementById("search");
+    if (btn) btn.disabled = !!on;
+  }catch(e){
+    console.warn("setSearchBusy error", e);
+  }
 }
 
-function normalizePenName(v){
-  const s = String(v || "").normalize("NFKC").trim();
-  return s || "";
+function setRankingBusy(on){
+  try{
+    const wrap = document.getElementById("todayRankingWrap");
+    if (wrap) wrap.classList.toggle("is-updating", !!on);
+  }catch(e){
+    console.warn("setRankingBusy error", e);
+  }
 }
+
+// =========================
+// ✅ NGワード
+// =========================
+const NG_PHRASES = [
+  "共通テスト",
+];
 
 function isNgText(text){
-  const t = normText(text).toLowerCase();
+  const t = String(text || "");
   if (!t) return true;
-  const ng = [
-    "共通テスト"
-  ];
-  return ng.some(x => t.includes(String(x).toLowerCase()));
+  return NG_PHRASES.some(ng => ng && t.includes(ng));
 }
 
-function toModeLabel(mode){
-  return mode === "fun" ? "お笑い" : "雑学";
-}
-
-function escHtml(s){
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function dayKeyJST(d = new Date()){
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric", month: "2-digit", day: "2-digit"
-  });
-  return fmt.format(d);
-}
-
-function makeGlobalId({ mode, bucket, text, source }){
-  const m = String(mode || "trivia");
-  const b = String(bucket10(bucket));
-  const t = normalizeMetaphorText(text);
-  const s = String(source || "seed");
-  return `${m}__${b}__${t}__${s}`;
-}
-
-function canonicalId(mode, text){
-  const key = `${mode || "trivia"}|${normalizeMetaphorText(text)}`;
-  let h = 2166136261;
-  for (let i = 0; i < key.length; i++) {
-    h ^= key.charCodeAt(i);
-    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
-  }
-  return `cid_${(h >>> 0).toString(16)}`;
-}
-
-function isSeedLike(item){
-  const id = String(item?.id || "");
-  const source = String(item?.source || "").toLowerCase();
-  const pen = String(item?.penName || "");
-  return (
-    id.startsWith("seedjs_") ||
-    source === "seed" ||
-    pen.includes("元ネタ")
-  );
-}
-
-function currentMode(){
-  const v = document.querySelector('input[name="mode"]:checked')?.value;
-  return v === "fun" ? "fun" : "trivia";
-}
-
-function modeMetaphors(mode){
-  return mode === "fun" ? window.FUN_METAPHORS : window.METAPHORS;
-}
-
-// =========================
-// ✅ state
-// =========================
-const state = {
-  region: "",
-  pointName: "",
-  lat: null,
-  lon: null,
-  weatherCode: null,
-  precipProb: null,
-  currentPhrases: { m: null, d: null, e: null },
-  hofThreshold: 20,
-};
-
-let __rankRenderToken = 0;
-
-// =========================
-// ✅ localStorage cache
-// =========================
-function saveJson(key, data){
-  try{ localStorage.setItem(key, JSON.stringify(data)); }catch(_){}
-}
-function loadJson(key, fallback = null){
+// ✅ ネタ本文内の「xx%」がバケットと一致しない場合は除外する
+function hasMismatchedPercent(text, bucket){
   try{
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  }catch(_){
-    return fallback;
+    const t = String(text || "");
+    const b = Number(bucket);
+    if (!Number.isFinite(b)) return false;
+
+    const re = /(\d{1,3})\s*[%％]/g;
+    let m;
+    while ((m = re.exec(t)) !== null){
+      const p = Number(m[1]);
+      if (!Number.isFinite(p)) continue;
+      if (p < 0 || p > 100) continue;
+      if (p !== b) return true;
+    }
+    return false;
+  }catch{
+    return false;
   }
 }
-function loadHallDailyCache(){
-  return loadJson(HOF_DAILY_CACHE_KEY, null);
-}
-function saveHallDailyCache(data){
-  saveJson(HOF_DAILY_CACHE_KEY, data);
+
+function hasHard100PercentMismatch(text, bucket){
+  try{
+    const t = String(text || "");
+    const b = Number(bucket);
+    if (!Number.isFinite(b)) return false;
+    if (b === 100) return false;
+    return /100\s*(%|％)/.test(t);
+  }catch{
+    return false;
+  }
 }
 
 // =========================
-// ✅ weather helpers
+// ✅ いいね演出CSS + モードバッジCSS
 // =========================
-function weatherCodeLabel(code){
-  const map = {
-    0: "快晴",
-    1: "晴れ",
-    2: "晴れ時々くもり",
-    3: "くもり",
-    45: "霧",
-    48: "霧氷",
-    51: "弱い霧雨",
-    53: "霧雨",
-    55: "強い霧雨",
-    61: "弱い雨",
-    63: "雨",
-    65: "強い雨",
-    71: "弱い雪",
-    73: "雪",
-    75: "大雪",
-    80: "にわか雨",
-    81: "雨がち",
-    82: "激しいにわか雨",
-    95: "雷雨"
-  };
-  return map[code] || "天気";
+(function injectLikeFxCSS(){
+  const id = "likeFxCSS_v1";
+  if (document.getElementById(id)) return;
+
+  const style = document.createElement("style");
+  style.id = id;
+  style.textContent = `
+    .like-btn-pop { transform: scale(1.0); transition: transform 120ms ease; }
+    .like-btn-pop.__pop { transform: scale(1.10); }
+    .like-plusone {
+      position: absolute;
+      font-weight: 900;
+      pointer-events: none;
+      user-select: none;
+      transform: translateY(0);
+      opacity: 1;
+      transition: transform 520ms ease, opacity 520ms ease;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.10);
+    }
+    .like-plusone.__fly { transform: translateY(-18px); opacity: 0; }
+
+    .pen-muted { opacity: .55; font-weight: 700; }
+
+    .hof-badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12px;
+      border:1px solid rgba(15,23,42,.18);
+      background: rgba(255,255,255,.75);
+      margin-left:6px;
+    }
+
+    .latest-details summary{
+      cursor:pointer;
+      user-select:none;
+      font-weight:900;
+      list-style:none;
+    }
+    .latest-details summary::-webkit-details-marker{ display:none; }
+
+    .mode-badge{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12px;
+      border:1px solid rgba(15,23,42,.12);
+      margin-left:6px;
+      vertical-align:middle;
+    }
+    .mode-badge.trivia{
+      background: rgba(59,130,246,.14);
+      border-color: rgba(59,130,246,.28);
+      color: rgba(30,58,138,.95);
+    }
+    .mode-badge.fun{
+      background: rgba(34,197,94,.14);
+      border-color: rgba(34,197,94,.28);
+      color: rgba(20,83,45,.95);
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+function likeFxPop(btnEl){
+  try{
+    btnEl.classList.add("__pop");
+    setTimeout(() => btnEl.classList.remove("__pop"), 140);
+  }catch{}
+}
+
+function likeFxPlusOne(btnEl){
+  try{
+    const parent = btnEl.parentElement;
+    if (!parent) return;
+    const cs = window.getComputedStyle(parent);
+    if (cs.position === "static") parent.style.position = "relative";
+
+    const plus = document.createElement("span");
+    plus.className = "like-plusone";
+    plus.textContent = "+1";
+
+    plus.style.left = (btnEl.offsetLeft + btnEl.offsetWidth - 6) + "px";
+    plus.style.top  = (btnEl.offsetTop - 6) + "px";
+
+    parent.appendChild(plus);
+    requestAnimationFrame(() => { plus.classList.add("__fly"); });
+    setTimeout(() => { try{ plus.remove(); }catch{} }, 700);
+  }catch{}
+}
+// ==============================
+// ✅ 合言葉（PIN）入力欄をJS側で自動生成
+// ==============================
+(function ensurePenPinDom(){
+  const pen = document.getElementById("penName");
+  if (!pen) return;
+  if (document.getElementById("penPin")) return;
+
+  const pin = document.createElement("input");
+  pin.id = "penPin";
+  pin.type = "text";
+  pin.style.webkitTextSecurity = "disc";
+  pin.setAttribute("inputmode", "text");
+  pin.setAttribute("lang", "ja");
+  pin.autocomplete = "off";
+  pin.autocapitalize = "none";
+  pin.autocorrect = "off";
+  pin.spellcheck = false;
+  pin.placeholder = "合言葉（初回登録/別端末ログイン用）";
+  pin.style.width = "100%";
+  pin.style.boxSizing = "border-box";
+  pin.style.marginTop = "8px";
+  pin.style.padding = "12px 14px";
+  pin.style.borderRadius = "12px";
+  pin.style.border = "1px solid rgba(15,23,42,.12)";
+
+  const note = document.createElement("div");
+  note.className = "muted";
+  note.style.marginTop = "6px";
+  note.textContent = "※合言葉は一般公開されません。忘れるとそのペンネームは使えません（救済なし）。";
+
+  pen.insertAdjacentElement("afterend", pin);
+  pin.insertAdjacentElement("afterend", note);
+})();
+
+// ==============================
+// ✅ モバイルで「雑学/お笑い」位置ズレ整列
+// ==============================
+function fixModeToggleAlignment(){
+  try{
+    const inputs = Array.from(document.querySelectorAll('input[name="mode"]'));
+    if (!inputs.length) return;
+
+    const labels = inputs.map(inp => {
+      const a = inp.closest("label");
+      if (a) return a;
+      if (inp.id) {
+        const b = document.querySelector(`label[for="${CSS.escape(inp.id)}"]`);
+        if (b) return b;
+      }
+      return null;
+    }).filter(Boolean);
+
+    if (labels.length < 2) return;
+
+    const parent = labels[0].parentElement;
+    if (parent){
+      parent.style.display = "flex";
+      parent.style.gap = "10px";
+      parent.style.justifyContent = "center";
+      parent.style.alignItems = "stretch";
+      parent.style.flexWrap = "wrap";
+    }
+
+    labels.forEach(lab => {
+      lab.style.display = "inline-flex";
+      lab.style.alignItems = "center";
+      lab.style.justifyContent = "center";
+      lab.style.minWidth = "120px";
+      lab.style.height = "44px";
+      lab.style.lineHeight = "1";
+      lab.style.boxSizing = "border-box";
+      lab.style.padding = "0 12px";
+      lab.style.whiteSpace = "nowrap";
+      lab.style.textAlign = "center";
+    });
+
+    inputs.forEach(inp => { inp.style.marginRight = "6px"; });
+  }catch(e){
+    console.warn("fixModeToggleAlignment error", e);
+  }
+}
+
+// ==============================
+// UI helper
+// ==============================
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text, kind="muted") {
+  const el = document.getElementById("placeStatus");
+  if (!el) return;
+  el.className = kind;
+  el.textContent = text;
+}
+
+function normalizePlaceName(input) {
+  return input
+    .replace(/[ 　]+/g, " ")
+    .replace(/(都|道|府|県|市|区|町|村)$/g, "")
+    .replace(/(都|道|府|県|市|区|町|村)/g, "")
+    .trim();
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+// ==============================
+// ✅ ネタ重複判定（canonical / dedupe）
+// ==============================
+function normalizeMetaphorText(text){
+  return String(text || "")
+    .normalize("NFKC")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t\u3000]+/g, " ")
+    .replace(/\n+/g, "\n")
+    .replace(/\s*[%％]\s*/g, "%")
+    .replace(/\s*[:：]\s*/g, "：")
+    .replace(/[‐-‒–—―ー]+/g, "ー")
+    .replace(/[!！?？。．、,，;；]+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function makeMetaphorDedupeKey({ mode, bucket, text }){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
+  const t = normalizeMetaphorText(text);
+  return `m:${m}|b:${b}|t:${t}`;
+}
+
+function sourcePriority(source){
+  const s = String(source || "");
+  if (s === "public") return 4;
+  if (s === "json") return 3;
+  if (s === "base") return 2;
+  if (s === "hof_daily") return 5;
+  return 1;
+}
+
+function pickBetterText(a, b){
+  const ta = String(a || "").trim();
+  const tb = String(b || "").trim();
+  if (!ta) return tb;
+  if (!tb) return ta;
+  if (tb.length > ta.length) return tb;
+  return ta;
+}
+
+function pickBetterPenName(a, b){
+  const pa = normalizePenName(a);
+  const pb = normalizePenName(b);
+  return pb || pa || null;
+}
+
+function mergeDisplayItems(items, { mode, bucket } = {}){
+  const map = new Map();
+
+  for (const raw of (Array.isArray(items) ? items : [])) {
+    const text = String(raw?.text || "").trim();
+    if (!text) continue;
+
+    const itemMode = (raw?.mode === "fun" ? "fun" : (mode === "fun" ? "fun" : "trivia"));
+    const itemBucket = Number.isFinite(Number(raw?.bucket))
+      ? window.bucket10(Number(raw.bucket))
+      : (Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0);
+
+    const key = makeMetaphorDedupeKey({ mode: itemMode, bucket: itemBucket, text });
+    const current = map.get(key);
+
+    if (!current) {
+      map.set(key, {
+        ...raw,
+        text,
+        mode: itemMode,
+        bucket: itemBucket,
+        source: raw?.source || null,
+        id: raw?.id ? String(raw.id).trim() : null,
+        penName: raw?.penName || null,
+        totalLikes: Number(raw?.totalLikes || 0),
+        likes: Number(raw?.likes || 0),
+        hof: !!raw?.hof,
+        __dedupeKey: key,
+        __canonText: normalizeMetaphorText(text),
+      });
+      continue;
+    }
+
+    const keepIncoming = sourcePriority(raw?.source) > sourcePriority(current?.source);
+
+    current.text = pickBetterText(current.text, text);
+    current.penName = pickBetterPenName(current.penName, raw?.penName);
+    current.totalLikes = Math.max(Number(current.totalLikes || 0), Number(raw?.totalLikes || 0));
+    current.likes = Math.max(Number(current.likes || 0), Number(raw?.likes || 0));
+    current.hof = !!current.hof || !!raw?.hof;
+    current.__canonText = normalizeMetaphorText(current.text);
+
+    if (keepIncoming) {
+      current.source = raw?.source || current.source || null;
+      current.id = raw?.id ? String(raw.id).trim() : (current.id || null);
+      current.mode = itemMode;
+      current.bucket = itemBucket;
+    } else if (!current.id && raw?.id) {
+      current.id = String(raw.id).trim();
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 // =========================
-// ✅ public API
+// ✅ 復旧（reindex）案内UI
 // =========================
-async function apiGet(path){
-  const r = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
-  if(!r.ok) throw new Error(`${path} ${r.status}`);
-  return r.json();
+function ensureReindexHintDom(){
+  if (document.getElementById("reindexHint")) return;
+
+  const target = document.getElementById("todayRankingWrap")
+              || document.getElementById("placeStatus")
+              || document.body;
+
+  const box = document.createElement("div");
+  box.id = "reindexHint";
+  box.style.display = "none";
+  box.style.maxWidth = "760px";
+  box.style.margin = "12px auto 0 auto";
+  box.style.padding = "12px 14px";
+  box.style.borderRadius = "14px";
+  box.style.border = "1px solid rgba(239,68,68,.25)";
+  box.style.background = "rgba(254, 226, 226, .75)";
+  box.style.color = "#7f1d1d";
+  box.style.fontWeight = "900";
+  box.style.boxShadow = "0 10px 24px rgba(2,6,23,.08)";
+  box.style.lineHeight = "1.35";
+
+  box.innerHTML = `
+    <div style="font-size:14px;">⚠️ 公開ネタの目次（index）が空の可能性があります</div>
+    <div style="margin-top:6px; font-weight:700; font-size:12px;">
+      管理画面（admin.html）で <b>「復旧（reindex）」</b> を押してください。<br>
+      ※投稿データ本体は消えず、一覧（idx）を作り直す処理です。
+    </div>
+  `;
+
+  if (target && target.id === "todayRankingWrap" && target.parentElement){
+    target.parentElement.insertBefore(box, target);
+  } else if (target && target !== document.body) {
+    target.insertAdjacentElement("afterend", box);
+  } else {
+    document.body.appendChild(box);
+  }
 }
 
-async function apiPost(path, body, headers = {}){
-  const r = await fetch(`${API_BASE}${path}`, {
+function setReindexHint(need, detailText){
+  try{
+    ensureReindexHintDom();
+    const el = document.getElementById("reindexHint");
+    if (!el) return;
+
+    if (!need){
+      el.style.display = "none";
+      return;
+    }
+
+    if (detailText){
+      const lines = el.querySelectorAll("div");
+      if (lines && lines[1]) {
+        lines[1].innerHTML = `<span style="font-weight:700; font-size:12px;">${escapeHtml(detailText)}</span>`;
+      }
+    }
+
+    el.style.display = "";
+  }catch(e){
+    console.warn("setReindexHint error", e);
+  }
+}
+
+// ✅ ペンネーム表示ルール
+function normalizePenName(name){
+  const n = String(name || "").trim();
+  if (!n) return null;
+  if (n === "匿名") return null;
+  if (n === "初期ネタ") return null;
+  return n;
+}
+function penHtmlIfAny(name){
+  const n = normalizePenName(name);
+  return n ? ` <span class="muted">（${escapeHtml(n)}）</span>` : "";
+}
+function modeBadgeHtml(mode){
+  const m = (mode === "fun") ? "fun" : "trivia";
+  const label = (m === "fun") ? "お笑い" : "雑学";
+  return ` <span class="mode-badge ${m}">${label}</span>`;
+}
+
+// ==============================
+// 承認待ち投稿（Workers）
+// ==============================
+async function submitToPending(mode, bucket, text, penName, penPin, clientId){
+  const res = await fetch(`${API_BASE}/api/submit`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...headers
-    },
-    body: JSON.stringify(body)
+    cache: "no-store",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ mode, bucket, text, penName, penPin, clientId, from: "mobile" })
   });
-  const j = await r.json().catch(() => ({}));
-  if(!r.ok) throw new Error(j?.error || `${path} ${r.status}`);
-  return j;
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) {
+    const code = data?.code || data?.error || `submit failed ${res.status}`;
+    throw new Error(code);
+  }
+  return data;
 }
 
-async function likeAny(payload){
-  return apiPost("/api/like", payload, {
-    "x-client-id": payload.clientId || getClientId()
-  });
-}
+// ==============================
+// publicネタ取得（Workers）
+// ==============================
+async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
+  const params = new URLSearchParams();
+  if (mode) params.set("mode", mode);
+  if (Number.isFinite(bucket)) params.set("bucket", String(bucket));
+  params.set("limit", String(limit));
 
-// 後半の warmPublicCache / getPublicItems でも共通利用するのでここでは宣言だけ外しておく
-const publicCache = new Map();
+  const url = `${API_BASE}/api/public?${params.toString()}`;
+  const res = await fetch(url, { method: "GET", cache: "no-store" });
 
-async function fetchPublic(mode, bucket){
-  const b = bucket10(bucket);
-  const key = `${mode}:${b}`;
-  if (publicCache.has(key)) return publicCache.get(key);
+  if (!res.ok){
+    setReindexHint(false);
+    throw new Error(`public fetch failed: ${res.status}`);
+  }
 
-  const items = await apiGet(`/api/public?mode=${encodeURIComponent(mode)}&bucket=${b}`);
-  const arr = Array.isArray(items) ? items : (Array.isArray(items?.items) ? items.items : []);
-  const normalized = arr.map(it => ({
-    ...it,
-    mode: mode,
-    bucket: b,
-    totalLikes: Number(it?.totalLikes || it?.likes_total || 0),
-    likesToday: Number(it?.likes || it?.likesToday || 0),
+  const data = await res.json().catch(()=>null);
+  if (!data?.ok) {
+    setReindexHint(false);
+    throw new Error("public not ok");
+  }
+
+  try{
+    const note = String(data?.note || "");
+    const itemsRaw = Array.isArray(data?.items) ? data.items : [];
+    if (data?.ok === true && note === "no_index_or_empty" && itemsRaw.length === 0){
+      setReindexHint(true, "公開ネタが0件です（no_index_or_empty）。管理画面で「復旧（reindex）」を実行してください。");
+    } else {
+      setReindexHint(false);
+    }
+  }catch{}
+
+  state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  const deduped = mergeDisplayItems(
+    items
+      .map(it => ({
+        id: String(it.id || "").trim(),
+        text: String(it.text || "").trim(),
+        penName: (it.penName ? String(it.penName).trim() : null),
+        totalLikes: Number(it.totalLikes || 0),
+        likes: Number(it.likes || 0),
+        hof: !!it.hof,
+        source: "public",
+        mode: (mode === "fun" ? "fun" : "trivia"),
+        bucket: window.bucket10(Number(bucket))
+      }))
+      .filter(x => x.id && x.text)
+      .filter(x => !isNgText(x.text)),
+    { mode, bucket }
+  );
+
+  return deduped.map(x => ({
+    id: x.id,
+    text: x.text,
+    penName: x.penName || null,
+    totalLikes: Number(x.totalLikes || 0),
+    hof: !!x.hof
   }));
-  publicCache.set(key, normalized);
-  return normalized;
+}
+// ==============================
+// ✅ 最新public（Workers /api/public_latest）
+// ==============================
+async function fetchPublicLatest(mode, limit = 10){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("limit", String(limit));
+
+  const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `public_latest failed ${res.status}`);
+
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items
+    .map(it => ({
+      id: String(it.id || "").trim(),
+      text: String(it.text || "").trim(),
+      penName: it.penName ? String(it.penName).trim() : null,
+      bucket: Number(it.bucket ?? 0),
+      approvedAt: it.approvedAt ?? null,
+      mode: (it.mode === "fun" ? "fun" : "trivia"),
+      source: "public"
+    }))
+    .filter(x => x.id && x.text)
+    .filter(x => !isNgText(x.text));
 }
 
-async function fetchRankingToday(mode, bucket, limit = 10){
-  const b = bucket10(bucket);
-  const q = mode ? `?mode=${encodeURIComponent(mode)}&bucket=${b}&limit=${limit}` : `?limit=${limit}`;
-  const res = await apiGet(`/api/ranking/today${q}`);
-  return Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : []);
+// ==============================
+// ✅ いいね（Workers）
+// ==============================
+async function likeAny(payload){
+  const cid = getClientId();
+  const res = await fetch(`${API_BASE}/api/like`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type":"application/json",
+      "x-client-id": cid,
+    },
+    body: JSON.stringify({
+      ...payload,
+      clientId: cid,
+    })
+  });
+
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
+
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+  return data;
 }
 
-async function fetchRankingTotal(mode, bucket, limit = 10){
-  const b = bucket10(bucket);
-  const q = mode ? `?mode=${encodeURIComponent(mode)}&bucket=${b}&limit=${limit}` : `?limit=${limit}`;
-  const res = await apiGet(`/api/ranking/total${q}`);
-  return Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : []);
+// ==============================
+// 今日のランキング（Workers）
+// ==============================
+async function fetchRankingToday(mode, bucket, limit = 3){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("bucket", String(bucket));
+  params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking failed ${res.status}`);
+  return Array.isArray(data.items) ? data.items : [];
 }
 
-async function fetchHallOfFame(mode, bucket = 0, limit = 50){
+// ✅ 今日の総合ランキング（全バケット共通）
+async function fetchRankingTodayAll(mode, limit = 3){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/ranking/today_all?${params.toString()}`, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking today_all failed ${res.status}`);
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+async function fetchRankingTotal(mode, bucket, limit = 3){
+  const params = new URLSearchParams();
+  params.set("mode", mode);
+  params.set("bucket", String(bucket));
+  params.set("limit", String(limit));
+  const res = await fetch(`${API_BASE}/api/ranking/total?${params.toString()}`, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking total failed ${res.status}`);
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+// ✅ 殿堂入り（従来API / フォールバック用）
+async function fetchHallOfFame(mode, bucket, limit = 50){
   const params = new URLSearchParams();
   params.set("mode", mode);
   params.set("limit", String(limit));
@@ -535,6 +835,18 @@ async function fetchHallModeFromApiOnce(mode, limit = 100){
       .filter(it => !isNgText(it.text))
   ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 }
+function saveHallDailyCache(payload){
+  try{
+    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
+  }catch{}
+}
+function loadHallDailyCache(){
+  try{
+    return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
+  }catch{
+    return null;
+  }
+}
 
 async function fetchHallOfFameDaily(limit = 100){
   const today = todayJSTString();
@@ -613,297 +925,151 @@ async function fetchHallOfFameDaily(limit = 100){
   }
 }
 async function fetchHallOfFameForRanking(limit = 100){
-  const today = todayJSTString();
-  const cached = loadHallDailyCache();
+  try{
+    const daily = await fetchHallOfFameDaily(limit);
 
-  if (
-    cached?.day === today &&
-    cached?.merged === true &&
-    Array.isArray(cached?.items) &&
-    cached.items.length > 0
-  ) {
-    const items = mergeDisplayItems(
-      cached.items
-        .map(normalizeHallSnapshotItem)
-        .filter(Boolean)
+    if (Array.isArray(daily?.items) && daily.items.length > 0) {
+      return {
+        generatedAt: daily?.generatedAt || null,
+        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+        items: daily.items.slice(0, limit)
+      };
+    }
+
+    throw new Error("hof_daily empty");
+  }catch(e){
+    console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
+
+    const [tItems, fItems] = await Promise.all([
+      fetchHallOfFame("trivia", 0, limit),
+      fetchHallOfFame("fun",    0, limit),
+    ]);
+
+    const merged = mergeDisplayItems(
+      [
+        ...(Array.isArray(tItems) ? tItems : []).map(it => ({
+          ...it,
+          mode: "trivia",
+          source: "public",
+          hof: true
+        })),
+        ...(Array.isArray(fItems) ? fItems : []).map(it => ({
+          ...it,
+          mode: "fun",
+          source: "public",
+          hof: true
+        }))
+      ]
+        .map(it => ({
+          ...it,
+          text: String(it?.text || "").trim(),
+          penName: it?.penName ? String(it.penName).trim() : null,
+          totalLikes: Number(it?.totalLikes || 0),
+          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0
+        }))
+        .filter(it => it.text)
         .filter(it => !isNgText(it.text))
     ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
-    state.hofThreshold = Number(cached?.hofThreshold || state.hofThreshold || 20);
-
     return {
-      generatedAt: cached?.generatedAt || null,
-      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
-      items: items.slice(0, limit)
+      generatedAt: null,
+      hofThreshold: Number(state.hofThreshold || 20),
+      items: merged.slice(0, limit)
     };
   }
-
-  let daily = null;
-  try{
-    daily = await fetchHallOfFameDaily(limit);
-  }catch(e){
-    console.warn("fetchHallOfFameDaily failed in fetchHallOfFameForRanking", e?.message || e);
-  }
-
-  const [triviaRes, funRes] = await Promise.allSettled([
-    fetchHallOfFame("trivia", 0, limit),
-    fetchHallOfFame("fun", 0, limit)
-  ]);
-
-  const apiItems = mergeDisplayItems(
-    [
-      ...(triviaRes.status === "fulfilled" ? triviaRes.value : []).map(it => ({
-        ...it,
-        mode: "trivia",
-        source: "public",
-        hof: true
-      })),
-      ...(funRes.status === "fulfilled" ? funRes.value : []).map(it => ({
-        ...it,
-        mode: "fun",
-        source: "public",
-        hof: true
-      }))
-    ]
-      .map(it => ({
-        ...it,
-        text: String(it?.text || "").trim(),
-        penName: it?.penName ? String(it.penName).trim() : null,
-        totalLikes: Number(it?.totalLikes || 0),
-        likes: Number(it?.likes || it?.likesToday || 0),
-        bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0
-      }))
-      .filter(it => it.text)
-      .filter(it => !isNgText(it.text))
-  ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-  const merged = mergeDisplayItems([
-    ...(Array.isArray(daily?.items) ? daily.items : []),
-    ...apiItems
-  ])
-    .filter(it => Number(it.totalLikes || 0) >= Number(state.hofThreshold || daily?.hofThreshold || 20))
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-  if (!merged.length) {
-    throw new Error("hof empty");
-  }
-
-  const hofThreshold = Number(
-    daily?.hofThreshold ||
-    state.hofThreshold ||
-    20
-  );
-  state.hofThreshold = hofThreshold;
-
-  const payload = {
-    day: today,
-    generatedAt: daily?.generatedAt || null,
-    hofThreshold,
-    items: merged,
-    merged: true
-  };
-  saveHallDailyCache(payload);
-
-  return {
-    generatedAt: payload.generatedAt,
-    hofThreshold,
-    items: merged.slice(0, limit)
-  };
 }
 function buildHallCardHtmlFromSnapshot(hofData){
   const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
   const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
 
   const snapItems = Array.isArray(hofData?.items) ? hofData.items : [];
-  const mergedItems = mergeDisplayItems(snapItems)
-    .filter(it => Number(it.totalLikes || 0) >= hofTh)
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
-  const rows = mergedItems.length
-    ? mergedItems.slice(0, 20).map((it, idx) => {
-        const modeLabel = it.mode === "fun" ? "お笑い" : "雑学";
-        const pen = it.penName ? ` / ${escHtml(it.penName)}` : "";
-        const bucket = Number.isFinite(Number(it.bucket)) ? ` / ${window.bucket10(Number(it.bucket))}%` : "";
-        const badge = Number(it.totalLikes || 0) >= hofTh
-          ? ` <span class="hof-badge">殿堂入り</span>`
-          : "";
-        return `
-          <div class="rank-item">
-            <div class="rank-no">${idx + 1}</div>
-            <div class="rank-main">
-              <div class="rank-text">${escHtml(it.text)}${badge}</div>
-              <div class="rank-meta">${modeLabel}${bucket}${pen} / 累計👍${Number(it.totalLikes || 0)}</div>
-            </div>
-          </div>
-        `;
-      }).join("")
-    : `<div class="rank-empty">殿堂入りはまだありません</div>`;
+  const liveItems = Object.values(state.currentPhrases || {})
+    .filter(Boolean)
+    .map(it => ({
+      id: it?.id ? String(it.id).trim() : null,
+      text: String(it?.text || "").trim(),
+      penName: it?.penName ? String(it.penName).trim() : null,
+      totalLikes: Number(it?.totalLikes || 0),
+      likes: Number(it?.likesToday || 0),
+      bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+      mode: (it?.mode === "fun" ? "fun" : "trivia"),
+      hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
+      source: it?.source || "live"
+    }))
+    .filter(it => it.text)
+    .filter(it => !isNgText(it.text));
+
+  const publicItems = [];
+try{
+  for (const arr of publicCache.values()) {
+    if (!Array.isArray(arr)) continue;
+    for (const it of arr) {
+      if (!it?.text) continue;
+      publicItems.push({
+        id: it?.id ? String(it.id).trim() : null,
+        text: String(it.text || "").trim(),
+        penName: it?.penName ? String(it.penName).trim() : null,
+        totalLikes: Number(it?.totalLikes || 0),
+        likes: Number(it?.likes || 0),
+        bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+        mode: (it?.mode === "fun" ? "fun" : "trivia"),
+        hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
+        source: it?.source || "public"
+      });
+    }
+  }
+}catch(e){
+  console.warn("publicItems collect failed", e);
+}
+
+const hofItems = mergeDisplayItems([
+  ...snapItems,
+  ...liveItems,
+  ...publicItems
+])
+  .filter(it => Number(it.totalLikes || 0) >= hofTh)
+  .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0))
+  .slice(0, 20);
+
+  if (!hofItems.length) {
+    return `
+      <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+        <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+        <div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>
+        <div class="muted">まだ殿堂入りがありません（累計👍${hofTh}以上が0件、または本日JSON未生成）</div>
+      </div>
+    `;
+  }
+
+  const rows = hofItems.map((it, idx) => {
+    const pen = penHtmlIfAny(it.penName);
+    const totalLikes = Number(it.totalLikes || 0);
+    const md = (it.mode === "fun") ? "fun" : "trivia";
+    return `
+      <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+        <div style="font-weight:800;">
+          ${idx+1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(md)}
+          <span class="hof-badge">👑殿堂入り</span>
+        </div>
+        <div class="muted">累計👍：${totalLikes}</div>
+      </div>
+    `;
+  }).join("");
 
   const snapshotNote = generatedAt
-    ? `<div class="rank-note">日次スナップショット: ${escHtml(generatedAt)}</div>`
-    : `<div class="rank-note">日次スナップショット: 取得時刻なし</div>`;
+    ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
+    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが片側欠けのときだけ不足分をAPI補完</div>`;
 
   return `
-    <div class="rank-card" id="rankHofCard">
-      <div class="rank-title">👑 殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+    <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
       ${snapshotNote}
       <div>${rows}</div>
     </div>
   `;
 }
-
-function canonMode(mode){
-  return (mode === "fun") ? "fun" : "trivia";
-}
-
-function canonBucket(bucket){
-  return Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
-}
-
-function sameCanonicalMetaphor(a, b){
-  const am = canonMode(a?.mode);
-  const bm = canonMode(b?.mode);
-  if (am !== bm) return false;
-
-  const at = normalizeMetaphorText(a?.text || "");
-  const bt = normalizeMetaphorText(b?.text || "");
-  return !!at && at === bt;
-}
-
-function refreshHallSnapshotHtml(){
-  try{
-    const base = (__hofSnapshotMemory && Array.isArray(__hofSnapshotMemory.items))
-      ? __hofSnapshotMemory
-      : {
-          day: todayJSTString(),
-          generatedAt: null,
-          hofThreshold: Number(state.hofThreshold || 20),
-          items: []
-        };
-
-    base.hofThreshold = Number(state.hofThreshold || base.hofThreshold || 20);
-    __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(base);
-
-    const el = document.getElementById("rankHofCard");
-    if (el && __hofSnapshotHtml) {
-      el.outerHTML = __hofSnapshotHtml;
-    }
-  }catch(e){
-    console.warn("refreshHallSnapshotHtml error", e);
-  }
-}
-
-function syncLikedItemToCaches(liked){
-  try{
-    if (!liked?.text) return;
-
-    const nextMode  = canonMode(liked.mode);
-    const nextBucket = canonBucket(liked.bucket);
-    const nextToday = Number(liked.likesToday || 0);
-    const nextTotal = Number(liked.totalLikes || 0);
-    const nextHof   = !!liked.hof || (nextTotal >= Number(state.hofThreshold || 20));
-
-    for (const slot of ["m", "d", "e"]) {
-      const cur = state.currentPhrases?.[slot];
-      if (!cur?.text) continue;
-      if (!sameCanonicalMetaphor(cur, liked)) continue;
-
-      state.currentPhrases[slot] = {
-        ...cur,
-        mode: nextMode,
-        bucket: canonBucket(cur.bucket ?? nextBucket),
-        likesToday: Math.max(Number(cur.likesToday || 0), nextToday),
-        totalLikes: Math.max(Number(cur.totalLikes || 0), nextTotal),
-        hof: !!cur.hof || nextHof
-      };
-    }
-
-    for (const [k, arr] of publicCache.entries()) {
-      if (!Array.isArray(arr)) continue;
-
-      publicCache.set(k, arr.map(it => {
-        if (!it?.text) return it;
-        const candidate = { ...it, mode: it?.mode || nextMode };
-        if (!sameCanonicalMetaphor(candidate, liked)) return it;
-
-        return {
-          ...it,
-          mode: canonMode(it?.mode || nextMode),
-          bucket: canonBucket(it?.bucket ?? nextBucket),
-          totalLikes: Math.max(Number(it?.totalLikes || 0), nextTotal),
-          likes: Math.max(Number(it?.likes || it?.likesToday || 0), nextToday),
-          likesToday: Math.max(Number(it?.likesToday || it?.likes || 0), nextToday),
-          hof: !!it?.hof || nextHof
-        };
-      }));
-    }
-
-    if (!__hofSnapshotMemory || !Array.isArray(__hofSnapshotMemory.items)) {
-      __hofSnapshotMemory = {
-        day: todayJSTString(),
-        generatedAt: null,
-        hofThreshold: Number(state.hofThreshold || 20),
-        items: []
-      };
-    }
-
-    let found = false;
-
-    __hofSnapshotMemory.items = (__hofSnapshotMemory.items || []).map(it => {
-      if (!it?.text) return it;
-      if (!sameCanonicalMetaphor(it, liked)) return it;
-
-      found = true;
-      return {
-        ...it,
-        mode: canonMode(it?.mode || nextMode),
-        bucket: canonBucket(it?.bucket ?? nextBucket),
-        totalLikes: Math.max(Number(it?.totalLikes || 0), nextTotal),
-        likes: Math.max(Number(it?.likes || it?.likesToday || 0), nextToday),
-        likesToday: Math.max(Number(it?.likesToday || it?.likes || 0), nextToday),
-        hof: true
-      };
-    });
-
-    if (!found && nextHof) {
-      __hofSnapshotMemory.items.push({
-        id: liked?.id ? String(liked.id).trim() : makeGlobalId({
-          mode: nextMode,
-          bucket: nextBucket,
-          text: liked.text,
-          source: "live"
-        }),
-        text: String(liked.text || "").trim(),
-        penName: liked?.penName ? String(liked.penName).trim() : null,
-        totalLikes: nextTotal,
-        likes: nextToday,
-        likesToday: nextToday,
-        bucket: nextBucket,
-        mode: nextMode,
-        hof: true,
-        source: "live"
-      });
-    }
-
-    __hofSnapshotMemory.day = todayJSTString();
-    __hofSnapshotMemory.hofThreshold = Number(state.hofThreshold || __hofSnapshotMemory.hofThreshold || 20);
-    __hofSnapshotMemory.items = mergeDisplayItems(__hofSnapshotMemory.items)
-      .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-    saveHallDailyCache({
-      day: __hofSnapshotMemory.day,
-      generatedAt: __hofSnapshotMemory.generatedAt || null,
-      hofThreshold: __hofSnapshotMemory.hofThreshold,
-      items: __hofSnapshotMemory.items,
-      merged: true
-    });
-
-    refreshHallSnapshotHtml();
-  }catch(e){
-    console.warn("syncLikedItemToCaches error", e);
-  }
-}
-
+    
 async function ensureHallSnapshotLoaded(){
   const today = todayJSTString();
 
@@ -974,6 +1140,7 @@ function getSharedItems(mode, bucket) {
 // ==============================
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
+const publicCache = new Map();
 const publicInFlight = new Map();
 
 function keyMB(mode, bucket){
@@ -1071,6 +1238,24 @@ async function fetchWithTimeout(url, ms = 4500){
   }
 }
 
+// =========================
+// state
+// =========================
+let state = {
+  pops: null,
+  placeLabel: null,
+  tz: null,
+  source: "API: 未接続",
+  hofThreshold: 20,
+  selectedLat: null,
+  selectedLon: null,
+  currentPhrases: {
+    m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
+    d: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
+    e: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null }
+  }
+};
+
 // ✅ 全ネタ一意ID（base/jsonも集計対象）
 function fnv1a32(str){
   let h = 0x811c9dc5;
@@ -1079,6 +1264,12 @@ function fnv1a32(str){
     h = Math.imul(h, 0x01000193);
   }
   return (h >>> 0).toString(16);
+}
+function makeGlobalId({mode, bucket, text, source}){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
+  const t = normalizeMetaphorText(text);
+  return `t_${m}_${b}_${fnv1a32(`${m}|${b}|${t}`)}`;
 }
 
 // アイコン
@@ -1310,11 +1501,10 @@ function getCurrentMainBucket(){
   if (!arr.length) return null;
   return window.bucket10(Math.max(...arr));
 }
-
 // =========================
 // ✅ いいねUI（public/base/jsonすべてOK）
 // =========================
-function updateLikeUIFull(slot) {
+function updateLikeUI(slot) {
   ensureLikeDom(slot);
 
   const phraseObj = state.currentPhrases[slot];
@@ -1362,9 +1552,6 @@ function updateLikeUIFull(slot) {
   btnEl.onclick = async () => {
     btnEl.disabled = true;
     try{
-      const prevToday = Number(state.currentPhrases[slot]?.likesToday || 0);
-      const prevTotal = Number(state.currentPhrases[slot]?.totalLikes || 0);
-
       const out = await likeAny({
         id: phraseObj.id,
         mode: phraseObj.mode || getSelectedMode(),
@@ -1378,27 +1565,11 @@ function updateLikeUIFull(slot) {
       likeFxPop(btnEl);
       likeFxPlusOne(btnEl);
 
-      const nextToday = Math.max(Number(out.likesToday || 0), prevToday + 1);
-      const nextTotal = Math.max(Number(out.totalLikes || 0), prevTotal + 1);
+      state.currentPhrases[slot].likesToday = Number(out.likesToday || 0);
+      state.currentPhrases[slot].totalLikes = Number(out.totalLikes || state.currentPhrases[slot].totalLikes || 0);
+      state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
 
-      state.currentPhrases[slot].likesToday = nextToday;
-      state.currentPhrases[slot].totalLikes = nextTotal;
-      state.currentPhrases[slot].hof =
-        !!out.hof || (nextTotal >= Number(state.hofThreshold || 20));
-
-      syncLikedItemToCaches({
-        id: state.currentPhrases[slot].id,
-        text: state.currentPhrases[slot].text,
-        penName: state.currentPhrases[slot].penName,
-        mode: state.currentPhrases[slot].mode,
-        bucket: state.currentPhrases[slot].bucket,
-        likesToday: nextToday,
-        totalLikes: nextTotal,
-        hof: state.currentPhrases[slot].hof,
-        source: state.currentPhrases[slot].source
-      });
-
-      updateLikeUIFull(slot);
+      updateLikeUI(slot);
     }catch(e){
       alert(`いいね失敗：${e?.message || e}`);
     }finally{
@@ -1432,7 +1603,7 @@ function renderEmpty() {
       text: null, source: null, id: null, penName: null,
       likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
     };
-    if (document.getElementById(`like_${k}`)) updateLikeUIFull(k);
+    updateLikeUI(k);
     updateDeleteUI(k);
   });
 
@@ -1449,7 +1620,7 @@ function render() {
   const metaAll = document.getElementById("metaphor");
   const footEl = document.getElementById("metaFoot");
 
-  if (sourceTag) sourceTag.textContent = state.source || "API";
+  if (sourceTag) sourceTag.textContent = state.source;
   if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
 
   const setSlot = (slotKey, value, label) => {
@@ -1465,7 +1636,7 @@ function render() {
         text: null, source: null, id: null, penName: null,
         likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null
       };
-      if (document.getElementById(`like_${slotKey}`)) updateLikeUIFull(slotKey);
+      updateLikeUI(slotKey);
       updateDeleteUI(slotKey);
       return null;
     }
@@ -1486,7 +1657,7 @@ function render() {
 
     if (!window.__forceRepick && sameContext) {
       picked = prev;
-    } else if (window.__freezeMetaphor && prev?.text) {
+    } else if (__freezeMetaphor && prev?.text) {
       picked = prev;
     } else {
       picked = pickMetaphor(mode, rounded);
@@ -1573,7 +1744,7 @@ function render() {
       dedupeKey: picked.dedupeKey || makeMetaphorDedupeKey({ mode, bucket: rounded, text: picked.text || "" })
     };
 
-    if (document.getElementById(`like_${slotKey}`)) updateLikeUIFull(slotKey);
+    updateLikeUI(slotKey);
     updateDeleteUI(slotKey);
 
     try { applyTheme(rounded); } catch {}
@@ -1692,7 +1863,6 @@ async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}
 
   return out;
 }
-
 // =========================
 // ✅ ランキングDOM
 // =========================
@@ -1778,17 +1948,6 @@ async function renderRankingOnce(key){
 // ✅ FIX: 更新中でも今の内容は消さない
 // ✅ SPEED: 段階表示
 // =========================
-let __rankingReqSeq = 0;
-
-function setRankingBusy(on){
-  try{
-    const wrap = document.getElementById("todayRankingWrap");
-    if (wrap) wrap.classList.toggle("is-updating", !!on);
-  }catch(e){
-    console.warn("setRankingBusy error", e);
-  }
-}
-
 async function renderRanking(){
   try{
     ensureRankingDom();
@@ -1924,7 +2083,7 @@ async function renderRanking(){
           <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
             <div style="font-weight:900; font-size:16px; margin-bottom:6px;">今日のランキング TOP3（全バケット共通 / ${mode==="fun"?"お笑い":"雑学"}）</div>
             <div class="muted" style="margin-bottom:8px;">※今日(JST)のいいね数で集計（0〜100%まとめて）</div>
-            <div class="muted">取得失敗：${escapeHtml(String(e?.message || e))}</div>
+            <div class="muted">総合ランキング取得に失敗：${escapeHtml(String(e?.message || e))}</div>
           </div>
         `;
       }
@@ -1932,509 +2091,755 @@ async function renderRanking(){
 
     const hofPromise = (async () => {
       try{
-        const hall = await ensureHallSnapshotLoaded();
-        return buildHallCardHtmlFromSnapshot(hall);
+        await ensureHallSnapshotLoaded();
+        return __hofSnapshotHtml || `
+          <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+            <div class="muted">殿堂入りデータなし</div>
+          </div>
+        `;
       } catch (e) {
-        const fallbackItems = buildHallCanonicalTop20();
-        if (fallbackItems.length) {
-          const fallback = {
-            day: todayJSTString(),
-            generatedAt: null,
-            hofThreshold: hofTh,
-            items: fallbackItems
-          };
-          __hofSnapshotMemory = fallback;
-          __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(fallback);
-          return __hofSnapshotHtml;
-        }
-
         return `
           <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">👑 殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
-            <div class="muted">取得失敗：${escapeHtml(String(e?.message || e))}</div>
+            <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通）</div>
+            <div class="muted">殿堂入り取得に失敗：${escapeHtml(String(e?.message || e))}</div>
           </div>
         `;
       }
     })();
 
-    const latestHtml = await latestPromise;
-    if (reqId !== __rankingReqSeq) return;
-    const latestCard = document.getElementById("rankLatestCard");
-    if (latestCard) latestCard.outerHTML = latestHtml;
+    latestPromise.then((html) => {
+      if (reqId !== __rankingReqSeq) return;
+      const el = document.getElementById("rankLatestCard");
+      if (el) el.outerHTML = html;
+      try{
+        const det = document.getElementById("latestDetails");
+        if (det && !det.dataset.wired){
+          det.dataset.wired = "1";
+          det.addEventListener("toggle", () => {
+            saveLatestOpen(!!det.open);
+          });
+        }
+      }catch{}
+    });
 
-    const latestDetails = document.getElementById("latestDetails");
-    if (latestDetails) {
-      latestDetails.addEventListener("toggle", () => {
-        saveLatestOpen(!!latestDetails.open);
-      }, { passive: true });
-    }
+    todayPromise.then((html) => {
+      if (reqId !== __rankingReqSeq) return;
+      const el = document.getElementById("rankTodayCard");
+      if (el) el.outerHTML = html;
+    });
 
-    const todayHtml = await todayPromise;
-    if (reqId !== __rankingReqSeq) return;
-    const todayCard = document.getElementById("rankTodayCard");
-    if (todayCard) todayCard.outerHTML = todayHtml;
+    hofPromise.then((html) => {
+      if (reqId !== __rankingReqSeq) return;
+      const el = document.getElementById("rankHofCard");
+      if (el) el.outerHTML = html;
+    });
 
-    const hofHtml = await hofPromise;
-    if (reqId !== __rankingReqSeq) return;
-    const hofCard = document.getElementById("rankHofCard");
-    if (hofCard) hofCard.outerHTML = hofHtml;
-    __hofSnapshotHtml = hofHtml;
+    await Promise.allSettled([latestPromise, todayPromise, hofPromise]);
 
-  } catch (e) {
-    const rankBody = document.getElementById("rankBody");
-    if (rankBody) {
-      rankBody.innerHTML = `<div class="muted">ランキング取得失敗：${escapeHtml(String(e?.message || e))}</div>`;
-    }
+  } catch(e){
+    console.warn("renderRanking error", e);
   } finally {
     setRankingBusy(false);
   }
 }
 
 // =========================
-// ✅ ランキングAPI
+// ✅ 承認フラグがあれば次の検索成功で花火
 // =========================
-async function fetchRankingTodayAll(mode, limit = 20){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("limit", String(limit));
-
-  const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, {
-    method:"GET",
-    cache:"no-store"
-  });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking today failed ${res.status}`);
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-async function fetchPublicLatest(mode, limit = 10){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("limit", String(limit));
-
-  const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, {
-    method:"GET",
-    cache:"no-store"
-  });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `public_latest failed ${res.status}`);
-  return Array.isArray(data.items) ? data.items : [];
-}
-
-async function fetchPublicMetaphors({ mode, bucket, limit = 80 }){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("bucket", String(window.bucket10(bucket)));
-  params.set("limit", String(limit));
-
-  const res = await fetch(`${API_BASE}/api/public?${params.toString()}`, {
-    method:"GET",
-    cache:"no-store"
-  });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `public failed ${res.status}`);
-
-  const arr = Array.isArray(data.items) ? data.items : [];
-  return arr.map(it => ({
-    id: String(it?.id || "").trim(),
-    text: String(it?.text || "").trim(),
-    penName: it?.penName ? String(it.penName).trim() : null,
-    totalLikes: Number(it?.totalLikes || 0),
-    likes: Number(it?.likes || 0),
-    bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : window.bucket10(bucket),
-    mode: (it?.mode === "fun" ? "fun" : "trivia"),
-    hof: !!it?.hof,
-    source: "public"
-  })).filter(it => it.text);
-}
-
-// =========================
-// 文字ユーティリティ
-// =========================
-function escapeHtml(str){
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function penHtmlIfAny(name){
-  const s = String(name || "").trim();
-  if (!s || s === "匿名" || s === "元ネタ") return "";
-  return ` <span class="muted">(${escapeHtml(s)})</span>`;
-}
-
-function modeBadgeHtml(mode){
-  return mode === "fun"
-    ? ` <span class="muted">[お笑い]</span>`
-    : ` <span class="muted">[雑学]</span>`;
-}
-
-function normalizeTextForCompare(s){
-  return String(s || "")
-    .normalize("NFKC")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractEmbeddedPercents(text){
-  const t = String(text || "").normalize("NFKC");
-  const out = [];
-  const re = /(\d{1,3})\s*[%％]/g;
-  let m;
-  while ((m = re.exec(t)) !== null) {
-    const n = Number(m[1]);
-    if (Number.isFinite(n) && n >= 0 && n <= 100) out.push(n);
-  }
-  return out;
-}
-
-function hasMismatchedPercent(text, bucket){
-  const nums = extractEmbeddedPercents(text);
-  if (!nums.length) return false;
-  const b = window.bucket10(bucket);
-  return !nums.some(n => window.bucket10(n) === b);
-}
-
-function hasHard100PercentMismatch(text, bucket){
-  const nums = extractEmbeddedPercents(text);
-  const b = window.bucket10(bucket);
-  if (b === 100) return false;
-  return nums.includes(100);
-}
-
-function normalizePenNameStrict(name){
-  const s = String(name || "").normalize("NFKC").trim();
-  return s || "匿名";
-}
-
-// =========================
-// ✅ 重複統合
-// =========================
-function mergeDisplayItemsAdvanced(items, fallback = {}){
-  const map = new Map();
-
-  for (const raw of (Array.isArray(items) ? items : [])) {
-    const text = String(raw?.text || "").trim();
-    if (!text) continue;
-    if (isNgText(text)) continue;
-
-    const mode = (raw?.mode === "fun" ? "fun" : (fallback?.mode === "fun" ? "fun" : "trivia"));
-    const bucket = Number.isFinite(Number(raw?.bucket))
-      ? window.bucket10(Number(raw.bucket))
-      : Number.isFinite(Number(fallback?.bucket))
-        ? window.bucket10(Number(fallback.bucket))
-        : 0;
-
-    if (hasHard100PercentMismatch(text, bucket)) continue;
-    if (hasMismatchedPercent(text, bucket)) continue;
-
-    const cid = canonicalId(mode, text);
-    const prev = map.get(cid);
-
-    const next = {
-      id: String(raw?.id || "").trim() || makeGlobalId({
-        mode,
-        bucket,
-        text,
-        source: raw?.source || "base"
-      }),
-      text,
-      penName: raw?.penName ? String(raw.penName).trim() : null,
-      totalLikes: Number(raw?.totalLikes || 0),
-      likes: Number(raw?.likes || raw?.likesToday || 0),
-      likesToday: Number(raw?.likesToday || raw?.likes || 0),
-      bucket,
-      mode,
-      hof: !!raw?.hof,
-      source: raw?.source || "base",
-      canonicalId: cid,
-      seedLike: isSeedLike(raw),
-      dedupeKey: makeMetaphorDedupeKey({ mode, bucket, text })
-    };
-
-    if (!prev) {
-      map.set(cid, next);
-      continue;
-    }
-
-    const preferNextIdentity = prev.seedLike && !next.seedLike;
-
-    map.set(cid, {
-      ...prev,
-      ...next,
-      id: preferNextIdentity ? next.id : prev.id,
-      penName: prev.penName || next.penName || null,
-      totalLikes: Math.max(Number(prev.totalLikes || 0), Number(next.totalLikes || 0)),
-      likes: Math.max(Number(prev.likes || 0), Number(next.likes || 0)),
-      likesToday: Math.max(Number(prev.likesToday || 0), Number(next.likesToday || 0)),
-      hof: !!prev.hof || !!next.hof || Math.max(Number(prev.totalLikes || 0), Number(next.totalLikes || 0)) >= Number(state.hofThreshold || 20),
-      source: preferNextIdentity ? next.source : prev.source,
-      seedLike: prev.seedLike && next.seedLike,
-      canonicalId: cid,
-      dedupeKey: prev.dedupeKey || next.dedupeKey || makeMetaphorDedupeKey({ mode, bucket, text })
-    });
-  }
-
-  return [...map.values()];
-}
-function mergeDisplayItemsAdvanced(items, fallback = {}){
-  return mergeDisplayItemsAdvanced(items, fallback);
-}
-function makeMetaphorDedupeKey({ mode, bucket, text }){
-  const m = (mode === "fun" ? "fun" : "trivia");
-  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
-  const t = normalizeMetaphorText(text);
-  return `${m}|${b}|${t}`;
-}
-
-// =========================
-// 検索候補UI
-// =========================
-function showPlaceSuggestions(results) {
-  const box = document.getElementById("suggestions");
-  if (!box) return;
-
-  if (!results || !results.length) {
-    box.innerHTML = "";
-    box.style.display = "none";
-    return;
-  }
-
-  box.innerHTML = results.map((r, idx) => `
-    <button type="button" class="suggItem" data-idx="${idx}">
-      ${escapeHtml(r.name)}
-    </button>
-  `).join("");
-
-  box.style.display = "block";
-
-  [...box.querySelectorAll(".suggItem")].forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const idx = Number(btn.dataset.idx);
-      const picked = results[idx];
-      if (!picked) return;
-
-      const place = document.getElementById("place");
-      if (place) place.value = picked.name;
-
-      box.innerHTML = "";
-      box.style.display = "none";
-
-      await applyPickedPlace(picked);
-    });
-  });
-}
-
-async function applyPickedPlace(picked){
-  state.selectedLat = Number(picked.latitude);
-  state.selectedLon = Number(picked.longitude);
-  state.placeLabel = picked.name || null;
-  state.source = "Open-Meteo";
-  invalidateRanking();
-
-  await fetchPopsBySlotsSWR(state.selectedLat, state.selectedLon, {
-    onCached: ({ pops, tz }) => {
-      state.pops = pops;
-      state.tz = tz || "Asia/Tokyo";
-      render();
-    }
-  }).then(async ({ pops, tz }) => {
-    state.pops = pops;
-    state.tz = tz || "Asia/Tokyo";
-    render();
-
-    const mode = getSelectedMode();
-    for (const b of uniqueBucketsFromPops(pops)) {
-      warmPublicCache(mode, b).catch(()=>{});
-    }
-
-    const rankingKey = getRankingKeyNow();
-    await renderRankingOnce(rankingKey);
-    await pingUsageOncePerDay("weather_ok");
-  }).catch(err => {
-    console.warn("weather fetch failed", err);
-    renderEmpty();
-    alert(`天気取得に失敗しました：${err?.message || err}`);
-  });
-}
-
-// =========================
-// 投稿一覧（最低限維持）
-// =========================
-function ensureMySubmissionsDom(){
-  let box = document.getElementById("mySubmissions");
-  if (box) return box;
-
-  const rankWrap = document.getElementById("todayRankingWrap");
-  if (!rankWrap) return null;
-
-  box = document.createElement("div");
-  box.id = "mySubmissions";
-  box.className = "card";
-  box.style.marginTop = "14px";
-  box.style.padding = "14px";
-  box.innerHTML = `
-    <div style="font-weight:900; margin-bottom:8px;">自分の投稿</div>
-    <div id="mySubmissionsBody" class="muted">投稿はまだありません</div>
-  `;
-  rankWrap.insertAdjacentElement("afterend", box);
-  return box;
-}
-
-function loadMySubmissions(){
+function fireIfApprovedOnNextSearch(){
   try{
-    return JSON.parse(localStorage.getItem("my_submissions_v1") || "[]");
-  }catch{
-    return [];
+    const raw = localStorage.getItem("fw_on_next_search");
+    if (!raw) return;
+
+    const obj = JSON.parse(raw || "{}");
+    const ts = Number(obj.ts || 0);
+    if (!ts) { localStorage.removeItem("fw_on_next_search"); return; }
+
+    const TTL = 24 * 60 * 60 * 1000;
+    if (Date.now() - ts > TTL) {
+      localStorage.removeItem("fw_on_next_search");
+      return;
+    }
+
+    localStorage.removeItem("fw_on_next_search");
+    fireworksOnce();
+  }catch(e){
+    console.warn("fireIfApprovedOnNextSearch error", e);
   }
 }
 
-function renderMySubmissions(){
-  ensureMySubmissionsDom();
-  const body = document.getElementById("mySubmissionsBody");
-  if (!body) return;
-
-  const arr = loadMySubmissions();
-  if (!arr.length) {
-    body.textContent = "投稿はまだありません";
-    return;
-  }
-
-  body.innerHTML = arr.slice().reverse().map(it => `
-    <div style="padding:8px 0; border-top:1px solid rgba(15,23,42,0.08);">
-      <div style="font-weight:700;">${escapeHtml(it.text || "")}</div>
-      <div class="muted">${escapeHtml(it.mode === "fun" ? "お笑い" : "雑学")} / ${window.bucket10(Number(it.bucket || 0))}% / ${escapeHtml(it.penName || "匿名")}</div>
-    </div>
-  `).join("");
-}
-
 // =========================
-// イベント
+// UI: 検索→候補表示
 // =========================
-function bindEvents(){
-  const searchBtn = document.getElementById("search");
-  const refreshBtn = document.getElementById("refresh");
-  const placeInput = document.getElementById("place");
+(function wireSearch(){
+  const btn = document.getElementById("search");
+  if (!btn) return;
 
-  if (searchBtn) {
-    searchBtn.addEventListener("click", async () => {
-      const q = String(placeInput?.value || "").trim();
-      if (!q) {
-        alert("地名を入力してください");
+  btn.onclick = async () => {
+    const raw = document.getElementById("place").value.trim();
+    const q = normalizePlaceName(raw);
+
+    const sel = document.getElementById("candidates");
+    sel.innerHTML = "";
+    sel.disabled = true;
+
+    if (!q) { setStatus("地点名を入力してください", "ng"); return; }
+
+    setSearchBusy(true);
+    setStatus("検索中…", "muted");
+
+    try {
+      let g = await geocode(q);
+      let results = g.results || [];
+
+      if (!results.length && raw !== q) {
+        g = await geocode(raw);
+        results = g.results || [];
+      }
+
+      if (!results.length) {
+        setStatus("候補が見つかりませんでした。別の書き方で試してください。（例：Sendai）", "ng");
         return;
       }
 
-      try{
-        const geo = await geocode(q);
-        const list = Array.isArray(geo?.results) ? geo.results : [];
-        const pickedList = list.map(x => ({
-          name: [x.name, x.admin1, x.country].filter(Boolean).join(", "),
-          latitude: Number(x.latitude),
-          longitude: Number(x.longitude)
-        })).filter(x => Number.isFinite(x.latitude) && Number.isFinite(x.longitude));
+      results.forEach((r, idx) => {
+        const labelParts = [r.name, r.admin1, r.country].filter(Boolean);
+        const label = labelParts.join(" / ");
+        const opt = document.createElement("option");
+        opt.value = String(idx);
+        opt.textContent = label;
+        opt.dataset.lat = r.latitude;
+        opt.dataset.lon = r.longitude;
+        sel.appendChild(opt);
+      });
 
-        showPlaceSuggestions(pickedList);
-      }catch(e){
-        alert(`地点検索に失敗しました：${e?.message || e}`);
-      }
-    });
-  }
+      sel.disabled = false;
+      setStatus("候補を選ぶと天気を取得します", "ok");
 
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", async () => {
-      if (state.selectedLat == null || state.selectedLon == null) {
-        alert("先に地点を選んでください");
-        return;
-      }
+      sel.onchange = async () => {
+        const mySeq = ++__searchSeq;
 
-      try{
-        window.__forceRepick = true;
+        const opt = sel.options[sel.selectedIndex];
+        const lat = Number(opt.dataset.lat);
+        const lon = Number(opt.dataset.lon);
+
+        state.selectedLat = lat;
+        state.selectedLon = lon;
+        state.placeLabel = opt.textContent;
+        state.source = "API: Open-Meteo";
+
         invalidateRanking();
+        setRankingBusy(true);
+        setSearchBusy(true);
+        setStatus("天気取得中…", "muted");
 
-        const out = await fetchPopsBySlotsSWR(state.selectedLat, state.selectedLon, {
-          onCached: ({ pops, tz }) => {
-            state.pops = pops;
-            state.tz = tz || "Asia/Tokyo";
-            render();
+        let cachedOut = null;
+
+        try {
+          const out = await fetchPopsBySlotsSWR(lat, lon, {
+            onCached: (cached) => {
+              if (mySeq !== __searchSeq) return;
+              if (!cached?.pops) return;
+              cachedOut = { pops: cached.pops, tz: cached.tz || null };
+            }
+          });
+
+          if (mySeq !== __searchSeq) return;
+
+          const nextPops = out.pops;
+          const nextTz = out.tz;
+
+          const mode = getSelectedMode();
+          const buckets = uniqueBucketsFromPops(nextPops);
+          await Promise.all(buckets.map(b => warmPublicCache(mode, b)));
+
+          if (mySeq !== __searchSeq) return;
+
+          state.pops = nextPops;
+          state.tz = nextTz;
+
+          const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
+          if (!any) {
+            setStatus("降水確率が取得できませんでした（別地点で試してください）", "ng");
+            state.source = "API: 取得失敗";
+            state.pops = null;
+            scheduleRender();
+            return;
           }
-        });
 
-        state.pops = out.pops;
-        state.tz = out.tz || "Asia/Tokyo";
+          __freezeMetaphor = false;
+          window.__forceRepick = true;
+          scheduleRender();
+          requestAnimationFrame(() => {
+            window.__forceRepick = false;
+          });
 
-        const mode = getSelectedMode();
-        for (const b of uniqueBucketsFromPops(out.pops)) {
-          await warmPublicCache(mode, b).catch(()=>{});
+          setStatus("取得しました", "ok");
+
+          try{ pingUsageOncePerDay("wx_ok"); }catch{}
+          try { fireIfApprovedOnNextSearch(); } catch {}
+
+          try{
+            const key = getRankingKeyNow();
+            await renderRankingOnce(key);
+          }catch(e){
+            console.warn("renderRankingOnce(after search) failed", e);
+          }
+
+        } catch (e) {
+          if (mySeq !== __searchSeq) return;
+
+          if (cachedOut?.pops) {
+            const mode = getSelectedMode();
+            const buckets = uniqueBucketsFromPops(cachedOut.pops);
+            await Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
+
+            if (mySeq !== __searchSeq) return;
+
+            state.pops = cachedOut.pops;
+            state.tz = cachedOut.tz || null;
+            state.source = "API: キャッシュ";
+
+            __freezeMetaphor = false;
+            window.__forceRepick = true;
+            scheduleRender();
+            requestAnimationFrame(() => {
+              window.__forceRepick = false;
+            });
+
+            setStatus(`最新の取得に失敗（キャッシュ表示）：${e?.message || e}`, "ng");
+
+            try{
+              const key = getRankingKeyNow();
+              await renderRankingOnce(key);
+            }catch(err){
+              console.warn("renderRankingOnce(cache fallback) failed", err);
+            }
+            return;
+          }
+
+          setStatus(e.message || "天気取得エラー", "ng");
+          state.source = "API: エラー";
+          state.pops = null;
+          scheduleRender();
+        } finally {
+          if (mySeq === __searchSeq) {
+            setSearchBusy(false);
+            setRankingBusy(false);
+          }
         }
+      };
 
-        render();
+      sel.selectedIndex = 0;
+      await sel.onchange();
 
-        const rankingKey = getRankingKeyNow();
-        await renderRankingOnce(rankingKey);
-      }catch(e){
-        alert(`更新失敗：${e?.message || e}`);
-      }finally{
+    } catch (e) {
+      setStatus(e.message || "検索エラー", "ng");
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+})();
+
+// =========================
+// mode 切替（ランキング更新）
+// =========================
+document.querySelectorAll('input[name="mode"]').forEach(r =>
+  r.addEventListener("change", async () => {
+    invalidateRanking();
+
+    if (!state?.pops) {
+      __freezeMetaphor = false;
+      window.__forceRepick = true;
+      scheduleRender();
+      requestAnimationFrame(() => {
         window.__forceRepick = false;
-      }
+      });
+      return;
+    }
+
+    try{
+      setRankingBusy(true);
+
+      const mode = getSelectedMode();
+      const buckets = uniqueBucketsFromPops(state.pops);
+      await Promise.all(buckets.map(b => warmPublicCache(mode, b)));
+
+      __freezeMetaphor = false;
+      window.__forceRepick = true;
+      scheduleRender();
+      requestAnimationFrame(() => {
+        window.__forceRepick = false;
+      });
+
+      const key = getRankingKeyNow();
+      await renderRankingOnce(key);
+    }catch(e){
+      console.warn("renderRankingOnce(on mode change) failed", e);
+    }finally{
+      setRankingBusy(false);
+    }
+  })
+);
+
+(function wireRefresh(){
+  const btn = document.getElementById("refresh");
+  if (!btn) return;
+
+  btn.onclick = () => {
+    window.__forceRepick = true;
+    __freezeMetaphor = false;
+
+    scheduleRender();
+    requestAnimationFrame(() => {
+      window.__forceRepick = false;
     });
+  };
+})();
+
+// ==============================
+// ✅ 自分の投稿欄DOM（HTML改修不要）
+// ==============================
+function ensureMySubmissionsDom(){
+  if (document.getElementById("mySubmissionsWrap")) return true;
+
+  const wrap = document.createElement("div");
+  wrap.id = "mySubmissionsWrap";
+  wrap.className = "card";
+  wrap.style.marginTop = "12px";
+  wrap.style.maxWidth = "760px";
+  wrap.style.marginLeft = "auto";
+  wrap.style.marginRight = "auto";
+
+  wrap.innerHTML = `
+    <div style="font-weight:900;">あなたの投稿</div>
+    <div class="muted" style="margin-top:6px;font-size:12px;">
+      この端末から投稿した分だけ表示（他人には見えません）
+    </div>
+    <div id="my-submissions-list" style="margin-top:10px;"></div>
+  `;
+
+  document.body.appendChild(wrap);
+  return true;
+}
+
+// =========================
+// 🎆 Fireworks (no library)
+// =========================
+let __fwCanvas = null;
+let __fwCtx = null;
+let __fwRAF = 0;
+let __fwActive = false;
+let __fwParticles = [];
+let __fwStartAt = 0;
+let __fwDuration = 5000;
+
+function ensureFireworksCanvas(){
+  if (__fwCanvas) return;
+
+  __fwCanvas = document.createElement("canvas");
+  __fwCanvas.id = "fireworksCanvas";
+  __fwCanvas.style.position = "fixed";
+  __fwCanvas.style.left = "0";
+  __fwCanvas.style.top = "0";
+  __fwCanvas.style.width = "100%";
+  __fwCanvas.style.height = "100%";
+  __fwCanvas.style.pointerEvents = "none";
+  __fwCanvas.style.zIndex = "2147483647";
+  __fwCanvas.style.opacity = "0";
+  __fwCanvas.style.willChange = "opacity, transform";
+  document.body.appendChild(__fwCanvas);
+
+  __fwCtx = __fwCanvas.getContext("2d", { alpha: true });
+  if (!__fwCtx) {
+    console.warn("fireworks: getContext failed");
+    return;
   }
 
-  document.querySelectorAll('input[name="mode"]').forEach(el => {
-    el.addEventListener("change", async () => {
-      if (!state.pops) return;
+  const resize = () => {
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    __fwCanvas.width  = Math.floor(window.innerWidth  * dpr);
+    __fwCanvas.height = Math.floor(window.innerHeight * dpr);
+    __fwCtx.setTransform(1, 0, 0, 1, 0, 0);
+    __fwCtx.scale(dpr, dpr);
+  };
 
-      invalidateRanking();
-      const mode = getSelectedMode();
-      for (const b of uniqueBucketsFromPops(state.pops)) {
-        await warmPublicCache(mode, b).catch(()=>{});
+  resize();
+  window.addEventListener("resize", resize);
+}
+
+function rand(min, max){ return Math.random() * (max - min) + min; }
+
+function spawnBurst(x, y){
+  const count = Math.floor(rand(40, 70));
+  for (let i=0; i<count; i++){
+    const a = rand(0, Math.PI * 2);
+    const sp = rand(2.0, 6.0);
+    __fwParticles.push({
+      x, y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp,
+      life: rand(40, 70),
+      r: rand(1.2, 2.6),
+      hue: rand(0, 360),
+      alpha: 1
+    });
+  }
+}
+
+function fireworksOnce(){
+  ensureFireworksCanvas();
+  if (!__fwCtx || !__fwCanvas) return;
+
+  const now = performance.now();
+
+  if (__fwActive){
+    __fwStartAt = now;
+    __fwDuration = 8000;
+    __fwCanvas.style.opacity = "1";
+    return;
+  }
+
+  __fwActive = true;
+  __fwStartAt = now;
+  __fwDuration = 8000;
+  __fwParticles = [];
+  __fwCanvas.style.opacity = "1";
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  spawnBurst(rand(w*0.2, w*0.8), rand(h*0.2, h*0.45));
+  spawnBurst(rand(w*0.2, w*0.8), rand(h*0.2, h*0.45));
+
+  const tick = () => {
+    __fwRAF = requestAnimationFrame(tick);
+
+    const t = performance.now();
+    const elapsed = t - __fwStartAt;
+
+    if (Math.random() < 0.16 && elapsed < __fwDuration){
+      spawnBurst(rand(w*0.15, w*0.85), rand(h*0.18, h*0.5));
+    }
+
+    __fwCtx.globalCompositeOperation = "source-over";
+    __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+    for (let i=__fwParticles.length-1; i>=0; i--){
+      const p = __fwParticles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+
+      p.vx *= 0.98;
+      p.vy = p.vy * 0.98 + 0.06;
+
+      p.life -= 1;
+      p.alpha *= 0.985;
+
+      __fwCtx.beginPath();
+      __fwCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      __fwCtx.fillStyle = `hsla(${p.hue}, 100%, 55%, ${Math.max(0, p.alpha)})`;
+      __fwCtx.fill();
+
+      if (p.life <= 0 || p.alpha <= 0.02){
+        __fwParticles.splice(i, 1);
+      }
+    }
+
+    if (elapsed > __fwDuration && __fwParticles.length === 0){
+      stopFireworks();
+    }
+  };
+
+  tick();
+}
+
+function stopFireworks(){
+  if (!__fwActive) return;
+  __fwActive = false;
+  cancelAnimationFrame(__fwRAF);
+  __fwRAF = 0;
+  __fwParticles = [];
+  if (__fwCtx) __fwCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  if (__fwCanvas) __fwCanvas.style.opacity = "0";
+}
+
+// ==============================
+// ✅ ネタ追加（承認待ちへ送信）
+// ==============================
+function wireSubmit(){
+  const btn = document.getElementById("submitPendingBtn");
+  const ta  = document.getElementById("newPhrase");
+  const modeSel = document.getElementById("newPhraseMode");
+  const bucketSel = document.getElementById("newPhraseBucket");
+
+  if (!btn || !ta) {
+    console.warn("wireSubmit: submitPendingBtn/newPhrase not found");
+    return;
+  }
+
+  if (btn.dataset.wired === "1") return;
+  btn.dataset.wired = "1";
+
+  btn.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+
+    const mode = modeSel ? String(modeSel.value || "trivia") : getSelectedMode();
+    const bucket = bucketSel ? Number(bucketSel.value) : (getCurrentMainBucket() ?? 0);
+
+    const text = String(ta.value || "").trim();
+    if (!text) { alert("ネタが空です"); return; }
+    if (isNgText(text)) { alert("この文言は登録できません（非表示ワードを含みます）"); return; }
+
+    const penEl = document.getElementById("penName");
+    const pinEl = document.getElementById("penPin");
+
+    const penName = penEl ? String(penEl.value || "").trim() : "";
+    const penPin  = pinEl ? String(pinEl.value || "").trim() : "";
+
+    if (penName && !penPin) {
+      alert("ペンネームを使う場合は合言葉（PIN）が必要です。");
+      return;
+    }
+
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = "送信中…";
+
+    try{
+      const clientId = makeGlobalId({ mode, bucket: window.bucket10(bucket), text, source: "local" });
+
+      const out = await submitToPending(
+        mode,
+        window.bucket10(bucket),
+        text,
+        (penName || null),
+        (penName ? penPin : null),
+        clientId
+      );
+
+      const serverId = String(out?.id || "").trim();
+      if (!serverId) {
+        alert("送信は成功しましたが、サーバIDが取得できませんでした。");
+        ta.value = "";
+        return;
       }
 
-      render();
+      const my = {
+        id: serverId,
+        serverId: serverId,
+        clientId: clientId,
+        text: text,
+        status: "pending",
+        createdAt: Date.now(),
+        mode: mode,
+        bucket: window.bucket10(bucket)
+      };
 
-      const rankingKey = getRankingKeyNow();
-      await renderRankingOnce(rankingKey);
-    });
+      saveMySubmission(my);
+
+      ta.value = "";
+      try{ ensureMySubmissionsDom(); }catch{}
+      try{ renderMySubmissions(); }catch{}
+      try{ await syncMySubmissionsStatus(); }catch{}
+
+      alert("送信しました！（承認待ちに入りました）");
+    }catch(e){
+      alert(`送信失敗：${e?.message || e}`);
+    }finally{
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
   });
 }
 
-// =========================
-// 初期化
-// =========================
-async function init(){
+// ==============================
+// ✅ 自分の投稿：承認状態同期
+// ==============================
+async function syncMySubmissionsStatus(){
   try{
-    await loadSharedJSON();
-  }catch(e){
-    console.warn("loadSharedJSON failed", e);
-  }
+    const key = "my_submissions";
+    const list = JSON.parse(localStorage.getItem(key) || "[]");
+    if (!Array.isArray(list) || list.length === 0) return;
 
-  bindEvents();
-  renderEmpty();
-  ensureRankingDom();
-  ensureMySubmissionsDom();
-  renderMySubmissions();
+    const ids = Array.from(new Set(
+      list.flatMap(x => {
+        const a = String(x?.serverId || x?.id || "").trim();
+        const b = String(x?.clientId || "").trim();
+        return [a, b].filter(v => v && !v.startsWith("local_"));
+      })
+    )).slice(0, 50);
 
-  const buildEl = document.getElementById("build");
-  if (buildEl) buildEl.textContent = BUILD;
+    if (ids.length === 0) return;
 
-  try{
-    const hall = loadHallDailyCache();
-    if (hall?.day === todayJSTString() && Array.isArray(hall.items)) {
-      __hofSnapshotMemory = {
-        day: hall.day,
-        generatedAt: hall.generatedAt || null,
-        hofThreshold: Number(hall.hofThreshold || state.hofThreshold || 20),
-        items: hall.items.map(normalizeHallSnapshotItem).filter(Boolean)
-      };
-      __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(__hofSnapshotMemory);
+    const res = await fetch(`${API_BASE}/api/status?ids=${encodeURIComponent(ids.join(","))}`, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+
+    if (!res.ok || !data?.ok) {
+      console.warn("syncMySubmissionsStatus: bad response", res.status, data);
+      return;
     }
+
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const map = new Map(items.map(x => [String(x.id), x]));
+
+    let becameApproved = 0;
+
+    const next = list.map(x => {
+      const serverId = String(x?.serverId || "").trim();
+      const clientId = String(x?.clientId || "").trim();
+      const id = String(x?.id || "").trim();
+
+      const prev = String(x?.status || "pending");
+      const st = map.get(serverId) || map.get(clientId) || map.get(id);
+      if (!st) return x;
+
+      const nowStatus =
+        (st.status === "public")  ? "approved" :
+        (st.status === "pending") ? "pending"  :
+        (st.status === "missing") ? "missing"  :
+        prev;
+
+      if (prev !== "approved" && nowStatus === "approved") becameApproved++;
+
+      return { ...x, status: nowStatus, approvedAt: st.approvedAt ?? x.approvedAt ?? null };
+    });
+
+    const cleaned = next.filter(x => {
+      const st = String(x?.status || "");
+      return (st !== "approved" && st !== "missing");
+    });
+
+    localStorage.setItem(key, JSON.stringify(cleaned));
+
+    if (becameApproved > 0) {
+      try {
+        localStorage.setItem("fw_on_next_search", JSON.stringify({
+          ts: Date.now(),
+          count: becameApproved
+        }));
+      } catch {}
+    }
+
+    try{ renderMySubmissions(); }catch{}
   }catch(e){
-    console.warn("initial hall cache load failed", e);
+    console.warn("syncMySubmissionsStatus error", e);
   }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+// ==============================
+// ✅ 自分の投稿：localStorage
+// ==============================
+function saveMySubmission(item){
+  const key = "my_submissions";
+  const list = JSON.parse(localStorage.getItem(key) || "[]");
+
+  list.unshift(item);
+
+  const MAX = 1000;
+  if (list.length > MAX) list.length = MAX;
+
+  localStorage.setItem(key, JSON.stringify(list));
+}
+
+// ==============================
+// ✅ 自分の投稿表示
+// ==============================
+function renderMySubmissions(){
+  const listEl = document.getElementById("my-submissions-list");
+  if (!listEl) return;
+
+  const list = JSON.parse(localStorage.getItem("my_submissions") || "[]");
+
+  if (!list.length){
+    listEl.innerHTML = `<div class="muted">まだ投稿はありません</div>`;
+    return;
+  }
+
+  listEl.innerHTML = list
+    .slice(0, 30)
+    .map(item => {
+      const id = String(item?.id || "");
+      const st = String(item?.status || "pending");
+
+      const isLocal = id.startsWith("local_");
+      const isMissing = (st === "missing");
+
+      const statusLabel =
+        (st === "approved")
+          ? `<span style="color:#16a34a;font-weight:900;">採用</span>`
+          : (isLocal || isMissing)
+            ? `<span style="color:#64748b;font-weight:900;">同期不可</span>`
+            : `<span style="color:#f59e0b;font-weight:900;">承認中</span>`;
+
+      const note =
+        isLocal
+          ? `<div class="muted" style="margin-top:4px;font-size:11px;">※この投稿は local_ のため承認状態を自動更新できません</div>`
+          : isMissing
+            ? `<div class="muted" style="margin-top:4px;font-size:11px;">※サーバ側にIDが見つかりません（/api/status=missing）。worker.js の保存キー/参照キーが一致しているか確認してください</div>`
+            : "";
+
+      return `
+        <div style="
+          border:1px solid rgba(15,23,42,.12);
+          border-radius:12px;
+          padding:10px;
+          margin-bottom:8px;
+          background:#fff;
+        ">
+          <div style="font-size:14px; white-space:pre-wrap;">${escapeHtml(String(item.text || ""))}</div>
+          <div class="muted" style="margin-top:6px;font-size:12px;">
+            状態：${statusLabel}
+          </div>
+          ${note}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+// ==============================
+// ✅ 初期化
+// ==============================
+async function init(){
+  try { ensureRankingDom(); } catch {}
+  try { ensureReindexHintDom(); } catch {}
+  try { await loadSharedJSON(); } catch {}
+  try { wireSubmit(); } catch (e) { console.warn(e); }
+
+  try { ensureMySubmissionsDom(); } catch {}
+  try { renderMySubmissions(); } catch {}
+  try { await syncMySubmissionsStatus(); } catch {}
+  try { setInterval(syncMySubmissionsStatus, 30000); } catch {}
+
+  try { fixModeToggleAlignment(); } catch {}
+  try { scheduleRender(); } catch {}
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", init, { once: true });
+} else {
+  init();
+}
+
+// =========================
+// ✅ アプリを開くQR（トップ下）
+// =========================
+(function renderOpenAppQr(){
+  const el = document.getElementById("openAppQr");
+  if (!el || !window.QRCode) return;
+
+  const url = "https://yyoshioka27-hash.github.io/tatoete-kousui/";
+
+  el.innerHTML = "";
+  new QRCode(el, {
+    text: url,
+    width: 150,
+    height: 150,
+    correctLevel: QRCode.CorrectLevel.M
+  });
+})();
+
+// # END
 
 // END
