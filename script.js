@@ -2180,7 +2180,7 @@ function mergeDisplayItemsAdvanced(items, fallback = {}){
 
   return [...map.values()];
 }
-function mergedDisplayItems(items, fallback = {}){
+function mergeDisplayItemsAdvanced(items, fallback = {}){
   return mergeDisplayItemsAdvanced(items, fallback);
 }
 function makeMetaphorDedupeKey({ mode, bucket, text }){
