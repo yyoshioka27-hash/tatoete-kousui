@@ -479,8 +479,8 @@ function mergeDisplayItems(items, { mode, bucket } = {}){
 
     current.text = pickBetterText(current.text, text);
     current.penName = pickBetterPenName(current.penName, raw?.penName);
-    current.totalLikes = Math.max(Number(current.totalLikes || 0), Number(raw?.totalLikes || 0));
-    current.likes = Math.max(Number(current.likes || 0), Number(raw?.likes || 0));
+    current.totalLikes = Number(current.totalLikes || 0) + Number(raw?.totalLikes || 0);
+    current.likes = Number(current.likes || 0) + Number(raw?.likes || 0);
     current.hof = !!current.hof || !!raw?.hof;
     current.__canonText = normalizeMetaphorText(current.text);
 
@@ -1565,8 +1565,13 @@ function updateLikeUI(slot) {
       likeFxPop(btnEl);
       likeFxPlusOne(btnEl);
 
-      state.currentPhrases[slot].likesToday = Number(out.likesToday || 0);
-      state.currentPhrases[slot].totalLikes = Number(out.totalLikes || state.currentPhrases[slot].totalLikes || 0);
+      const prevToday = Number(state.currentPhrases[slot].likesToday || 0);
+      const prevTotal = Number(state.currentPhrases[slot].totalLikes || 0);
+      const nextToday = Number(out.likesToday || 0);
+      const nextTotal = Number(out.totalLikes || 0);
+
+      state.currentPhrases[slot].likesToday = Math.max(prevToday, nextToday);
+      state.currentPhrases[slot].totalLikes = Math.max(prevTotal, nextTotal);
       state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
 
       updateLikeUI(slot);
@@ -1691,14 +1696,14 @@ function render() {
 
         if (hit) {
           picked = {
-            ...picked,
-            source: "public",
-            id: String(hit.id || picked.id || "").trim() || null,
-            penName: (hit.penName != null ? String(hit.penName).trim() : picked.penName),
-            totalLikes: Number(hit.totalLikes || 0),
-            hof: !!hit.hof,
-            dedupeKey: makeMetaphorDedupeKey({ mode, bucket: rounded, text: hit.text || picked.text })
-          };
+          ...picked,
+          source: "public",
+          id: String(hit.id || picked.id || "").trim() || null,
+          penName: (hit.penName != null ? String(hit.penName).trim() : picked.penName),
+          totalLikes: Math.max(Number(picked.totalLikes || 0), Number(hit.totalLikes || 0)),
+          hof: !!picked.hof || !!hit.hof,
+          dedupeKey: makeMetaphorDedupeKey({ mode, bucket: rounded, text: hit.text || picked.text })
+        };
         }
       }
     } catch (e) {
