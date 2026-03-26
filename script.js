@@ -1041,8 +1041,8 @@ function buildHallCardHtmlFromSnapshot(hofData){
     `;
   }
 
-  const top10 = hofItems.slice(0, 10);
-  const restItems = hofItems.slice(10);
+  const top5 = hofItems.slice(0, 5);
+const restItems = hofItems.slice(5);
 
   const renderHofRow = (it, idx) => {
     const pen = penHtmlIfAny(it.penName);
@@ -1059,8 +1059,8 @@ function buildHallCardHtmlFromSnapshot(hofData){
     `;
   };
 
-  const topRows = top10.map((it, idx) => renderHofRow(it, idx)).join("");
-  const restRows = restItems.map((it, idx) => renderHofRow(it, idx + 10)).join("");
+  const topRows = top5.map((it, idx) => renderHofRow(it, idx)).join("");
+  const restRows = restItems.map((it, idx) => renderHofRow(it, idx + 5)).join("");
 
   const snapshotNote = generatedAt
     ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
@@ -1072,7 +1072,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
       ${snapshotNote}
       <div>${topRows}</div>
       ${restItems.length ? `
-        <div style="margin-top:8px; font-weight:800; color:#475569;">11位以下</div>
+        <div style="margin-top:8px; font-weight:800; color:#475569;">6位以下</div>
         <div style="max-height:360px; overflow-y:scroll; margin-top:6px; padding:0 8px 0 0; border-top:1px solid rgba(15,23,42,0.08); overscroll-behavior:contain; scrollbar-gutter:stable;">
           ${restRows}
         </div>
