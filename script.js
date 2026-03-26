@@ -929,13 +929,13 @@ async function fetchHallOfFameForRanking(limit = 100){
     const daily = await fetchHallOfFameDaily(limit);
     console.log("HOF daily items =", daily?.items?.length, daily?.items);
 
-    if (Array.isArray(daily?.items) && daily.items.length > 0) {
-      return {
-        generatedAt: daily?.generatedAt || null,
-        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
-        items: daily.items.slice(0, limit)
-      };
-    }
+    if (Array.isArray(daily?.items) && daily.items.length >= 20) {
+  return {
+    generatedAt: daily?.generatedAt || null,
+    hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+    items: daily.items.slice(0, limit)
+  };
+}
 
     throw new Error("hof_daily empty");
   }catch(e){
