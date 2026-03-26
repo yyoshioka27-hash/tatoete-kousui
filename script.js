@@ -1008,8 +1008,45 @@ function buildHallCardHtmlFromSnapshot(hofData){
     `;
   }
 
-  
-    
+  const top10 = hofItems.slice(0, 10);
+  const restItems = hofItems.slice(10);
+
+  const renderHofRow = (it, idx) => {
+    const pen = penHtmlIfAny(it.penName);
+    const totalLikes = Number(it.totalLikes || 0);
+    const md = (it.mode === "fun") ? "fun" : "trivia";
+    return `
+      <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
+        <div style="font-weight:800;">
+          ${idx + 1}. ${escapeHtml(it.text)}${pen}${modeBadgeHtml(md)}
+          <span class="hof-badge">👑殿堂入り</span>
+        </div>
+        <div class="muted">累計👍：${totalLikes}</div>
+      </div>
+    `;
+  };
+
+  const topRows = top10.map((it, idx) => renderHofRow(it, idx)).join("");
+  const restRows = restItems.map((it, idx) => renderHofRow(it, idx + 10)).join("");
+
+  const snapshotNote = generatedAt
+    ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
+    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが片側欠けのときだけ不足分をAPI補完</div>`;
+
+  return `
+    <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
+      <div style="font-weight:900; font-size:16px; margin-bottom:6px;">殿堂入り（全モード共通 / 累計👍${hofTh}以上）</div>
+      ${snapshotNote}
+      <div>${topRows}</div>
+      ${restItems.length ? `
+        <div style="margin-top:8px; font-weight:800; color:#475569;">11位以下</div>
+        <div style="max-height:360px; overflow-y:scroll; margin-top:6px; padding:0 8px 0 0; border-top:1px solid rgba(15,23,42,0.08); overscroll-behavior:contain; scrollbar-gutter:stable;">
+          ${restRows}
+        </div>
+      ` : ``}
+    </div>
+  `;
+}
 async function ensureHallSnapshotLoaded(){
   const today = todayJSTString();
 
