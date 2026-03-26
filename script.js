@@ -925,28 +925,25 @@ async function fetchHallOfFameDaily(limit = 100){
   }
 }
 async function fetchHallOfFameForRanking(limit = 100){
+  let daily = null;
+  let dailyItems = [];
+  let apiItems = [];
+
   try{
-    const daily = await fetchHallOfFameDaily(limit);
-    console.log("HOF daily items =", daily?.items?.length, daily?.items);
-
-    if (Array.isArray(daily?.items) && daily.items.length >= 20) {
-  return {
-    generatedAt: daily?.generatedAt || null,
-    hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
-    items: daily.items.slice(0, limit)
-  };
-}
-
-    throw new Error("hof_daily empty");
+    daily = await fetchHallOfFameDaily(limit);
+    dailyItems = Array.isArray(daily?.items) ? daily.items : [];
+    console.log("HOF daily items =", dailyItems.length, dailyItems);
   }catch(e){
-    console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
+    console.warn("hof daily snapshot failed", e?.message || e);
+  }
 
+  try{
     const [tItems, fItems] = await Promise.all([
       fetchHallOfFame("trivia", 0, limit),
-      fetchHallOfFame("fun",    0, limit),
+      fetchHallOfFame("fun", 0, limit),
     ]);
 
-    const merged = mergeDisplayItems(
+    apiItems = mergeDisplayItems(
       [
         ...(Array.isArray(tItems) ? tItems : []).map(it => ({
           ...it,
@@ -966,18 +963,41 @@ async function fetchHallOfFameForRanking(limit = 100){
           text: String(it?.text || "").trim(),
           penName: it?.penName ? String(it.penName).trim() : null,
           totalLikes: Number(it?.totalLikes || 0),
+          likes: Number(it?.likes || 0),
           bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0
         }))
         .filter(it => it.text)
         .filter(it => !isNgText(it.text))
     ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
-    return {
-      generatedAt: null,
-      hofThreshold: Number(state.hofThreshold || 20),
-      items: merged.slice(0, limit)
-    };
+    console.log("HOF api items =", apiItems.length, apiItems);
+  }catch(e){
+    console.warn("api/hof load failed", e?.message || e);
   }
+
+  const merged = mergeDisplayItems([
+    ...dailyItems.map(it => ({
+      ...it,
+      source: it?.source || "hof_daily",
+      hof: true
+    })),
+    ...apiItems.map(it => ({
+      ...it,
+      source: it?.source || "public",
+      hof: true
+    }))
+  ])
+    .filter(it => String(it?.text || "").trim())
+    .filter(it => !isNgText(it.text))
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+
+  console.log("HOF merged items =", merged.length, merged);
+
+  return {
+    generatedAt: daily?.generatedAt || null,
+    hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+    items: merged.slice(0, limit)
+  };
 }
 function buildHallCardHtmlFromSnapshot(hofData){
   const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
