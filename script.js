@@ -925,25 +925,27 @@ async function fetchHallOfFameDaily(limit = 100){
   }
 }
 async function fetchHallOfFameForRanking(limit = 100){
-  let daily = null;
-  let dailyItems = [];
-  let apiItems = [];
-
   try{
-    daily = await fetchHallOfFameDaily(limit);
-    dailyItems = Array.isArray(daily?.items) ? daily.items : [];
-    console.log("HOF daily items =", dailyItems.length, dailyItems);
+    const daily = await fetchHallOfFameDaily(limit);
+
+    if (Array.isArray(daily?.items) && daily.items.length > 0) {
+      return {
+        generatedAt: daily?.generatedAt || null,
+        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+        items: daily.items.slice(0, limit)
+      };
+    }
+
+    throw new Error("hof_daily empty");
   }catch(e){
-    console.warn("hof daily snapshot failed", e?.message || e);
-  }
+    console.warn("hof daily snapshot failed, fallback to api/hof", e?.message || e);
 
-  try{
     const [tItems, fItems] = await Promise.all([
       fetchHallOfFame("trivia", 0, limit),
-      fetchHallOfFame("fun", 0, limit),
+      fetchHallOfFame("fun",    0, limit),
     ]);
 
-    apiItems = mergeDisplayItems(
+    const merged = mergeDisplayItems(
       [
         ...(Array.isArray(tItems) ? tItems : []).map(it => ({
           ...it,
@@ -963,61 +965,72 @@ async function fetchHallOfFameForRanking(limit = 100){
           text: String(it?.text || "").trim(),
           penName: it?.penName ? String(it.penName).trim() : null,
           totalLikes: Number(it?.totalLikes || 0),
-          likes: Number(it?.likes || 0),
           bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0
         }))
         .filter(it => it.text)
         .filter(it => !isNgText(it.text))
     ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
-    console.log("HOF api items =", apiItems.length, apiItems);
-  }catch(e){
-    console.warn("api/hof load failed", e?.message || e);
+    return {
+      generatedAt: null,
+      hofThreshold: Number(state.hofThreshold || 20),
+      items: merged.slice(0, limit)
+    };
   }
-
-  const merged = mergeDisplayItems([
-    ...dailyItems.map(it => ({
-      ...it,
-      source: it?.source || "hof_daily",
-      hof: true
-    })),
-    ...apiItems.map(it => ({
-      ...it,
-      source: it?.source || "public",
-      hof: true
-    }))
-  ])
-    .filter(it => String(it?.text || "").trim())
-    .filter(it => !isNgText(it.text))
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-  console.log("HOF merged items =", merged.length, merged);
-
-  return {
-    generatedAt: daily?.generatedAt || null,
-    hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
-    items: merged.slice(0, limit)
-  };
 }
 function buildHallCardHtmlFromSnapshot(hofData){
   const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
   const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
 
-  const hofItems = (Array.isArray(hofData?.items) ? hofData.items : [])
-  .map(it => ({
-    ...it,
-    text: String(it?.text || "").trim(),
-    penName: it?.penName ? String(it.penName).trim() : null,
-    totalLikes: Number(it?.totalLikes || 0),
-    likes: Number(it?.likes || 0),
-    bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
-    mode: (it?.mode === "fun" ? "fun" : "trivia"),
-    hof: true,
-    source: it?.source || "hof_daily"
-  }))
-  .filter(it => it.text)
-  .filter(it => !isNgText(it.text))
-  .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+  const snapItems = Array.isArray(hofData?.items) ? hofData.items : [];
+
+  const liveItems = Object.values(state.currentPhrases || {})
+    .filter(Boolean)
+    .map(it => ({
+      id: it?.id ? String(it.id).trim() : null,
+      text: String(it?.text || "").trim(),
+      penName: it?.penName ? String(it.penName).trim() : null,
+      totalLikes: Number(it?.totalLikes || 0),
+      likes: Number(it?.likesToday || 0),
+      bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+      mode: (it?.mode === "fun" ? "fun" : "trivia"),
+      hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
+      source: it?.source || "live"
+    }))
+    .filter(it => it.text)
+    .filter(it => !isNgText(it.text));
+
+  const publicItems = [];
+  try{
+    for (const arr of publicCache.values()) {
+      if (!Array.isArray(arr)) continue;
+      for (const it of arr) {
+        if (!it?.text) continue;
+        publicItems.push({
+          id: it?.id ? String(it.id).trim() : null,
+          text: String(it.text || "").trim(),
+          penName: it?.penName ? String(it.penName).trim() : null,
+          totalLikes: Number(it?.totalLikes || 0),
+          likes: Number(it?.likes || 0),
+          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+          mode: (it?.mode === "fun" ? "fun" : "trivia"),
+          hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
+          source: it?.source || "public"
+        });
+      }
+    }
+  }catch(e){
+    console.warn("publicItems collect failed", e);
+  }
+
+  const hofItems = mergeDisplayItems([
+    ...snapItems,
+    ...liveItems,
+    ...publicItems
+  ])
+    .filter(it => Number(it.totalLikes || 0) >= hofTh)
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+
   if (!hofItems.length) {
     return `
       <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
@@ -1028,8 +1041,8 @@ function buildHallCardHtmlFromSnapshot(hofData){
     `;
   }
 
-  const top5 = hofItems.slice(0, 5);
-const restItems = hofItems.slice(5);
+  const top10 = hofItems.slice(0, 10);
+  const restItems = hofItems.slice(10);
 
   const renderHofRow = (it, idx) => {
     const pen = penHtmlIfAny(it.penName);
@@ -1046,8 +1059,8 @@ const restItems = hofItems.slice(5);
     `;
   };
 
-  const topRows = top5.map((it, idx) => renderHofRow(it, idx)).join("");
-  const restRows = restItems.map((it, idx) => renderHofRow(it, idx + 5)).join("");
+  const topRows = top10.map((it, idx) => renderHofRow(it, idx)).join("");
+  const restRows = restItems.map((it, idx) => renderHofRow(it, idx + 10)).join("");
 
   const snapshotNote = generatedAt
     ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
@@ -1059,7 +1072,7 @@ const restItems = hofItems.slice(5);
       ${snapshotNote}
       <div>${topRows}</div>
       ${restItems.length ? `
-        <div style="margin-top:8px; font-weight:800; color:#475569;">6位以下</div>
+        <div style="margin-top:8px; font-weight:800; color:#475569;">11位以下</div>
         <div style="max-height:360px; overflow-y:scroll; margin-top:6px; padding:0 8px 0 0; border-top:1px solid rgba(15,23,42,0.08); overscroll-behavior:contain; scrollbar-gutter:stable;">
           ${restRows}
         </div>
