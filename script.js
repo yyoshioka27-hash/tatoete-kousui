@@ -982,55 +982,21 @@ function buildHallCardHtmlFromSnapshot(hofData){
   const hofTh = Number(hofData?.hofThreshold || state.hofThreshold || 20);
   const generatedAt = hofData?.generatedAt ? String(hofData.generatedAt) : null;
 
-  const snapItems = Array.isArray(hofData?.items) ? hofData.items : [];
-
-  const liveItems = Object.values(state.currentPhrases || {})
-    .filter(Boolean)
-    .map(it => ({
-      id: it?.id ? String(it.id).trim() : null,
-      text: String(it?.text || "").trim(),
-      penName: it?.penName ? String(it.penName).trim() : null,
-      totalLikes: Number(it?.totalLikes || 0),
-      likes: Number(it?.likesToday || 0),
-      bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
-      mode: (it?.mode === "fun" ? "fun" : "trivia"),
-      hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
-      source: it?.source || "live"
-    }))
-    .filter(it => it.text)
-    .filter(it => !isNgText(it.text));
-
-  const publicItems = [];
-  try{
-    for (const arr of publicCache.values()) {
-      if (!Array.isArray(arr)) continue;
-      for (const it of arr) {
-        if (!it?.text) continue;
-        publicItems.push({
-          id: it?.id ? String(it.id).trim() : null,
-          text: String(it.text || "").trim(),
-          penName: it?.penName ? String(it.penName).trim() : null,
-          totalLikes: Number(it?.totalLikes || 0),
-          likes: Number(it?.likes || 0),
-          bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
-          mode: (it?.mode === "fun" ? "fun" : "trivia"),
-          hof: !!it?.hof || (Number(it?.totalLikes || 0) >= hofTh),
-          source: it?.source || "public"
-        });
-      }
-    }
-  }catch(e){
-    console.warn("publicItems collect failed", e);
-  }
-
-  const hofItems = mergeDisplayItems([
-    ...snapItems,
-    ...liveItems,
-    ...publicItems
-  ])
-    .filter(it => Number(it.totalLikes || 0) >= hofTh)
-    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
+  const hofItems = (Array.isArray(hofData?.items) ? hofData.items : [])
+  .map(it => ({
+    ...it,
+    text: String(it?.text || "").trim(),
+    penName: it?.penName ? String(it.penName).trim() : null,
+    totalLikes: Number(it?.totalLikes || 0),
+    likes: Number(it?.likes || 0),
+    bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
+    mode: (it?.mode === "fun" ? "fun" : "trivia"),
+    hof: true,
+    source: it?.source || "hof_daily"
+  }))
+  .filter(it => it.text)
+  .filter(it => !isNgText(it.text))
+  .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
   if (!hofItems.length) {
     return `
       <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
