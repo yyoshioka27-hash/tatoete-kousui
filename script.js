@@ -1012,8 +1012,8 @@ function buildHallCardHtmlFromSnapshot(hofData){
     `;
   }
 
-  const top10 = hofItems.slice(0, 10);
-  const restItems = hofItems.slice(10);
+  const top10 = hofItems.slice(0, 5);
+　const restItems = hofItems.slice(5);
 
   const renderHofRow = (it, idx) => {
     const pen = penHtmlIfAny(it.penName);
@@ -1043,7 +1043,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
       ${snapshotNote}
       <div>${topRows}</div>
       ${restItems.length ? `
-        <div style="margin-top:8px; font-weight:800; color:#475569;">11位以下</div>
+        <div style="margin-top:8px; font-weight:800; color:#475569;">6位以下</div>
         <div style="max-height:360px; overflow-y:scroll; margin-top:6px; padding:0 8px 0 0; border-top:1px solid rgba(15,23,42,0.08); overscroll-behavior:contain; scrollbar-gutter:stable;">
           ${restRows}
         </div>
