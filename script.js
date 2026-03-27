@@ -1970,13 +1970,10 @@ function saveLatestOpen(open){
 // =========================
 let __rankingRenderedKey = null;
 
-function makeRankingKey({ mode, bucket, lat, lon }){
+function makeRankingKey({ mode }){
   const mv = String(mode || "").trim();
   const m = (mv === "fun" || mv === "お笑い") ? "fun" : "trivia";
-  const b = (bucket == null) ? "null" : String(window.bucket10(bucket));
-  const la = (lat == null) ? "null" : String(Math.round(Number(lat) * 10000) / 10000);
-  const lo = (lon == null) ? "null" : String(Math.round(Number(lon) * 10000) / 10000);
-  return `${m}|${b}|${la},${lo}`;
+  return `${m}`;
 }
 
 function invalidateRanking(){
@@ -1985,11 +1982,8 @@ function invalidateRanking(){
 
 function getRankingKeyNow(){
   const mode = getSelectedMode();
-  const bucket = getCurrentMainBucket();
-  const lat = state.selectedLat;
-  const lon = state.selectedLon;
-  if (bucket == null || lat == null || lon == null) return null;
-  return makeRankingKey({ mode, bucket, lat, lon });
+  if (!mode) return null;
+  return makeRankingKey({ mode });
 }
 
 async function renderRankingOnce(key){
