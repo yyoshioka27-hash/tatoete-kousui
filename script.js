@@ -10,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-23_hof_mixed_daily_cache_patch_v12";
+const BUILD = "2026-03-23_hof_mixed_daily_cache_patch_v13";
 
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
@@ -652,13 +652,22 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
     { mode, bucket }
   );
 
-  return deduped.map(x => ({
+  return deduped.map(x => {
+  const flooredTotal = rememberTotalLikesFloor({
+    mode,
+    bucket,
+    text: x.text,
+    totalLikes: Number(x.totalLikes || 0)
+  });
+
+  return {
     id: x.id,
     text: x.text,
     penName: x.penName || null,
-    totalLikes: Number(x.totalLikes || 0),
-    hof: !!x.hof
-  }));
+    totalLikes: flooredTotal,
+    hof: !!x.hof || (flooredTotal >= Number(state.hofThreshold || 20))
+  };
+});
 }
 // ==============================
 // ✅ 最新public（Workers /api/public_latest）
@@ -1118,6 +1127,75 @@ function getSharedItems(mode, bucket) {
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
 const publicCache = new Map();
+const totalLikesFloor = new Map();
+
+function floorKeyForItem(mode, bucket, text){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
+  const t = normalizeMetaphorText(text || "");
+  return `m:${m}|b:${b}|t:${t}`;
+}
+
+function rememberTotalLikesFloor({ mode, bucket, text, totalLikes }){
+  const key = floorKeyForItem(mode, bucket, text);
+  const prev = Number(totalLikesFloor.get(key) || 0);
+  const next = Math.max(prev, Number(totalLikes || 0));
+  totalLikesFloor.set(key, next);
+  return next;
+}
+
+function applyTotalLikesFloor({ mode, bucket, text, totalLikes }){
+  const key = floorKeyForItem(mode, bucket, text);
+  const floor = Number(totalLikesFloor.get(key) || 0);
+  return Math.max(Number(totalLikes || 0), floor);
+}
+
+function patchPublicCacheItem(mode, bucket, text, patch = {}){
+  const k = keyMB(mode, bucket);
+  const arr = publicCache.get(k);
+  if (!Array.isArray(arr) || !arr.length) return;
+
+  const canon = normalizeMetaphorText(text || "");
+  let changed = false;
+
+  const next = arr.map(it => {
+    if (normalizeMetaphorText(it?.text || "") !== canon) return it;
+
+    changed = true;
+    const mergedTotal = Math.max(
+      Number(it?.totalLikes || 0),
+      Number(patch?.totalLikes || 0)
+    );
+    const mergedLikesToday = Math.max(
+      Number(it?.likesToday || it?.likes || 0),
+      Number(patch?.likesToday || patch?.likes || 0)
+    );
+
+    rememberTotalLikesFloor({
+      mode,
+      bucket,
+      text,
+      totalLikes: mergedTotal
+    });
+
+    return {
+      ...it,
+      totalLikes: applyTotalLikesFloor({
+        mode,
+        bucket,
+        text,
+        totalLikes: mergedTotal
+      }),
+      likes: mergedLikesToday,
+      likesToday: mergedLikesToday,
+      hof: !!patch?.hof || !!it?.hof || (mergedTotal >= Number(state.hofThreshold || 20))
+    };
+  });
+
+  if (changed) {
+    publicCache.set(k, next);
+  }
+}
 const publicInFlight = new Map();
 
 function keyMB(mode, bucket){
@@ -1543,15 +1621,39 @@ function updateLikeUI(slot) {
       likeFxPlusOne(btnEl);
 
       const prevToday = Number(state.currentPhrases[slot].likesToday || 0);
-      const prevTotal = Number(state.currentPhrases[slot].totalLikes || 0);
-      const nextToday = Number(out.likesToday || 0);
-      const nextTotal = Number(out.totalLikes || 0);
+const prevTotal = Number(state.currentPhrases[slot].totalLikes || 0);
+const nextToday = Number(out.likesToday || 0);
+const nextTotal = Number(out.totalLikes || 0);
 
-      state.currentPhrases[slot].likesToday = Math.max(prevToday, nextToday);
-      state.currentPhrases[slot].totalLikes = Math.max(prevTotal, nextTotal);
-      state.currentPhrases[slot].hof = !!out.hof || (state.currentPhrases[slot].totalLikes >= Number(state.hofThreshold || 20));
+const safeToday = Math.max(prevToday, nextToday);
+const safeTotal = rememberTotalLikesFloor({
+  mode: state.currentPhrases[slot].mode || getSelectedMode(),
+  bucket: Number(state.currentPhrases[slot].bucket ?? 0),
+  text: state.currentPhrases[slot].text,
+  totalLikes: Math.max(prevTotal, nextTotal)
+});
 
-      updateLikeUI(slot);
+state.currentPhrases[slot].likesToday = safeToday;
+state.currentPhrases[slot].totalLikes = safeTotal;
+state.currentPhrases[slot].hof =
+  !!out.hof || (safeTotal >= Number(state.hofThreshold || 20));
+
+patchPublicCacheItem(
+  state.currentPhrases[slot].mode || getSelectedMode(),
+  Number(state.currentPhrases[slot].bucket ?? 0),
+  state.currentPhrases[slot].text,
+  {
+    likesToday: safeToday,
+    likes: safeToday,
+    totalLikes: safeTotal,
+    hof: state.currentPhrases[slot].hof
+  }
+);
+
+__hofSnapshotMemory = null;
+__hofSnapshotHtml = null;
+
+updateLikeUI(slot);
     }catch(e){
       alert(`いいね失敗：${e?.message || e}`);
     }finally{
