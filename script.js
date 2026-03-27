@@ -857,17 +857,20 @@ function loadHallDailyCache(){
   }
 }
 
-async function fetchHallOfFameDaily(limit = 100){
-  
-  const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
+async function getMergedLikeToday(kv, { id, mode, bucket, text }, day = todayJST()) {
+  const t = trimText(text || "", 300);
+  if (!t) return 0;
 
-  try{
-    const res = await fetch(url, { method:"GET", cache:"no-store" });
-    const data = await res.json().catch(()=>null);
+  const canon = await getCanonLikeToday(kv, mode, t, day);
 
-    if (!res.ok || !data?.ok) {
-      throw new Error(data?.error || `hof_daily failed ${res.status}`);
-    }
+  let legacyMax = 0;
+  for (const lid of buildLogicalIds({ id, mode, bucket, text: t })) {
+    const v = await getLikeToday(kv, lid, day);
+    if (v > legacyMax) legacyMax = v;
+  }
+
+  return Math.max(canon, legacyMax);
+}
 
     let items = extractHallSnapshotItemsFromPayload(data);
 
