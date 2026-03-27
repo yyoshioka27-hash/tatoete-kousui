@@ -849,41 +849,31 @@ function saveHallDailyCache(payload){
     localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
   }catch{}
 }
-function loadHallDailyCache(){
+async function fetchHallOfFameDaily(limit = 100){
+  const today = todayJSTString();
+
+  const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
+
   try{
-    return JSON.parse(localStorage.getItem(HOF_DAILY_CACHE_KEY) || "null");
-  }catch{
-    return null;
-  }
-}
+    const res = await fetch(url, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
 
-async function getMergedLikeToday(kv, { id, mode, bucket, text }, day = todayJST()) {
-  const t = trimText(text || "", 300);
-  if (!t) return 0;
-
-  const canon = await getCanonLikeToday(kv, mode, t, day);
-
-  let legacyMax = 0;
-  for (const lid of buildLogicalIds({ id, mode, bucket, text: t })) {
-    const v = await getLikeToday(kv, lid, day);
-    if (v > legacyMax) legacyMax = v;
-  }
-
-  return Math.max(canon, legacyMax);
-}
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `hof_daily failed ${res.status}`);
+    }
 
     let items = extractHallSnapshotItemsFromPayload(data);
 
-const [triviaFill, funFill] = await Promise.all([
-  fetchHallModeFromApiOnce("trivia", limit),
-  fetchHallModeFromApiOnce("fun", limit)
-]);
+    const [triviaFill, funFill] = await Promise.all([
+      fetchHallModeFromApiOnce("trivia", limit),
+      fetchHallModeFromApiOnce("fun", limit)
+    ]);
 
-items = mergeDisplayItems([
-  ...items,
-  ...triviaFill,
-  ...funFill
-]).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+    items = mergeDisplayItems([
+      ...items,
+      ...triviaFill,
+      ...funFill
+    ]).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
     const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
     state.hofThreshold = hofThreshold;
@@ -1013,7 +1003,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
   };
 
   const topRows = top10.map((it, idx) => renderHofRow(it, idx)).join("");
-  const restRows = restItems.map((it, idx) => renderHofRow(it, idx + 10)).join("");
+  const restRows = restItems.map((it, idx) => renderHofRow(it, idx + 5)).join("");
 
   const snapshotNote = generatedAt
     ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
