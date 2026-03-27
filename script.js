@@ -858,28 +858,7 @@ function loadHallDailyCache(){
 }
 
 async function fetchHallOfFameDaily(limit = 100){
-  const today = todayJSTString();
-  const cached = loadHallDailyCache();
-
-  if (cached?.day === today && Array.isArray(cached?.items) && cached.items.length > 0) {
-    if (cached?.hofThreshold != null) {
-      state.hofThreshold = Number(cached.hofThreshold || state.hofThreshold || 20);
-    }
-
-    const cachedItems = mergeDisplayItems(
-      cached.items
-        .map(normalizeHallSnapshotItem)
-        .filter(Boolean)
-        .filter(it => !isNgText(it.text))
-    ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-
-    return {
-      generatedAt: cached?.generatedAt || null,
-      hofThreshold: Number(cached?.hofThreshold || state.hofThreshold || 20),
-      items: cachedItems.slice(0, limit)
-    };
-  }
-
+  
   const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
   try{
