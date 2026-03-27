@@ -892,21 +892,16 @@ async function fetchHallOfFameDaily(limit = 100){
 
     let items = extractHallSnapshotItemsFromPayload(data);
 
-    const needTrivia = !hasHallMode(items, "trivia");
-    const needFun = !hasHallMode(items, "fun");
+const [triviaFill, funFill] = await Promise.all([
+  fetchHallModeFromApiOnce("trivia", limit),
+  fetchHallModeFromApiOnce("fun", limit)
+]);
 
-    if (needTrivia || needFun){
-      const [triviaFill, funFill] = await Promise.all([
-        needTrivia ? fetchHallModeFromApiOnce("trivia", limit) : Promise.resolve([]),
-        needFun ? fetchHallModeFromApiOnce("fun", limit) : Promise.resolve([])
-      ]);
-
-      items = mergeDisplayItems([
-        ...items,
-        ...triviaFill,
-        ...funFill
-      ]).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
-    }
+items = mergeDisplayItems([
+  ...items,
+  ...triviaFill,
+  ...funFill
+]).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
     const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
     state.hofThreshold = hofThreshold;
