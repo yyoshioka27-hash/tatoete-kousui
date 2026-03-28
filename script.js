@@ -891,16 +891,14 @@ async function fetchHallOfFameDaily(limit = 100){
   }
 }
 async function fetchHallOfFameForRanking(limit = 100){
-  try{
-    const daily = await fetchHallOfFameDaily(limit);
+  const daily = await fetchHallOfFameDaily(limit);
 
-    if (Array.isArray(daily?.items) && daily.items.length > 0) {
-      return {
-        generatedAt: daily?.generatedAt || null,
-        hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
-        items: daily.items.slice(0, limit)
-      };
-    }
+  return {
+    generatedAt: daily?.generatedAt || null,
+    hofThreshold: Number(daily?.hofThreshold || state.hofThreshold || 20),
+    items: Array.isArray(daily?.items) ? daily.items.slice(0, limit) : []
+  };
+}
 
     throw new Error("hof_daily empty");
   }catch(e){
@@ -997,7 +995,7 @@ function buildHallCardHtmlFromSnapshot(hofData){
 
   const snapshotNote = generatedAt
     ? `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計 / 生成: ${escapeHtml(generatedAt)}</div>`
-    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計。日次JSONが片側欠けのときだけ不足分をAPI補完</div>`;
+    : `<div class="muted" style="margin-bottom:8px;">※殿堂入りは1日1回集計</div>`;
 
   return `
     <div id="rankHofCard" class="card" style="margin:0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
