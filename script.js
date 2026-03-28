@@ -851,50 +851,40 @@ function saveHallDailyCache(payload){
 }
 async function fetchHallOfFameDaily(limit = 100){
   const today = todayJSTString();
-
   const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
-  try{
-    const res = await fetch(url, { method:"GET", cache:"no-store" });
-    const data = await res.json().catch(()=>null);
+  const res = await fetch(url, { method:"GET", cache:"no-store" });
+  const data = await res.json().catch(()=>null);
 
-    if (!res.ok || !data?.ok) {
-      throw new Error(data?.error || `hof_daily failed ${res.status}`);
-    }
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || `hof_daily failed ${res.status}`);
+  }
 
-    let items = extractHallSnapshotItemsFromPayload(data);
+  const items = mergeDisplayItems(
+    extractHallSnapshotItemsFromPayload(data)
+  ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
-    const [triviaFill, funFill] = await Promise.all([
-      fetchHallModeFromApiOnce("trivia", limit),
-      fetchHallModeFromApiOnce("fun", limit)
-    ]);
+  const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
+  state.hofThreshold = hofThreshold;
 
-    items = mergeDisplayItems([
-      ...items,
-      ...triviaFill,
-      ...funFill
-    ]).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+  if (!items.length) {
+    throw new Error(data?.note || "hof_daily empty");
+  }
 
-    const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
-    state.hofThreshold = hofThreshold;
+  const payload = {
+    day: today,
+    generatedAt: data?.generatedAt || null,
+    hofThreshold,
+    items
+  };
+  saveHallDailyCache(payload);
 
-    if (!items.length) {
-      throw new Error(data?.note || "hof_daily empty");
-    }
-
-    const payload = {
-      day: today,
-      generatedAt: data?.generatedAt || null,
-      hofThreshold,
-      items
-    };
-    saveHallDailyCache(payload);
-
-    return {
-      generatedAt: payload.generatedAt,
-      hofThreshold,
-      items: items.slice(0, limit)
-    };
+  return {
+    generatedAt: payload.generatedAt,
+    hofThreshold,
+    items: items.slice(0, limit)
+  };
+}
   }catch(e){
     console.warn("hof daily api load failed", e?.message || e);
     throw e;
