@@ -966,22 +966,29 @@ function buildHallCardHtmlFromSnapshot(hofData){
     </div>
   `;
 }
-async function ensureHallSnapshotLoaded(){
+async function ensureHallSnapshotLoaded(force = false){
   const today = todayJSTString();
 
-  if (__hofSnapshotMemory?.day === today && Array.isArray(__hofSnapshotMemory.items)) {
-    return __hofSnapshotMemory;
-  }
+  // ✅ 同日キャッシュを固定で返さない
+  // force=true のとき、または通常時でも毎回 API を取り直す
+  // 失敗したときだけ当日メモリを救済で使う
+  try {
+    const hofData = await fetchHallOfFameForRanking(100);
 
-  const hofData = await fetchHallOfFameForRanking(100);
-  __hofSnapshotMemory = {
-    day: today,
-    generatedAt: hofData?.generatedAt || null,
-    hofThreshold: Number(hofData?.hofThreshold || state.hofThreshold || 20),
-    items: Array.isArray(hofData?.items) ? hofData.items : []
-  };
-  __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(__hofSnapshotMemory);
-  return __hofSnapshotMemory;
+    __hofSnapshotMemory = {
+      day: today,
+      generatedAt: hofData?.generatedAt || null,
+      hofThreshold: Number(hofData?.hofThreshold || state.hofThreshold || 20),
+      items: Array.isArray(hofData?.items) ? hofData.items : []
+    };
+    __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(__hofSnapshotMemory);
+    return __hofSnapshotMemory;
+  } catch (e) {
+    if (!force && __hofSnapshotMemory?.day === today && Array.isArray(__hofSnapshotMemory.items) && __hofSnapshotMemory.items.length) {
+      return __hofSnapshotMemory;
+    }
+    throw e;
+  }
 }
 // ==============================
 // 共有ネタ（GitHub PagesのJSON / metaphors.json）
