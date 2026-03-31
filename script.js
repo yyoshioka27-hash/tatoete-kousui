@@ -849,7 +849,7 @@ function saveHallDailyCache(payload){
     localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
   }catch{}
 }
-async function fetchHallOfFameDaily(limit = 100){
+
   const today = todayJSTString();
   const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
@@ -868,21 +868,18 @@ async function fetchHallOfFameDaily(limit = 100){
   state.hofThreshold = hofThreshold;
 
   if (!items.length) {
-    throw new Error(data?.note || "hof_daily empty");
-  }
-
   const payload = {
     day: today,
     generatedAt: data?.generatedAt || null,
     hofThreshold,
-    items
+    items: []
   };
   saveHallDailyCache(payload);
 
   return {
     generatedAt: payload.generatedAt,
     hofThreshold,
-    items: items.slice(0, limit)
+    items: []
   };
 }
   
