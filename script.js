@@ -850,6 +850,7 @@ function saveHallDailyCache(payload){
   }catch{}
 }
 
+async function fetchHallOfFameDaily(limit = 100){
   const today = todayJSTString();
   const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
@@ -868,20 +869,35 @@ function saveHallDailyCache(payload){
   state.hofThreshold = hofThreshold;
 
   if (!items.length) {
+    const payload = {
+      day: today,
+      generatedAt: data?.generatedAt || null,
+      hofThreshold,
+      items: []
+    };
+    saveHallDailyCache(payload);
+
+    return {
+      generatedAt: payload.generatedAt,
+      hofThreshold,
+      items: []
+    };
+  }
+
   const payload = {
     day: today,
     generatedAt: data?.generatedAt || null,
     hofThreshold,
-    items: []
+    items
   };
   saveHallDailyCache(payload);
 
   return {
     generatedAt: payload.generatedAt,
     hofThreshold,
-    items: []
+    items: items.slice(0, limit)
   };
-}
+}  
   
 async function fetchHallOfFameForRanking(limit = 100){
   const daily = await fetchHallOfFameDaily(limit);
