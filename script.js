@@ -897,14 +897,22 @@ function saveHallDailyCache(payload){
 }
 
 async function fetchHallOfFameDaily(limit = 100){
+  
+async function fetchHallOfFameDaily(limit = 100){
   const today = todayJSTString();
   const url = `${HOF_DAILY_JSON_URL}?day=${encodeURIComponent(today)}&_=${Date.now()}`;
 
   const res = await fetch(url, { method:"GET", cache:"no-store" });
   const data = await res.json().catch(()=>null);
 
+  // ✅ Worker 側の失敗は empty 扱いせず、そのまま失敗として投げる
   if (!res.ok || !data?.ok) {
-    throw new Error(data?.error || `hof_daily failed ${res.status}`);
+    const msg =
+      data?.detail ||
+      data?.error ||
+      data?.fallbackReason ||
+      `hof_daily failed ${res.status}`;
+    throw new Error(msg);
   }
 
   const items = mergeDisplayItems(
@@ -914,22 +922,7 @@ async function fetchHallOfFameDaily(limit = 100){
   const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
   state.hofThreshold = hofThreshold;
 
-  if (!items.length) {
-    const payload = {
-      day: today,
-      generatedAt: data?.generatedAt || null,
-      hofThreshold,
-      items: []
-    };
-    saveHallDailyCache(payload);
-
-    return {
-      generatedAt: payload.generatedAt,
-      hofThreshold,
-      items: []
-    };
-  }
-
+  // ✅ 成功時だけキャッシュ保存
   const payload = {
     day: today,
     generatedAt: data?.generatedAt || null,
@@ -944,7 +937,6 @@ async function fetchHallOfFameDaily(limit = 100){
     items: items.slice(0, limit)
   };
 }  
-  
 async function fetchHallOfFameForRanking(limit = 100){
   const daily = await fetchHallOfFameDaily(limit);
 
