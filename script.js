@@ -896,7 +896,6 @@ function saveHallDailyCache(payload){
   }catch{}
 }
 
-async function fetchHallOfFameDaily(limit = 100){
   
 async function fetchHallOfFameDaily(limit = 100){
   const today = todayJSTString();
