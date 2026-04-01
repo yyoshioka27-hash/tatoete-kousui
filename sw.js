@@ -1,6 +1,6 @@
 // sw.js
 // ★ 更新するたびに数字を上げる（tatoete-v8: API素通し安定版）
-const CACHE_NAME = "tatoete-v9";
+const CACHE_NAME = "tatoete-v10";
 
 const ASSETS = [
   "./",
@@ -60,7 +60,16 @@ self.addEventListener("activate", (event) => {
   );
   self.clients.claim();
 });
-
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
 // ------------------------------
 // fetch
 // ------------------------------
@@ -84,16 +93,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 3) 静的ファイルはキャッシュ優先
+    // 3) 静的ファイルはネットワーク優先（古いJSを掴まないため）
   event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-
-      return fetch(req).then((res) => {
+    fetch(req)
+      .then((res) => {
         if (res && res.ok) {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(req, copy));
         }
+        return res;
+      })
+      .catch(() => caches.match(req))
+  );
         return res;
       });
     })
