@@ -10,8 +10,54 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-03-23_hof_mixed_daily_cache_patch_v13";
+const BUILD = "2026-04-01_auto_cache_reset_v1";
+// =========================
+// ✅ BUILD変更時に古いキャッシュを自動破棄
+// =========================
+async function clearOldAppCachesOnBuildChange() {
+  const BUILD_KEY = "app_build_v1";
+  const prev = localStorage.getItem(BUILD_KEY);
 
+  if (prev === BUILD) return;
+
+  try {
+    const prefixes = [
+      "hof_daily_cache_",
+      "ranking_",
+      "today_",
+      "weather_",
+      "publicLatest_",
+      "usage_",
+      "adminCache_",
+      "wx_pops_cache_"
+    ];
+
+    for (const k of Object.keys(localStorage)) {
+      if (
+        prefixes.some(p => k.startsWith(p)) ||
+        k === "hof_daily_cache_v2" ||
+        k === "wx_pops_cache_v1"
+      ) {
+        localStorage.removeItem(k);
+      }
+    }
+
+    for (const k of Object.keys(sessionStorage)) {
+      if (prefixes.some(p => k.startsWith(p))) {
+        sessionStorage.removeItem(k);
+      }
+    }
+
+    if ("caches" in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map(name => caches.delete(name)));
+    }
+  } catch (e) {
+    console.warn("clearOldAppCachesOnBuildChange failed:", e);
+  } finally {
+    localStorage.setItem(BUILD_KEY, BUILD);
+  }
+}
 // ✅ API_BASE（/api/health がOKの“正”）
 const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
 
@@ -2810,6 +2856,7 @@ function renderMySubmissions(){
 // ✅ 初期化
 // ==============================
 async function init(){
+  await clearOldAppCachesOnBuildChange();
   try { ensureRankingDom(); } catch {}
   try { ensureReindexHintDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
