@@ -10,7 +10,7 @@
 // =========================
 // ✅ BUILD（反映確認用）
 // =========================
-const BUILD = "2026-04-01_auto_cache_reset_v1";
+const BUILD = "2026-04-03_hof_visible_latest_off_v1";
 // =========================
 // ✅ BUILD変更時に古いキャッシュを自動破棄
 // =========================
@@ -719,29 +719,7 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // ✅ 最新public（Workers /api/public_latest）
 // ==============================
 async function fetchPublicLatest(mode, limit = 10){
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("limit", String(limit));
-
-  const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `public_latest failed ${res.status}`);
-
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-
-  const items = Array.isArray(data.items) ? data.items : [];
-  return items
-    .map(it => ({
-      id: String(it.id || "").trim(),
-      text: String(it.text || "").trim(),
-      penName: it.penName ? String(it.penName).trim() : null,
-      bucket: Number(it.bucket ?? 0),
-      approvedAt: it.approvedAt ?? null,
-      mode: (it.mode === "fun" ? "fun" : "trivia"),
-      source: "public"
-    }))
-    .filter(x => x.id && x.text)
-    .filter(x => !isNgText(x.text));
+  return [];
 }
 
 // ==============================
@@ -2008,10 +1986,6 @@ async function renderRanking(){
     const latestOpen = loadLatestOpen();
 
     rankBody.innerHTML = `
-      <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-        <div class="muted">最新の公開ネタを読み込み中…</div>
-      </div>
-
       <div id="rankTodayCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
         <div class="muted">今日のランキングを読み込み中…</div>
       </div>
@@ -2021,61 +1995,7 @@ async function renderRanking(){
       </div>
     `;
 
-    const latestPromise = (async () => {
-      try{
-        const latestRaw = (await fetchPublicLatest(mode, 10)).filter(it => !isNgText(it?.text));
-        const items = mergeDisplayItems(latestRaw, { mode });
-
-        if (!items.length) {
-          return `
-            <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-              <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
-                <summary style="display:flex; align-items:center; justify-content:space-between;">
-                  <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-                  <span class="muted" style="font-size:12px;">（開くと10件）</span>
-                </summary>
-                <div class="muted" style="margin-top:10px;">最新の公開ネタがまだありません</div>
-              </details>
-            </div>
-          `;
-        }
-
-        const rows = items.slice(0, 10).map((it, idx) => {
-          const pen = penHtmlIfAny(it.penName);
-          const bkt = Number(it.bucket ?? 0);
-          const bktTag = Number.isFinite(bkt) ? ` <span class="muted" style="font-size:12px;">[${bkt}%]</span>` : "";
-          return `
-            <div style="padding:10px 0; border-top:1px solid rgba(15,23,42,0.10);">
-              <div style="font-weight:800;">${idx+1}. ${escapeHtml(it.text)}${pen}${bktTag}</div>
-            </div>
-          `;
-        }).join("");
-
-        return `
-          <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
-              <summary style="display:flex; align-items:center; justify-content:space-between;">
-                <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-                <span class="muted" style="font-size:12px;">（開くと10件）</span>
-              </summary>
-              <div style="margin-top:10px;">${rows}</div>
-            </details>
-          </div>
-        `;
-      } catch (e) {
-        return `
-          <div id="rankLatestCard" class="card" style="margin:0 0 10px 0; padding:14px; background:rgba(255,255,255,0.72); border:1px solid rgba(15,23,42,0.08); border-radius:14px;">
-            <details class="latest-details" id="latestDetails" ${latestOpen ? "open" : ""} style="margin:0;">
-              <summary style="display:flex; align-items:center; justify-content:space-between;">
-                <span>最新の公開ネタ（折り畳み） / ${mode==="fun"?"お笑い":"雑学"}</span>
-                <span class="muted" style="font-size:12px;">（開くと10件）</span>
-              </summary>
-              <div class="muted" style="margin-top:10px;">最新の取得に失敗：${escapeHtml(String(e?.message || e))}</div>
-            </details>
-          </div>
-        `;
-      }
-    })();
+    
 
     const todayPromise = (async () => {
       try{
@@ -2152,21 +2072,7 @@ async function renderRanking(){
       }
     })();
 
-    latestPromise.then((html) => {
-      if (reqId !== __rankingReqSeq) return;
-      const el = document.getElementById("rankLatestCard");
-      if (el) el.outerHTML = html;
-      try{
-        const det = document.getElementById("latestDetails");
-        if (det && !det.dataset.wired){
-          det.dataset.wired = "1";
-          det.addEventListener("toggle", () => {
-            saveLatestOpen(!!det.open);
-          });
-        }
-      }catch{}
-    });
-
+    
     todayPromise.then((html) => {
       if (reqId !== __rankingReqSeq) return;
       const el = document.getElementById("rankTodayCard");
@@ -2179,7 +2085,7 @@ async function renderRanking(){
       if (el) el.outerHTML = html;
     });
 
-    await Promise.allSettled([latestPromise, todayPromise, hofPromise]);
+    await Promise.allSettled([todayPromise, hofPromise]);
 
   } catch(e){
     console.warn("renderRanking error", e);
