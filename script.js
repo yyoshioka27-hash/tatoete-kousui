@@ -1822,15 +1822,43 @@ function render() {
 // =========================
 // API: geocode
 // =========================
+const GEO_CACHE_KEY = "geo_cache_v1";
+const GEO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function loadGeoCache(){
+  try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function saveGeoCache(obj){
+  try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(obj)); } catch {}
+}
+function geoKey(name){
+  return String(name || "").trim().toLowerCase();
+}
+
 async function geocode(name) {
+  const key = geoKey(name);
+  const cache = loadGeoCache();
+  const hit = cache[key];
+  const now = Date.now();
+
+  if (hit && hit.ts && (now - hit.ts) < GEO_CACHE_TTL_MS && hit.data) {
+    return hit.data;
+  }
+
   const url = new URL(GEO);
   url.searchParams.set("name", name);
-  url.searchParams.set("count", "10");
+  url.searchParams.set("count", "5");
   url.searchParams.set("language", "ja");
   url.searchParams.set("format", "json");
-  const res = await fetch(url.toString(), { cache: "no-store" });
+
+  const res = await fetchWithTimeout(url.toString(), 3500);
   if (!res.ok) throw new Error("地点検索に失敗しました");
-  return await res.json();
+
+  const data = await res.json();
+  cache[key] = { ts: now, data };
+  saveGeoCache(cache);
+  return data;
 }
 
 // ✅（内部）天気取得本体
@@ -2186,14 +2214,34 @@ function fireIfApprovedOnNextSearch(){
 
         let cachedOut = null;
 
-        try {
-          const out = await fetchPopsBySlotsSWR(lat, lon, {
-            onCached: (cached) => {
-              if (mySeq !== __searchSeq) return;
-              if (!cached?.pops) return;
-              cachedOut = { pops: cached.pops, tz: cached.tz || null };
-            }
-          });
+try {
+  const out = await fetchPopsBySlotsSWR(lat, lon, {
+    onCached: async (cached) => {
+      if (mySeq !== __searchSeq) return;
+      if (!cached?.pops) return;
+
+      cachedOut = { pops: cached.pops, tz: cached.tz || null };
+
+      const mode = getSelectedMode();
+      const buckets = uniqueBucketsFromPops(cached.pops);
+      await Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
+
+      if (mySeq !== __searchSeq) return;
+
+      state.pops = cached.pops;
+      state.tz = cached.tz || null;
+      state.source = cached.fresh ? "API: キャッシュ" : "API: キャッシュ(古め)";
+
+      __freezeMetaphor = false;
+      window.__forceRepick = true;
+      scheduleRender();
+      requestAnimationFrame(() => {
+        window.__forceRepick = false;
+      });
+
+      setStatus("キャッシュを表示中…（裏で最新取得）", "ok");
+    }
+  });
 
           if (mySeq !== __searchSeq) return;
 
@@ -2231,11 +2279,13 @@ function fireIfApprovedOnNextSearch(){
           try { fireIfApprovedOnNextSearch(); } catch {}
 
           try{
-            const key = getRankingKeyNow();
-            await renderRankingOnce(key);
-          }catch(e){
-            console.warn("renderRankingOnce(after search) failed", e);
-          }
+        const key = getRankingKeyNow();
+        renderRankingOnce(key).catch(e => {
+        console.warn("renderRankingOnce(after search) failed", e);
+        });
+        }catch(e){
+        console.warn("renderRankingOnce(after search) failed", e);
+        }
 
         } catch (e) {
           if (mySeq !== __searchSeq) return;
@@ -2261,13 +2311,13 @@ function fireIfApprovedOnNextSearch(){
             setStatus(`最新の取得に失敗（キャッシュ表示）：${e?.message || e}`, "ng");
 
             try{
-              const key = getRankingKeyNow();
-              await renderRankingOnce(key);
-            }catch(err){
-              console.warn("renderRankingOnce(cache fallback) failed", err);
-            }
-            return;
-          }
+          const key = getRankingKeyNow();
+          renderRankingOnce(key).catch(err => {
+            console.warn("renderRankingOnce(cache fallback) failed", err);
+          });
+        }catch(err){
+          console.warn("renderRankingOnce(cache fallback) failed", err);
+        }
 
           setStatus(e.message || "天気取得エラー", "ng");
           state.source = "API: エラー";
