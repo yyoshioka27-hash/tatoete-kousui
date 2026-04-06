@@ -2250,7 +2250,7 @@ try {
 
           const mode = getSelectedMode();
           const buckets = uniqueBucketsFromPops(nextPops);
-          await Promise.all(buckets.map(b => warmPublicCache(mode, b)));
+          Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
 
           if (mySeq !== __searchSeq) return;
 
@@ -2293,9 +2293,9 @@ try {
   if (cachedOut?.pops) {
     const mode = getSelectedMode();
     const buckets = uniqueBucketsFromPops(cachedOut.pops);
-    await Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
+    Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
 
-    if (mySeq !== __searchSeq) return;
+if (mySeq !== __searchSeq) return;
 
     state.pops = cachedOut.pops;
     state.tz = cachedOut.tz || null;
@@ -2367,7 +2367,7 @@ document.querySelectorAll('input[name="mode"]').forEach(r =>
 
       const mode = getSelectedMode();
       const buckets = uniqueBucketsFromPops(state.pops);
-      await Promise.all(buckets.map(b => warmPublicCache(mode, b)));
+      Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
 
       __freezeMetaphor = false;
       window.__forceRepick = true;
