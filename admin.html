@@ -409,11 +409,11 @@
   const viewCount  = $("viewCount");
 
   const btnSave    = $("btnSave");
-  const btnHealth  = $("btnHealth");
-  const btnRefresh = $("btnRefresh");
-  const btnRefreshAll = $("btnRefreshAll");
-  const btnImportSeed = $("btnImportSeed");
-  const btnHofDailyBuild = $("btnHofDailyBuild");
+　const btnHealth  = $("btnHealth");
+　const btnRefresh = $("btnRefresh");
+　const btnRefreshAll = $("btnRefreshAll");
+　const btnImportSeed = $("btnImportSeed");
+　const btnHofDailyBuild = $("btnHofDailyBuild");
 　const btnHofDailyCheck = $("btnHofDailyCheck");
 
   const bulkActionsPending = $("bulkActionsPending");
@@ -469,19 +469,19 @@
   }
 
   function setBusy(on){
-    __busy = !!on;
-    pillBusy.style.display = __busy ? "inline-flex" : "none";
-    const dis = __busy;
+  __busy = !!on;
+  pillBusy.style.display = __busy ? "inline-flex" : "none";
+  const dis = __busy;
 
-    [
-      btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed
-      btnHofDailyBuild, btnHofDailyCheck,
-      tabPending, tabPublic, tabAll,
-      btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
-      elQ, elSort, btnClearQ,
-      btnReindexTop, btnReindex
-    ].forEach(b => { try{ if (b) b.disabled = dis; }catch{} });
-  }
+  [
+    btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed,
+    btnHofDailyBuild, btnHofDailyCheck,
+    tabPending, tabPublic, tabAll,
+    btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
+    elQ, elSort, btnClearQ,
+    btnReindexTop, btnReindex
+  ].forEach(b => { try{ if (b) b.disabled = dis; }catch{} });
+}
 
   function abortInFlight(){
     try{ if (__ctrl) __ctrl.abort(); }catch{}
@@ -1520,105 +1520,109 @@
   }
 
   async function importSeed(){
-    const items = buildSeedItemsFromMetaphors();
-    if (!items.length){
-      return alert("metaphors.js から初期ネタが取得できません（NETA_TRIVIA / NETA が見つからない）");
-    }
-　　  async function hofDailyBuild(){
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
-
-    try{
-      const d = new Date();
-      const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
-
-      const r = await callAdminWithFallback(
-        ["/api/admin/hof_daily_build"],
-        {
-          method:"POST",
-          admin:true,
-          body:{ day: jst },
-          signal
-        }
-      );
-
-      alert(`殿堂入りbuild成功\n日付: ${r.day}\n件数: ${r.count ?? 0}件`);
-
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`殿堂入りbuildに失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
+  const items = buildSeedItemsFromMetaphors();
+  if (!items.length){
+    return alert("metaphors.js から初期ネタが取得できません（NETA_TRIVIA / NETA が見つからない）");
   }
 
-  async function hofDailyCheck(){
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
+  abortInFlight();
+  __ctrl = new AbortController();
+  setBusy(true);
+  const signal = __ctrl.signal;
 
-    try{
-      const d = new Date();
-      const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
+  try{
+    const BATCH = 12;
+    let imported = 0;
 
-      const data = await callAdminWithFallback(
-        [`/api/admin/hof_daily?day=${jst}`],
-        {
-          admin:true,
-          signal
-        }
-      );
-
-      alert(`殿堂入り確認OK\n日付: ${data.day}\n件数: ${data.count ?? 0}件`);
-
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`殿堂入り確認に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
+    for (let i = 0; i < items.length; i += BATCH){
+      const chunk = items.slice(i, i + BATCH);
+      await callAdminWithFallback(API.importSeed, {
+        method:"POST",
+        admin:true,
+        body:{ items: chunk },
+        signal
+      });
+      imported += chunk.length;
     }
+
+    await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
+    syncCacheAll();
+    resetPager();
+    render();
+
+    await fetchDAU(signal);
+
+    alert(`初期ネタを取り込みました（${imported}件）`);
+  } catch(e){
+    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    alert(`初期ネタ取り込みに失敗: ${e.message}`);
+  } finally {
+    setBusy(false);
+    __ctrl = null;
   }
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
+}
 
-    try{
-      const BATCH = 12;
-      let imported = 0;
+async function hofDailyBuild(){
+  abortInFlight();
+  __ctrl = new AbortController();
+  setBusy(true);
+  const signal = __ctrl.signal;
 
-      for (let i = 0; i < items.length; i += BATCH){
-        const chunk = items.slice(i, i + BATCH);
-        await callAdminWithFallback(API.importSeed, { method:"POST", admin:true, body:{ items: chunk }, signal });
-        imported += chunk.length;
+  try{
+    const d = new Date();
+    const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
+    const r = await callAdminWithFallback(
+      ["/api/admin/hof_daily_build"],
+      {
+        method:"POST",
+        admin:true,
+        body:{ day: jst },
+        signal
       }
+    );
 
-      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
-      syncCacheAll();
-      resetPager();
-      render();
-
-      await fetchDAU(signal);
-
-      alert(`初期ネタを取り込みました（${imported}件）`);
-    } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`初期ネタ取り込みに失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
-    }
+    alert(`殿堂入りbuild成功\n日付: ${r.day}\n件数: ${r.count ?? 0}件`);
+  } catch(e){
+    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    alert(`殿堂入りbuildに失敗: ${e.message}`);
+  } finally {
+    setBusy(false);
+    __ctrl = null;
   }
+}
 
+async function hofDailyCheck(){
+  abortInFlight();
+  __ctrl = new AbortController();
+  setBusy(true);
+  const signal = __ctrl.signal;
+
+  try{
+    const d = new Date();
+    const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
+    const data = await callAdminWithFallback(
+      [`/api/admin/hof_daily?day=${jst}`],
+      {
+        admin:true,
+        signal
+      }
+    );
+
+    alert(`殿堂入り確認OK\n日付: ${data.day}\n件数: ${data.count ?? 0}件`);
+  } catch(e){
+    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    alert(`殿堂入り確認に失敗: ${e.message}`);
+  } finally {
+    setBusy(false);
+    __ctrl = null;
+  }
+}
   // Events
   btnSave.addEventListener("click", () => {
     saveSettings();
@@ -1626,10 +1630,10 @@
   });
 
   btnHealth.addEventListener("click", doHealth);
-  btnRefresh.addEventListener("click", refreshCurrentTab);
-  btnRefreshAll.addEventListener("click", refreshAllTabs);
-  btnImportSeed.addEventListener("click", importSeed);
-  btnHofDailyBuild.addEventListener("click", hofDailyBuild);
+　btnRefresh.addEventListener("click", refreshCurrentTab);
+　btnRefreshAll.addEventListener("click", refreshAllTabs);
+　btnImportSeed.addEventListener("click", importSeed);
+　btnHofDailyBuild.addEventListener("click", hofDailyBuild);
 　btnHofDailyCheck.addEventListener("click", hofDailyCheck);
 
   // ✅ FIX: 復旧ボタンは両方とも同じ動作
