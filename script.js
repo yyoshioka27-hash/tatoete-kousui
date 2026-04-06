@@ -1200,6 +1200,36 @@ function getPublicItems(mode, bucket){
   }));
 }
 
+function findPublicLikeSeed(mode, bucket, text){
+  const k = keyMB(mode, bucket);
+  const arr = publicCache.get(k) || [];
+  const canon = normalizeMetaphorText(text || "");
+  if (!canon || !Array.isArray(arr) || !arr.length) return null;
+
+  const hit = arr.find(it => normalizeMetaphorText(it?.text || "") === canon);
+  if (!hit) return null;
+
+  const totalLikes = Number(hit.totalLikes || 0);
+  rememberTotalLikesFloor({
+    mode,
+    bucket,
+    text,
+    totalLikes
+  });
+
+  return {
+    id: hit.id ? String(hit.id).trim() : null,
+    penName: hit.penName || null,
+    totalLikes: applyTotalLikesFloor({
+      mode,
+      bucket,
+      text,
+      totalLikes
+    }),
+    hof: !!hit.hof || (totalLikes >= Number(state.hofThreshold || 20))
+  };
+}
+
 // =========================
 // 天気取得：Open-Meteo
 // =========================
@@ -1401,27 +1431,33 @@ function buildCandidatePool(mode, bucket) {
   const b = window.bucket10(bucket);
   const m = (mode === "fun" ? "fun" : "trivia");
 
-  const baseItems = getBaseTexts(m, b).map(text => ({
+  const baseItems = getBaseTexts(m, b).map(text => {
+  const seed = findPublicLikeSeed(m, b, text);
+  return {
     text,
     source: "base",
     id: makeGlobalId({ mode: m, bucket: b, text, source: "base" }),
-    penName: null,
-    totalLikes: 0,
-    hof: false,
+    penName: seed?.penName || null,
+    totalLikes: Number(seed?.totalLikes || 0),
+    hof: !!seed?.hof,
     mode: m,
     bucket: b
-  }));
+  };
+});
 
-  const jsonItems = getSharedItems(m, b).map(x => ({
+  const jsonItems = getSharedItems(m, b).map(x => {
+  const seed = findPublicLikeSeed(m, b, x.text);
+  return {
     text: x.text,
     source: "json",
     id: makeGlobalId({ mode: m, bucket: b, text: x.text, source: "json" }),
-    penName: null,
-    totalLikes: 0,
-    hof: false,
+    penName: seed?.penName || null,
+    totalLikes: Number(seed?.totalLikes || 0),
+    hof: !!seed?.hof,
     mode: m,
     bucket: b
-  }));
+  };
+});
 
   const publicItems = getPublicItems(m, b).map(x => ({
     ...x,
