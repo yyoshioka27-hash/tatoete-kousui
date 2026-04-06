@@ -2288,42 +2288,45 @@ try {
         }
 
         } catch (e) {
-          if (mySeq !== __searchSeq) return;
+  if (mySeq !== __searchSeq) return;
 
-          if (cachedOut?.pops) {
-            const mode = getSelectedMode();
-            const buckets = uniqueBucketsFromPops(cachedOut.pops);
-            await Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
+  if (cachedOut?.pops) {
+    const mode = getSelectedMode();
+    const buckets = uniqueBucketsFromPops(cachedOut.pops);
+    await Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
 
-            if (mySeq !== __searchSeq) return;
+    if (mySeq !== __searchSeq) return;
 
-            state.pops = cachedOut.pops;
-            state.tz = cachedOut.tz || null;
-            state.source = "API: キャッシュ";
+    state.pops = cachedOut.pops;
+    state.tz = cachedOut.tz || null;
+    state.source = "API: キャッシュ";
 
-            __freezeMetaphor = false;
-            window.__forceRepick = true;
-            scheduleRender();
-            requestAnimationFrame(() => {
-              window.__forceRepick = false;
-            });
+    __freezeMetaphor = false;
+    window.__forceRepick = true;
+    scheduleRender();
+    requestAnimationFrame(() => {
+      window.__forceRepick = false;
+    });
 
-            setStatus(`最新の取得に失敗（キャッシュ表示）：${e?.message || e}`, "ng");
+    setStatus(`最新の取得に失敗（キャッシュ表示）：${e?.message || e}`, "ng");
 
-            try{
-          const key = getRankingKeyNow();
-          renderRankingOnce(key).catch(err => {
-            console.warn("renderRankingOnce(cache fallback) failed", err);
-          });
-        }catch(err){
-          console.warn("renderRankingOnce(cache fallback) failed", err);
-        }
+    try{
+      const key = getRankingKeyNow();
+      renderRankingOnce(key).catch(err => {
+        console.warn("renderRankingOnce(cache fallback) failed", err);
+      });
+    }catch(err){
+      console.warn("renderRankingOnce(cache fallback) failed", err);
+    }
 
-          setStatus(e.message || "天気取得エラー", "ng");
-          state.source = "API: エラー";
-          state.pops = null;
-          scheduleRender();
-        } finally {
+    return;
+  }
+
+  setStatus(e.message || "天気取得エラー", "ng");
+  state.source = "API: エラー";
+  state.pops = null;
+  scheduleRender();
+} finally {
           if (mySeq === __searchSeq) {
             setSearchBusy(false);
             setRankingBusy(false);
