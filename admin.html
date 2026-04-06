@@ -219,6 +219,8 @@
         <button id="btnRefresh">更新（表示中タブ）</button>
         <button id="btnRefreshAll">更新（全タブ）</button>
         <button id="btnImportSeed">初期ネタを取り込み</button>
+        <button id="btnHofDailyBuild">殿堂入りbuild</button>
+        <button id="btnHofDailyCheck">殿堂入り確認</button>
         <!-- ✅ FIX: ID重複を解消（上部の復旧ボタンは unique にする） -->
         <button id="btnReindexTop" class="btnDanger">復旧（reindex）</button>
       </div>
@@ -411,6 +413,8 @@
   const btnRefresh = $("btnRefresh");
   const btnRefreshAll = $("btnRefreshAll");
   const btnImportSeed = $("btnImportSeed");
+  const btnHofDailyBuild = $("btnHofDailyBuild");
+　const btnHofDailyCheck = $("btnHofDailyCheck");
 
   const bulkActionsPending = $("bulkActionsPending");
   const bulkActionsPublic  = $("bulkActionsPublic");
@@ -470,7 +474,8 @@
     const dis = __busy;
 
     [
-      btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed,
+      btnSave, btnHealth, btnRefresh, btnRefreshAll, btnImportSeed
+      btnHofDailyBuild, btnHofDailyCheck,
       tabPending, tabPublic, tabAll,
       btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
       elQ, elSort, btnClearQ,
@@ -1519,7 +1524,69 @@
     if (!items.length){
       return alert("metaphors.js から初期ネタが取得できません（NETA_TRIVIA / NETA が見つからない）");
     }
+　　  async function hofDailyBuild(){
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
 
+    try{
+      const d = new Date();
+      const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+
+      const r = await callAdminWithFallback(
+        ["/api/admin/hof_daily_build"],
+        {
+          method:"POST",
+          admin:true,
+          body:{ day: jst },
+          signal
+        }
+      );
+
+      alert(`殿堂入りbuild成功\n日付: ${r.day}\n件数: ${r.count ?? 0}件`);
+
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`殿堂入りbuildに失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
+
+  async function hofDailyCheck(){
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
+
+    try{
+      const d = new Date();
+      const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+
+      const data = await callAdminWithFallback(
+        [`/api/admin/hof_daily?day=${jst}`],
+        {
+          admin:true,
+          signal
+        }
+      );
+
+      alert(`殿堂入り確認OK\n日付: ${data.day}\n件数: ${data.count ?? 0}件`);
+
+    } catch(e){
+      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`殿堂入り確認に失敗: ${e.message}`);
+    } finally {
+      setBusy(false);
+      __ctrl = null;
+    }
+  }
     abortInFlight();
     __ctrl = new AbortController();
     setBusy(true);
@@ -1562,6 +1629,8 @@
   btnRefresh.addEventListener("click", refreshCurrentTab);
   btnRefreshAll.addEventListener("click", refreshAllTabs);
   btnImportSeed.addEventListener("click", importSeed);
+  btnHofDailyBuild.addEventListener("click", hofDailyBuild);
+　btnHofDailyCheck.addEventListener("click", hofDailyCheck);
 
   // ✅ FIX: 復旧ボタンは両方とも同じ動作
   function bindReindex(btn){
