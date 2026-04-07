@@ -896,7 +896,7 @@ async function fetchHallOfFameDaily(limit = 100){
   extractHallSnapshotItemsFromPayload(data)
 ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
-rememberHallSnapshotFloors(items);
+rememberHallSnapshotTotals(items);
   const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
   state.hofThreshold = hofThreshold;
 
@@ -1074,6 +1074,44 @@ function getSharedItems(mode, bucket) {
 // ==============================
 const publicCache = new Map();
 const totalLikesFloor = new Map();
+const hallSnapshotTotals = new Map();
+
+function hallSnapshotKeyForItem(mode, bucket, text){
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = Number.isFinite(Number(bucket)) ? window.bucket10(Number(bucket)) : 0;
+  const t = normalizeMetaphorText(text || "");
+  return `m:${m}|b:${b}|t:${t}`;
+}
+
+function rememberHallSnapshotTotals(items){
+  hallSnapshotTotals.clear();
+
+  for (const it of (Array.isArray(items) ? items : [])) {
+    const text = String(it?.text || "").trim();
+    if (!text) continue;
+
+    const mode = (it?.mode === "fun" ? "fun" : "trivia");
+    const bucket = Number.isFinite(Number(it?.bucket))
+      ? window.bucket10(Number(it.bucket))
+      : 0;
+    const totalLikes = Number(it?.totalLikes || 0);
+
+    const key = hallSnapshotKeyForItem(mode, bucket, text);
+    hallSnapshotTotals.set(key, totalLikes);
+  }
+}
+
+function getHallSnapshotTotalLikes(mode, bucket, text){
+  const key = hallSnapshotKeyForItem(mode, bucket, text);
+  if (!hallSnapshotTotals.has(key)) return null;
+  return Number(hallSnapshotTotals.get(key) || 0);
+}
+
+function resolveDisplayTotalLikes(mode, bucket, text, totalLikes){
+  const snap = getHallSnapshotTotalLikes(mode, bucket, text);
+  if (snap !== null) return snap;
+  return applyTotalLikesFloor({ mode, bucket, text, totalLikes });
+}
 
 function floorKeyForItem(mode, bucket, text){
   const m = (mode === "fun" ? "fun" : "trivia");
@@ -1823,12 +1861,12 @@ function render() {
   ? Number(state.currentPhrases[slotKey]?.totalLikes || totalLikesPicked || 0)
   : Number(totalLikesPicked || 0);
 
-const nextTotalLikes = applyTotalLikesFloor({
+const nextTotalLikes = resolveDisplayTotalLikes(
   mode,
-  bucket: rounded,
-  text: picked.text,
-  totalLikes: nextTotalLikesRaw
-});
+  rounded,
+  picked.text,
+  nextTotalLikesRaw
+);
 
     state.currentPhrases[slotKey] = {
       text: picked.text,
