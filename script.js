@@ -893,9 +893,10 @@ async function fetchHallOfFameDaily(limit = 100){
   }
 
   const items = mergeDisplayItems(
-    extractHallSnapshotItemsFromPayload(data)
-  ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
+  extractHallSnapshotItemsFromPayload(data)
+).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 
+rememberHallSnapshotFloors(items);
   const hofThreshold = Number(data?.hofThreshold || state.hofThreshold || 20);
   state.hofThreshold = hofThreshold;
 
@@ -1094,7 +1095,23 @@ function applyTotalLikesFloor({ mode, bucket, text, totalLikes }){
   const floor = Number(totalLikesFloor.get(key) || 0);
   return Math.max(Number(totalLikes || 0), floor);
 }
+function rememberHallSnapshotFloors(items){
+  for (const it of (Array.isArray(items) ? items : [])) {
+    const text = String(it?.text || "").trim();
+    if (!text) continue;
 
+    const mode = (it?.mode === "fun" ? "fun" : "trivia");
+    const bucket = Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0;
+    const totalLikes = Number(it?.totalLikes || 0);
+
+    rememberTotalLikesFloor({
+      mode,
+      bucket,
+      text,
+      totalLikes
+    });
+  }
+}
 function patchPublicCacheItem(mode, bucket, text, patch = {}){
   const k = keyMB(mode, bucket);
   const arr = publicCache.get(k);
@@ -1467,19 +1484,29 @@ function buildCandidatePool(mode, bucket) {
 
   const merged = mergeDisplayItems([...publicItems, ...jsonItems, ...baseItems], { mode: m, bucket: b });
 
-  return merged
-    .map(item => ({
-      text: String(item?.text || "").trim(),
-      source: item.source || "base",
-      id: item.id || makeGlobalId({ mode: m, bucket: b, text: item?.text || "", source: item.source || "base" }),
-      penName: item.penName || null,
-      totalLikes: Number(item.totalLikes || 0),
-      likes: Number(item.likes || 0),
-      hof: !!item.hof,
-      bucket: b,
-      mode: m,
-      dedupeKey: makeMetaphorDedupeKey({ mode: m, bucket: b, text: item?.text || "" })
-    }))
+    return merged
+    .map(item => {
+      const text = String(item?.text || "").trim();
+      const totalLikes = applyTotalLikesFloor({
+        mode: m,
+        bucket: b,
+        text,
+        totalLikes: Number(item?.totalLikes || 0)
+      });
+
+      return {
+        text,
+        source: item.source || "base",
+        id: item.id || makeGlobalId({ mode: m, bucket: b, text: item?.text || "", source: item.source || "base" }),
+        penName: item.penName || null,
+        totalLikes,
+        likes: Number(item.likes || 0),
+        hof: !!item.hof || (totalLikes >= Number(state.hofThreshold || 20)),
+        bucket: b,
+        mode: m,
+        dedupeKey: makeMetaphorDedupeKey({ mode: m, bucket: b, text: item?.text || "" })
+      };
+    })
     .filter(item => item.text)
     .filter(item => !isNgText(item.text))
     .filter(item => !hasHard100PercentMismatch(item.text, b))
@@ -1792,9 +1819,16 @@ function render() {
       ? Number(state.currentPhrases[slotKey]?.likesToday || 0)
       : 0;
 
-    const nextTotalLikes = (prevId && nextId && prevId === nextId)
-      ? Number(state.currentPhrases[slotKey]?.totalLikes || totalLikesPicked || 0)
-      : Number(totalLikesPicked || 0);
+    const nextTotalLikesRaw = (prevId && nextId && prevId === nextId)
+  ? Number(state.currentPhrases[slotKey]?.totalLikes || totalLikesPicked || 0)
+  : Number(totalLikesPicked || 0);
+
+const nextTotalLikes = applyTotalLikesFloor({
+  mode,
+  bucket: rounded,
+  text: picked.text,
+  totalLikes: nextTotalLikesRaw
+});
 
     state.currentPhrases[slotKey] = {
       text: picked.text,
