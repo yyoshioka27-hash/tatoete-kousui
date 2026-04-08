@@ -1610,20 +1610,30 @@ async function hofDailyBuild(){
       }
     );
 
-    alert(`殿堂入りbuild成功\n日付: ${r.day}\n件数: ${r.count ?? 0}件`);
+    if (r?.building || r?.accepted) {
+      alert(
+        `殿堂入りbuildを開始しました\n日付: ${r.day || jst}\n` +
+        `10〜30秒後に「殿堂入り確認」を押してください。`
+      );
+    } else {
+      alert(
+        `殿堂入りbuild成功\n日付: ${r.day || jst}\n` +
+        `件数: ${r.count ?? "未確定"}件`
+      );
+    }
   } catch (e) {
-  if (e?.status === 403) {
-    setPill(pillAdmin, "admin: 403（鍵違い）", false);
-  }
+    if (e?.status === 403) {
+      setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    }
 
-  const detail =
-    e?.data?.detail ||
-    e?.data?.error ||
-    e?.message ||
-    "unknown_error";
+    const detail =
+      e?.data?.detail ||
+      e?.data?.error ||
+      e?.message ||
+      "unknown_error";
 
-  alert(`殿堂入りbuildに失敗\n${detail}`);
-} finally {
+    alert(`殿堂入りbuildに失敗\n${detail}`);
+  } finally {
     setBusy(false);
     __ctrl = null;
   }
