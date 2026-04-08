@@ -1568,7 +1568,7 @@ async function hofDailyBuild(){
   setBusy(true);
   const signal = __ctrl.signal;
 
-  try{
+  try {
     const d = new Date();
     const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
       .toISOString()
@@ -1577,15 +1577,15 @@ async function hofDailyBuild(){
     const r = await callAdminWithFallback(
       ["/api/admin/hof_daily_build"],
       {
-        method:"POST",
-        admin:true,
-        body:{ day: jst },
+        method: "POST",
+        admin: true,
+        body: { day: jst },
         signal
       }
     );
 
     alert(`殿堂入りbuild成功\n日付: ${r.day}\n件数: ${r.count ?? 0}件`);
-  } catch(e){
+  } catch (e) {
     if (e?.status === 403) {
       setPill(pillAdmin, "admin: 403（鍵違い）", false);
     }
@@ -1595,7 +1595,6 @@ async function hofDailyBuild(){
     __ctrl = null;
   }
 }
-
     if (r?.building || r?.accepted) {
       alert(
         `殿堂入りbuildを開始しました\n日付: ${r.day || jst}\n` +
@@ -1621,7 +1620,7 @@ async function hofDailyCheck(){
   setBusy(true);
   const signal = __ctrl.signal;
 
-  try{
+  try {
     const d = new Date();
     const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
       .toISOString()
@@ -1630,13 +1629,13 @@ async function hofDailyCheck(){
     const data = await callAdminWithFallback(
       [`/api/admin/hof_daily?day=${jst}`],
       {
-        admin:true,
+        admin: true,
         signal
       }
     );
 
     alert(`殿堂入り確認OK\n日付: ${data.day}\n件数: ${data.count ?? 0}件`);
-  } catch(e){
+  } catch (e) {
     if (e?.status === 403) {
       setPill(pillAdmin, "admin: 403（鍵違い）", false);
       alert(`殿堂入り確認に失敗: ${e.message}`);
@@ -1644,7 +1643,7 @@ async function hofDailyCheck(){
     }
 
     if (e?.status === 404) {
-      alert("殿堂入りはまだ生成中です。\n5〜15秒ほど待ってから、もう一度「殿堂入り確認」を押してください。");
+      alert("殿堂入りはまだ生成されていません。\n5〜15秒ほど待ってから、もう一度「殿堂入り確認」を押してください。");
       return;
     }
 
