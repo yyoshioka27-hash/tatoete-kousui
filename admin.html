@@ -1625,7 +1625,17 @@ async function hofDailyCheck(){
 
     alert(`殿堂入り確認OK\n日付: ${data.day}\n件数: ${data.count ?? 0}件`);
   } catch(e){
-    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    if (e?.status === 403) {
+      setPill(pillAdmin, "admin: 403（鍵違い）", false);
+      alert(`殿堂入り確認に失敗: ${e.message}`);
+      return;
+    }
+
+    if (e?.status === 404) {
+      alert("殿堂入りはまだ生成中です。\n5〜15秒ほど待ってから、もう一度「殿堂入り確認」を押してください。");
+      return;
+    }
+
     alert(`殿堂入り確認に失敗: ${e.message}`);
   } finally {
     setBusy(false);
