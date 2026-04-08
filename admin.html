@@ -1858,11 +1858,9 @@ async function hofDailyCheck(){
   hydrateFromCache();
   render();
 
-  // ✅ 追加：ページを開いたら自動でhealth+DAU更新（鍵が入っていれば）
-  // - ADMIN_KEYが空なら無理に叩かない（403/alert連発を避ける）
-  if (adminKey()) {
-    doHealth();
-  }
+    // ✅ 起動時に自動 health は実行しない
+  // 必要なときだけ手動で health を押す
+  setBusy(false);
 
 })();
 </script>
