@@ -511,28 +511,54 @@
   // fetch(JSON) + 404フォールバック
   // =========================
   async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null } = {}){
-    const base = apiBase();
-    if (!base) throw new Error("API_BASE が空です");
+  const base = apiBase();
+  if (!base) throw new Error("API_BASE が空です");
 
-    const url = base + path;
-    const headers = { "Content-Type":"application/json" };
+  const url = base + path;
+  const headers = { "Content-Type":"application/json" };
 
-    if (admin){
-      const k = adminKey();
-      if (!k) throw new Error("ADMIN_KEY が空です");
-      headers["x-admin-key"] = k;
+  if (admin){
+    const k = adminKey();
+    if (!k) throw new Error("ADMIN_KEY が空です");
+    headers["x-admin-key"] = k;
+  }
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => {
+    try { ctrl.abort("timeout"); } catch(e){}
+  }, 25000);
+
+  const onAbort = () => {
+    try { ctrl.abort("aborted"); } catch(e){}
+  };
+
+  try {
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener("abort", onAbort, { once: true });
     }
 
     const res = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : null,
-      signal
+      signal: ctrl.signal
     });
 
-    const data = await res.json().catch(()=>null);
+    const data = await res.json().catch(() => null);
     return { res, data };
+  } catch (e) {
+    if (ctrl.signal.aborted) {
+      throw new Error("通信がタイムアウトしました（25秒）");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    if (signal) {
+      try { signal.removeEventListener("abort", onAbort); } catch(e){}
+    }
   }
+}
 
   async function fetchOK(path, opts){
     const { res, data } = await rawFetchJSON(path, opts);
