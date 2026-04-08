@@ -1584,6 +1584,18 @@ async function hofDailyBuild(){
       }
     );
 
+    alert(`殿堂入りbuild成功\n日付: ${r.day}\n件数: ${r.count ?? 0}件`);
+  } catch(e){
+    if (e?.status === 403) {
+      setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    }
+    alert(`殿堂入りbuildに失敗: ${e.message}`);
+  } finally {
+    setBusy(false);
+    __ctrl = null;
+  }
+}
+
     if (r?.building || r?.accepted) {
       alert(
         `殿堂入りbuildを開始しました\n日付: ${r.day || jst}\n` +
