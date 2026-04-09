@@ -510,7 +510,7 @@
   // =========================
   // fetch(JSON) + 404フォールバック
   // =========================
-  async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null } = {}){
+  async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null, timeoutMs=25000 } = {}){
   const base = apiBase();
   if (!base) throw new Error("API_BASE が空です");
 
@@ -526,7 +526,7 @@
   const ctrl = new AbortController();
   const timer = setTimeout(() => {
     try { ctrl.abort("timeout"); } catch(e){}
-  }, 25000);
+  }, timeoutMs);
 
   const onAbort = () => {
     try { ctrl.abort("aborted"); } catch(e){}
@@ -549,7 +549,7 @@
     return { res, data };
   } catch (e) {
     if (ctrl.signal.aborted) {
-      throw new Error("通信がタイムアウトしました（25秒）");
+      throw new Error(`通信がタイムアウトしました（${Math.round(timeoutMs / 1000)}秒）`);
     }
     throw e;
   } finally {
@@ -559,7 +559,6 @@
     }
   }
 }
-
   async function fetchOK(path, opts){
     const { res, data } = await rawFetchJSON(path, opts);
     if (res.status === 404) {
