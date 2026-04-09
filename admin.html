@@ -1610,17 +1610,10 @@ async function hofDailyBuild(){
       }
     );
 
-    if (r?.building || r?.accepted) {
-      alert(
-        `殿堂入りbuildを開始しました\n日付: ${r.day || jst}\n` +
-        `10〜30秒後に「殿堂入り確認」を押してください。`
-      );
-    } else {
-      alert(
-        `殿堂入りbuild成功\n日付: ${r.day || jst}\n` +
-        `件数: ${r.count ?? "未確定"}件`
-      );
-    }
+    alert(
+      `殿堂入りbuildを開始しました\n日付: ${r.day || jst}\n` +
+      `5〜15秒後に「殿堂入り確認」を押してください。`
+    );
   } catch (e) {
     if (e?.status === 403) {
       setPill(pillAdmin, "admin: 403（鍵違い）", false);
@@ -1659,6 +1652,14 @@ async function hofDailyCheck(){
       }
     );
 
+    if (data?.building) {
+      alert(
+        `殿堂入りbuildは処理中です\n日付: ${data.day || jst}\n` +
+        `5〜15秒後にもう一度「殿堂入り確認」を押してください。`
+      );
+      return;
+    }
+
     alert(`殿堂入り確認OK\n日付: ${data.day}\n件数: ${data.count ?? 0}件`);
   } catch (e) {
     if (e?.status === 403) {
@@ -1672,7 +1673,13 @@ async function hofDailyCheck(){
       return;
     }
 
-    alert(`殿堂入り確認に失敗: ${e.message}`);
+    const detail =
+      e?.data?.detail ||
+      e?.data?.error ||
+      e?.message ||
+      "unknown_error";
+
+    alert(`殿堂入り確認に失敗\n${detail}`);
   } finally {
     setBusy(false);
     __ctrl = null;
