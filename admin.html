@@ -1652,6 +1652,17 @@ async function hofDailyCheck(){
       }
     );
 
+    // build中
+    if (data?.building || data?.type === "hall_of_fame_daily_building") {
+      alert(
+        `殿堂入りbuildは処理中です\n` +
+        `日付: ${data.day || jst}\n` +
+        `type: ${data.type || "-"}\n` +
+        `5〜15秒ほど待ってから、もう一度「殿堂入り確認」を押してください。`
+      );
+      return;
+    }
+
     const dbg = data?.debug || {};
     const lines = [
       `殿堂入り確認OK`,
