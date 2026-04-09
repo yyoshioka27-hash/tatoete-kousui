@@ -1652,15 +1652,20 @@ async function hofDailyCheck(){
       }
     );
 
-    if (data?.building) {
-      alert(
-        `殿堂入りbuildは処理中です\n日付: ${data.day || jst}\n` +
-        `5〜15秒後にもう一度「殿堂入り確認」を押してください。`
-      );
-      return;
-    }
+    const dbg = data?.debug || {};
+    const lines = [
+      `殿堂入り確認OK`,
+      `日付: ${data.day}`,
+      `件数: ${data.count ?? 0}件`,
+      `type: ${data.type || "-"}`,
+      `triviaRanked: ${dbg.triviaRanked ?? "-"}`,
+      `funRanked: ${dbg.funRanked ?? "-"}`,
+      `allItemsCount: ${dbg.allItemsCount ?? "-"}`,
+      `mergedCount: ${dbg.mergedCount ?? "-"}`,
+      `hofCount: ${dbg.hofCount ?? "-"}`
+    ];
 
-    alert(`殿堂入り確認OK\n日付: ${data.day}\n件数: ${data.count ?? 0}件`);
+    alert(lines.join("\n"));
   } catch (e) {
     if (e?.status === 403) {
       setPill(pillAdmin, "admin: 403（鍵違い）", false);
