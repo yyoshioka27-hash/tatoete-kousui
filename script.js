@@ -1313,6 +1313,18 @@ function loadWxCache(){
 function saveWxCache(obj){
   try { localStorage.setItem(WX_CACHE_KEY, JSON.stringify(obj)); } catch {}
 }
+function clearWxCacheByLatLon(lat, lon){
+  try{
+    const key = wxKey(lat, lon);
+    const cache = loadWxCache();
+    if (cache && Object.prototype.hasOwnProperty.call(cache, key)) {
+      delete cache[key];
+      saveWxCache(cache);
+    }
+  }catch(e){
+    console.warn("clearWxCacheByLatLon failed", e);
+  }
+}
 async function fetchWithTimeout(url, ms = 4500){
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), ms);
@@ -2320,41 +2332,17 @@ function fireIfApprovedOnNextSearch(){
         setSearchBusy(true);
         setStatus("天気取得中…", "muted");
 
-        let cachedOut = null;
+        const wxCacheBeforeClear = loadWxCache()[wxKey(lat, lon)] || null;
 
 try {
-  const out = await fetchPopsBySlotsSWR(lat, lon, {
-    onCached: async (cached) => {
-      if (mySeq !== __searchSeq) return;
-      if (!cached?.pops) return;
+  clearWxCacheByLatLon(lat, lon);
 
-      cachedOut = { pops: cached.pops, tz: cached.tz || null };
+  const out = await fetchPopsBySlotsNetwork(lat, lon, 4500);
 
-      const mode = getSelectedMode();
-      const buckets = uniqueBucketsFromPops(cached.pops);
-      await Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
+  if (mySeq !== __searchSeq) return;
 
-      if (mySeq !== __searchSeq) return;
-
-      state.pops = cached.pops;
-      state.tz = cached.tz || null;
-      state.source = cached.fresh ? "API: キャッシュ" : "API: キャッシュ(古め)";
-
-      __freezeMetaphor = false;
-      window.__forceRepick = true;
-      scheduleRender();
-      requestAnimationFrame(() => {
-        window.__forceRepick = false;
-      });
-
-      setStatus("キャッシュを表示中…（裏で最新取得）", "ok");
-    }
-  });
-
-          if (mySeq !== __searchSeq) return;
-
-          const nextPops = out.pops;
-          const nextTz = out.tz;
+  const nextPops = out.pops;
+  const nextTz = out.tz;
 
           const mode = getSelectedMode();
           const buckets = uniqueBucketsFromPops(nextPops);
@@ -2398,16 +2386,16 @@ try {
         } catch (e) {
   if (mySeq !== __searchSeq) return;
 
-  if (cachedOut?.pops) {
+   if (wxCacheBeforeClear?.pops) {
     const mode = getSelectedMode();
-    const buckets = uniqueBucketsFromPops(cachedOut.pops);
+    const buckets = uniqueBucketsFromPops(wxCacheBeforeClear.pops);
     Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
 
-if (mySeq !== __searchSeq) return;
+    if (mySeq !== __searchSeq) return;
 
-    state.pops = cachedOut.pops;
-    state.tz = cachedOut.tz || null;
-    state.source = "API: キャッシュ";
+    state.pops = wxCacheBeforeClear.pops;
+    state.tz = wxCacheBeforeClear.tz || null;
+    state.source = "API: キャッシュ(通信失敗時のみ)";
 
     __freezeMetaphor = false;
     window.__forceRepick = true;
@@ -2416,7 +2404,7 @@ if (mySeq !== __searchSeq) return;
       window.__forceRepick = false;
     });
 
-    setStatus(`最新の取得に失敗（キャッシュ表示）：${e?.message || e}`, "ng");
+    setStatus(`最新取得に失敗したため保存データを表示：${e?.message || e}`, "ng");
 
     try{
       const key = getRankingKeyNow();
