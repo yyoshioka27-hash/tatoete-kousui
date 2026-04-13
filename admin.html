@@ -1348,7 +1348,7 @@
   // =========================
   // Actions：承認 / 却下(=削除) / 公開削除
   // =========================
-  async function approveIds(ids){
+    async function approveIds(ids){
     if (!ids.length) return;
     abortInFlight();
     __ctrl = new AbortController();
@@ -1359,13 +1359,32 @@
       const uniq = Array.from(new Set(ids)).filter(Boolean);
       const body = { ids: uniq };
 
-      await callAdminFast(API.approve, { method:"POST", admin:true, body, signal });
+      // ✅ 承認API自体は長めに待つ
+      await callAdminFast(API.approve, {
+        method:"POST",
+        admin:true,
+        body,
+        signal,
+        timeoutMs: 60000
+      });
 
-      await Promise.all([loadPending(signal), loadPublic(signal)]);
-      if (activeTab === "all") await loadAll(signal);
+      // ✅ まずは軽い更新だけ
+      await loadPending(signal);
 
-      // ✅ 操作後にもDAU更新
-      await fetchDAU(signal);
+      // 承認待ちタブ以外では公開一覧も更新
+      if (activeTab !== "pending") {
+        await loadPublic(signal);
+      }
+
+      // allタブだけ必要なときに全件を更新
+      if (activeTab === "all") {
+        await loadAll(signal);
+      }
+
+      // DAUは後回し。失敗しても承認自体は成功扱いにする
+      try{
+        await fetchDAU(signal);
+      } catch(e){}
 
       selectedIds = new Set();
       syncCacheAll();
@@ -1379,7 +1398,6 @@
       __ctrl = null;
     }
   }
-
   async function deletePublicRobust(ids, signal){
     const uniq = Array.from(new Set(ids)).filter(Boolean);
 
