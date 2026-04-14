@@ -516,7 +516,7 @@
   // =========================
   // fetch(JSON) + 404フォールバック
   // =========================
-  async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null, timeoutMs=60000 } = {}){
+  async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null, timeoutMs=300000 } = {}){
   const base = apiBase();
   if (!base) throw new Error("API_BASE が空です");
 
@@ -1412,7 +1412,7 @@
         admin:true,
         body,
         signal,
-        timeoutMs: 60000
+        timeoutMs: 300000
       });
 
       // ✅ まずは軽い更新だけ
@@ -1688,7 +1688,7 @@ async function hofDailyBuild(){
         admin: true,
         body: { day: jst },
         signal,
-        timeoutMs: 120000
+        timeoutMs: 300000
       }
     );
 
