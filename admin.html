@@ -1265,7 +1265,7 @@
     const oldU = (loadCache("public")?.items)  || itemsPublic  || [];
     const oldA = (loadCache("allkv")?.items)   || itemsAllKV   || [];
 
-    // 重い Promise.all をやめて順番に取得
+    // ① まず軽い2タブを順番に更新
     const freshP = await loadPending(signal);
     itemsPending = mergeById(oldP, freshP);
     saveCache("pending", itemsPending);
@@ -1274,7 +1274,7 @@
     itemsPublic = mergeById(oldU, freshU);
     saveCache("public", itemsPublic);
 
-    // all は最重量なので最後。失敗しても pending/public は生かす
+    // ② all は重いので最後。失敗しても pending/public は生かす
     try{
       await loadAll(signal);
       const mergedKV = mergeById(oldA, itemsAllKV);
@@ -1284,6 +1284,7 @@
       console.warn("loadAll skipped:", e?.message || e);
     }
 
+    // ③ DAU は最後。失敗しても更新成功扱い
     try{
       await fetchDAU(signal);
     } catch(e){}
@@ -1291,6 +1292,15 @@
     syncCacheAll();
     resetPager();
     render();
+
+    // ④ all だけ失敗した場合は軽く知らせる
+    if (activeTab === "all") {
+      const hasCache = Array.isArray(itemsAllKV) && itemsAllKV.length > 0;
+      if (hasCache) {
+        console.log("全ネタはキャッシュ表示を維持しました");
+      }
+    }
+
   } catch(e){
     if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
     alert(`更新に失敗: ${e.message}`);
@@ -1299,7 +1309,6 @@
     __ctrl = null;
   }
 }
-
   async function doHealth(){
     abortInFlight();
     __ctrl = new AbortController();
