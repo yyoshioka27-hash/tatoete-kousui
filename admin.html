@@ -1254,12 +1254,18 @@
         saveCache("pending", itemsPending);
             } else if (activeTab === "public"){
         await loadPublic(signal, true);
-      } else {
+            } else {
         const oldKV = (loadCache("allkv")?.items) || itemsAllKV || [];
-        await loadAll(signal);
-        const mergedKV = mergeById(oldKV, itemsAllKV);
-        rebuildAllFromKV(mergedKV);
-        saveCache("allkv", itemsAllKV);
+        try{
+          await loadAll(signal);
+          const mergedKV = mergeById(oldKV, itemsAllKV);
+          rebuildAllFromKV(mergedKV);
+          saveCache("allkv", itemsAllKV);
+        } catch(e){
+          console.warn("loadAll skipped in refreshCurrentTab:", e?.message || e);
+          rebuildAllFromKV(oldKV);
+          saveCache("allkv", oldKV);
+        }
       }
 
       // ✅ 更新後にDAUも更新
