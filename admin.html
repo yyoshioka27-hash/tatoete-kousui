@@ -510,7 +510,7 @@
   // =========================
   // fetch(JSON) + 404フォールバック
   // =========================
-  async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null, timeoutMs=25000 } = {}){
+  async function rawFetchJSON(path, { method="GET", body=null, admin=false, signal=null, timeoutMs=60000 } = {}){
   const base = apiBase();
   if (!base) throw new Error("API_BASE が空です");
 
@@ -1252,41 +1252,53 @@
   }
 
   async function refreshAllTabs(){
-    hydrateFromCache();
-    render();
+  hydrateFromCache();
+  render();
 
-    abortInFlight();
-    __ctrl = new AbortController();
-    setBusy(true);
-    const signal = __ctrl.signal;
+  abortInFlight();
+  __ctrl = new AbortController();
+  setBusy(true);
+  const signal = __ctrl.signal;
 
+  try{
+    const oldP = (loadCache("pending")?.items) || itemsPending || [];
+    const oldU = (loadCache("public")?.items)  || itemsPublic  || [];
+    const oldA = (loadCache("allkv")?.items)   || itemsAllKV   || [];
+
+    // 重い Promise.all をやめて順番に取得
+    const freshP = await loadPending(signal);
+    itemsPending = mergeById(oldP, freshP);
+    saveCache("pending", itemsPending);
+
+    const freshU = await loadPublic(signal);
+    itemsPublic = mergeById(oldU, freshU);
+    saveCache("public", itemsPublic);
+
+    // all は最重量なので最後。失敗しても pending/public は生かす
     try{
-      const oldP = (loadCache("pending")?.items) || itemsPending || [];
-      const oldU = (loadCache("public")?.items)  || itemsPublic  || [];
-      const oldA = (loadCache("allkv")?.items)  || itemsAllKV   || [];
-
-      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
-
-      itemsPending = mergeById(oldP, itemsPending);
-      itemsPublic  = mergeById(oldU, itemsPublic);
-
+      await loadAll(signal);
       const mergedKV = mergeById(oldA, itemsAllKV);
       rebuildAllFromKV(mergedKV);
-
-      // ✅ 全更新後にDAUも更新
-      await fetchDAU(signal);
-
-      syncCacheAll();
-      resetPager();
-      render();
+      saveCache("allkv", itemsAllKV);
     } catch(e){
-      if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
-      alert(`更新に失敗: ${e.message}`);
-    } finally {
-      setBusy(false);
-      __ctrl = null;
+      console.warn("loadAll skipped:", e?.message || e);
     }
+
+    try{
+      await fetchDAU(signal);
+    } catch(e){}
+
+    syncCacheAll();
+    resetPager();
+    render();
+  } catch(e){
+    if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
+    alert(`更新に失敗: ${e.message}`);
+  } finally {
+    setBusy(false);
+    __ctrl = null;
   }
+}
 
   async function doHealth(){
     abortInFlight();
@@ -1444,7 +1456,12 @@
 
     try{
       await deletePublicRobust(ids, signal);
-      await Promise.all([loadPublic(signal), loadAll(signal)]);
+      await loadPublic(signal);
+try{
+  await loadAll(signal);
+}catch(e){
+  console.warn("loadAll skipped after deletePublic:", e?.message || e);
+}
 
       await fetchDAU(signal);
 
@@ -1513,7 +1530,13 @@
 
       await deletePendingRobust(ids, signal);
 
-      await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
+      await loadPending(signal);
+await loadPublic(signal);
+try{
+  await loadAll(signal);
+}catch(e){
+  console.warn("loadAll skipped after importSeed:", e?.message || e);
+}
 
       const remain = new Set(itemsPending.map(x => x.id));
       const still = ids.filter(id => remain.has(id));
@@ -1588,7 +1611,13 @@
       imported += chunk.length;
     }
 
-    await Promise.all([loadPending(signal), loadPublic(signal), loadAll(signal)]);
+    await loadPending(signal);
+await loadPublic(signal);
+try{
+  await loadAll(signal);
+}catch(e){
+  console.warn("loadAll skipped after reject:", e?.message || e);
+}
     syncCacheAll();
     resetPager();
     render();
