@@ -347,14 +347,16 @@
       return null;
     }
   }
-  function saveCache(tabKey, items){
-    try{
-      localStorage.setItem(_cacheKey(tabKey), JSON.stringify({
-        items: Array.isArray(items) ? items : [],
-        savedAt: Date.now()
-      }));
-    }catch(e){}
-  }
+  function saveCache(tabKey, items, since = null){
+  try{
+    const prev = loadCache(tabKey) || {};
+    localStorage.setItem(_cacheKey(tabKey), JSON.stringify({
+      items: Array.isArray(items) ? items : [],
+      savedAt: Date.now(),
+      since: (since == null ? (prev.since ?? 0) : Number(since || 0))
+    }));
+  }catch(e){}
+}
 
   // 差分マージ
   function mergeById(oldItems, freshItems){
@@ -391,7 +393,11 @@
     }
     return out;
   }
-
+  function removeByIds(items, deletedIds){
+  const del = new Set((deletedIds || []).map(x => String(x || "").trim()).filter(Boolean));
+  if (!del.size) return Array.isArray(items) ? items.slice() : [];
+  return (Array.isArray(items) ? items : []).filter(it => !del.has(String(it?.id || "").trim()));
+}
   const pillHealth = $("pillHealth");
   const pillAdmin  = $("pillAdmin");
   const pillDAU    = $("pillDAU"); // ✅ 追加：DAU表示
@@ -1153,11 +1159,34 @@
     return itemsPending;
   }
 
-  async function loadPublic(signal){
-    const data = await callAdminWithFallback(API.list, { admin:true, signal });
-    itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
+  async function loadPublic(signal, useDiff = true){
+  const cache = loadCache("public");
+  const since = Number(cache?.since || 0);
+
+  if (useDiff && since > 0) {
+    const data = await callAdminWithFallback(
+      [`/api/admin/list_diff?since=${encodeURIComponent(since)}&limit=1000`],
+      { admin:true, signal }
+    );
+
+    const fresh = normalizeItems(data.items || [], "public");
+    const old = (cache?.items) || itemsPublic || [];
+    let merged = mergeById(old, fresh);
+    merged = removeByIds(merged, data.deletedIds || []);
+
+    itemsPublic = merged;
+    saveCache("public", itemsPublic, Number(data.nextSince || since));
     return itemsPublic;
   }
+
+  const data = await callAdminWithFallback(API.list, { admin:true, signal });
+  itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
+
+  const maxTs = itemsPublic.reduce((m, it) => Math.max(m, Number(it?.createdAt || 0)), 0);
+  saveCache("public", itemsPublic, maxTs);
+
+  return itemsPublic;
+}
 
   async function loadAll(signal){
     const data = await callAdminWithFallback(API.all, { admin:true, signal });
@@ -1223,11 +1252,8 @@
         const fresh = await loadPending(signal);
         itemsPending = mergeById(old, fresh);
         saveCache("pending", itemsPending);
-      } else if (activeTab === "public"){
-        const old = (loadCache("public")?.items) || itemsPublic || [];
-        const fresh = await loadPublic(signal);
-        itemsPublic = mergeById(old, fresh);
-        saveCache("public", itemsPublic);
+            } else if (activeTab === "public"){
+        await loadPublic(signal, true);
       } else {
         const oldKV = (loadCache("allkv")?.items) || itemsAllKV || [];
         await loadAll(signal);
