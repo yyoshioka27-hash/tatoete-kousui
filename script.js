@@ -64,6 +64,8 @@ const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.work
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
 const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
 const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v2";
+// 殿堂入りランキング描画で扱う件数は軽量化のため上限を固定
+const HOF_RANK_LIMIT = 20;
 let __hofSnapshotMemory = null;
 let __hofSnapshotHtml = null;
 
@@ -915,7 +917,7 @@ rememberHallSnapshotTotals(items);
     items: items.slice(0, limit)
   };
 }  
-async function fetchHallOfFameForRanking(limit = 100){
+async function fetchHallOfFameForRanking(limit = HOF_RANK_LIMIT){
   const daily = await fetchHallOfFameDaily(limit);
 
   return {
@@ -1002,7 +1004,7 @@ async function ensureHallSnapshotLoaded(force = false){
   // force=true のとき、または通常時でも毎回 API を取り直す
   // 失敗したときだけ当日メモリを救済で使う
   try {
-    const hofData = await fetchHallOfFameForRanking(100);
+    const hofData = await fetchHallOfFameForRanking(HOF_RANK_LIMIT);
 
     __hofSnapshotMemory = {
       day: today,
