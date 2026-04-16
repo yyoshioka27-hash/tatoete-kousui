@@ -177,6 +177,28 @@
       height: 20px;
       fill: currentColor;
     }
+
+    .opsGrid{
+      display:grid;
+      gap:8px 14px;
+      grid-template-columns: minmax(180px, 220px) 1fr;
+      align-items:center;
+      font-size:14px;
+    }
+    .opsGrid dt{
+      color:var(--sub);
+      font-weight:700;
+    }
+    .opsGuide{
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid rgba(22,163,74,.2);
+      background:rgba(22,163,74,.07);
+      color:#166534;
+      font-size:13px;
+      font-weight:700;
+    }
   </style>
 
   <!-- ✅ 元ネタ（metaphors.js）を先に読み込む -->
@@ -237,6 +259,25 @@
       ※ API_BASE は Workers のURL（例：<span class="mono">https://xxxx.workers.dev</span>）<br/>
       ※ 管理操作は <span class="mono">x-admin-key</span> ヘッダで送ります。鍵が違うと 403。
     </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;">
+      <div style="font-weight:800;">運用ステータス（日次）</div>
+      <button id="btnOpsStatus" class="smallBtn">運用ステータス更新</button>
+    </div>
+    <dl class="opsGrid" style="margin:10px 0 0;">
+      <dt>現在の BUILD 値</dt><dd id="opsBuild">-</dd>
+      <dt>hof_daily 対象日</dt><dd id="opsHofDay">-</dd>
+      <dt>hof_daily 最終生成時刻</dt><dd id="opsHofGeneratedAt">-</dd>
+      <dt>hof_daily 件数</dt><dd id="opsHofCount">-</dd>
+      <dt>API health</dt><dd id="opsHealth">-</dd>
+      <dt>pending 件数</dt><dd id="opsPendingCount">-</dd>
+      <dt>public 件数</dt><dd id="opsPublicCount">-</dd>
+      <dt>今日 snapshot 存在</dt><dd id="opsSnapshot">-</dd>
+      <dt>判定</dt><dd id="opsState">-</dd>
+    </dl>
+    <div class="opsGuide">通常は手動BUILD不要です。snapshot未生成・処理中・反映待ちの切り分けに使ってください。</div>
   </div>
 
   <div class="card">
@@ -417,6 +458,17 @@
 　const btnRefresh = $("btnRefresh");
 　const btnHofDailyBuild = $("btnHofDailyBuild");
 　const btnHofDailyCheck = $("btnHofDailyCheck");
+  const btnOpsStatus = $("btnOpsStatus");
+
+  const opsBuild = $("opsBuild");
+  const opsHofDay = $("opsHofDay");
+  const opsHofGeneratedAt = $("opsHofGeneratedAt");
+  const opsHofCount = $("opsHofCount");
+  const opsHealth = $("opsHealth");
+  const opsPendingCount = $("opsPendingCount");
+  const opsPublicCount = $("opsPublicCount");
+  const opsSnapshot = $("opsSnapshot");
+  const opsState = $("opsState");
 
   const bulkActionsPending = $("bulkActionsPending");
   const bulkActionsPublic  = $("bulkActionsPublic");
@@ -448,6 +500,8 @@
   function resetPager(){ page = 1; }
 
   let itemsSeedLocal = [];
+  let hasLoadedPending = false;
+  let hasLoadedPublic = false;
 
   let q = "";
   let sortKey = "new";
@@ -702,6 +756,91 @@
     const hh = String(d.getHours()).padStart(2,"0");
     const mi = String(d.getMinutes()).padStart(2,"0");
     return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  }
+
+  function todayJstYmd(){
+    return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0,10);
+  }
+
+  function updateOpsStateLine({ healthOk, snapshotExists, hofCount, building, hofError }){
+    if (healthOk === false){
+      opsState.textContent = "API異常の可能性（health NG）";
+      return;
+    }
+    if (building){
+      opsState.textContent = "build処理中（反映待ち）";
+      return;
+    }
+    if (snapshotExists === false){
+      opsState.textContent = "未生成（snapshotなし）";
+      return;
+    }
+    if (snapshotExists === true && Number(hofCount) <= 0){
+      opsState.textContent = "snapshotありだが件数0（要確認）";
+      return;
+    }
+    if (hofError){
+      opsState.textContent = "hof_daily取得エラー（要確認）";
+      return;
+    }
+    if (snapshotExists === true && Number(hofCount) > 0){
+      opsState.textContent = "正常（手動BUILD不要）";
+      return;
+    }
+    opsState.textContent = "情報不足（ステータス更新を実行）";
+  }
+
+  async function refreshOpsStatus(signal){
+    const day = todayJstYmd();
+    let healthOk = null;
+    let snapshotExists = null;
+    let hofCount = null;
+    let building = false;
+    let hofError = null;
+
+    try{
+      const h = await callAdminWithFallback(API.health, { signal });
+      const buildVal = h?.BUILD ?? h?.build ?? h?.version ?? h?.release ?? "-";
+      opsBuild.textContent = String(buildVal);
+      opsHealth.textContent = "OK";
+      healthOk = true;
+    } catch(e){
+      opsBuild.textContent = "-";
+      opsHealth.textContent = `NG (${e?.message || "error"})`;
+      healthOk = false;
+    }
+
+    opsHofDay.textContent = day;
+    try{
+      const hof = await callAdminWithFallback([`/api/admin/hof_daily?day=${day}`], { admin:true, signal });
+      building = !!(hof?.building || hof?.type === "hall_of_fame_daily_building");
+      const st = hof?.statusDetail || {};
+      const rawSnapshot = hof?.snapshotExists ?? st?.snapshotExists ?? (Number(hof?.count ?? 0) > 0);
+      snapshotExists = !!rawSnapshot;
+      hofCount = Number(hof?.count ?? st?.count ?? 0);
+      const genTs = hof?.generatedAt ?? hof?.updatedAt ?? hof?.builtAt ?? st?.generatedAt ?? st?.updatedAt ?? st?.builtAt ?? 0;
+
+      opsHofGeneratedAt.textContent = formatTs(genTs) || "-";
+      opsHofCount.textContent = Number.isFinite(hofCount) ? `${hofCount}件` : "-";
+      opsSnapshot.textContent = snapshotExists ? "あり" : "なし";
+    } catch(e){
+      if (e?.status === 404){
+        snapshotExists = false;
+        hofCount = 0;
+        opsHofGeneratedAt.textContent = "-";
+        opsHofCount.textContent = "0件";
+        opsSnapshot.textContent = "なし";
+      } else {
+        hofError = e?.message || "error";
+        opsHofGeneratedAt.textContent = "-";
+        opsHofCount.textContent = "-";
+        opsSnapshot.textContent = `不明 (${hofError})`;
+      }
+    }
+
+    opsPendingCount.textContent = hasLoadedPending ? `${itemsPending.length}件` : "未取得";
+    opsPublicCount.textContent = hasLoadedPublic ? `${itemsPublic.length}件` : "未取得";
+    updateOpsStateLine({ healthOk, snapshotExists, hofCount, building, hofError });
   }
 
   function normalizeScope(x, fallback){
@@ -1146,6 +1285,7 @@
   async function loadPending(signal){
     const data = await callAdminWithFallback(API.pending, { admin:true, signal });
     itemsPending = normalizeItems(data.items || data.pending || [], "pending");
+    hasLoadedPending = true;
     return itemsPending;
   }
 
@@ -1165,12 +1305,14 @@
     merged = removeByIds(merged, data.deletedIds || []);
 
     itemsPublic = merged;
+    hasLoadedPublic = true;
     saveCache("public", itemsPublic, Number(data.nextSince || since));
     return itemsPublic;
   }
 
   const data = await callAdminWithFallback(API.list, { admin:true, signal });
   itemsPublic = normalizeItems(data.items || data.list || data.public || [], "public");
+  hasLoadedPublic = true;
 
   const maxTs = itemsPublic.reduce((m, it) => Math.max(m, Number(it?.createdAt || 0)), 0);
   saveCache("public", itemsPublic, maxTs);
@@ -1260,6 +1402,7 @@
 
       // ✅ 更新後にDAUも更新
       await fetchDAU(signal);
+      await refreshOpsStatus(signal);
 
       syncCacheAll();
       resetPager();
@@ -1295,10 +1438,12 @@
 
       // ✅ DAU表示（stats/usage/dau どれでも）
       await fetchDAU(signal);
+      await refreshOpsStatus(signal);
 
     } catch(e){
       setPill(pillHealth, `health: NG（${e.message}）`, false);
       setPill(pillDAU, "今日の使用者数: -", null);
+      await refreshOpsStatus(signal);
     } finally {
       setBusy(false);
       __ctrl = null;
@@ -1590,6 +1735,7 @@ async function hofDailyBuild(){
 
     alert(`殿堂入りbuildに失敗\n${detail}`);
   } finally {
+    try{ await refreshOpsStatus(signal); }catch(e){}
     setBusy(false);
     __ctrl = null;
   }
@@ -1664,6 +1810,7 @@ async function hofDailyCheck(){
 
     alert(`殿堂入り確認に失敗\n${detail}`);
   } finally {
+    try{ await refreshOpsStatus(signal); }catch(e){}
     setBusy(false);
     __ctrl = null;
   }
@@ -1678,6 +1825,20 @@ async function hofDailyCheck(){
 　btnRefresh.addEventListener("click", refreshCurrentTab);
 　btnHofDailyBuild.addEventListener("click", hofDailyBuild);
 　btnHofDailyCheck.addEventListener("click", hofDailyCheck);
+  btnOpsStatus.addEventListener("click", async () => {
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
+    try{
+      await refreshOpsStatus(signal);
+    } catch(e){
+      alert(`運用ステータス更新に失敗: ${e.message}`);
+    } finally{
+      setBusy(false);
+      __ctrl = null;
+    }
+  });
 
   // ✅ FIX: 復旧ボタンは両方とも同じ動作
   function bindReindex(btn){
@@ -1866,6 +2027,15 @@ async function hofDailyCheck(){
   setPill(pillHealth, "health: 未確認", null);
   setPill(pillAdmin,  "admin: 未確認", null);
   setPill(pillDAU,    "今日の使用者数: -", null);
+  opsBuild.textContent = "-";
+  opsHofDay.textContent = todayJstYmd();
+  opsHofGeneratedAt.textContent = "-";
+  opsHofCount.textContent = "-";
+  opsHealth.textContent = "未確認";
+  opsPendingCount.textContent = "未取得";
+  opsPublicCount.textContent = "未取得";
+  opsSnapshot.textContent = "未確認";
+  opsState.textContent = "情報不足（ステータス更新を実行）";
 
   hydrateFromCache();
   render();
