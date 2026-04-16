@@ -1370,6 +1370,16 @@
     }
   }
 
+  // ✅ 更新ボタンの体感速度改善:
+  // 一覧更新に必須ではない補助情報（DAU/運用ステータス）は
+  // 非同期で裏更新し、一覧描画を先に完了させる。
+  async function refreshAuxPanels(signal){
+    await Promise.allSettled([
+      fetchDAU(signal),
+      refreshOpsStatus(signal),
+    ]);
+  }
+
   async function refreshCurrentTab(){
     applyCacheToActiveTabInstant();
 
@@ -1400,13 +1410,12 @@
         }
       }
 
-      // ✅ 更新後にDAUも更新
-      await fetchDAU(signal);
-      await refreshOpsStatus(signal);
-
       syncCacheAll();
       resetPager();
       render();
+
+      // ✅ 補助情報は待たない（遅いAPIに引きずられない）
+      void refreshAuxPanels(signal);
     } catch(e){
       if (e?.status === 403) setPill(pillAdmin, "admin: 403（鍵違い）", false);
       alert(`更新に失敗: ${e.message}`);
