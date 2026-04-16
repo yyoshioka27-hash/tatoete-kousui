@@ -1302,6 +1302,8 @@ const FC  = "https://api.open-meteo.com/v1/forecast";
 // ✅ SWRキャッシュ
 const WX_CACHE_KEY = "wx_pops_cache_v1";
 const WX_CACHE_TTL_MS = 10 * 60 * 1000;
+// 通信失敗時のフォールバックは「新しめ」のみ許容
+const WX_FALLBACK_MAX_STALE_MS = 30 * 60 * 1000;
 
 function wxKey(lat, lon){
   const la = Math.round(Number(lat) * 100) / 100;
@@ -2388,7 +2390,13 @@ try {
         } catch (e) {
   if (mySeq !== __searchSeq) return;
 
-   if (wxCacheBeforeClear?.pops) {
+   const cacheAgeMs = Date.now() - Number(wxCacheBeforeClear?.ts || 0);
+   const canUseFallbackCache =
+     !!wxCacheBeforeClear?.pops &&
+     Number.isFinite(cacheAgeMs) &&
+     cacheAgeMs <= WX_FALLBACK_MAX_STALE_MS;
+
+   if (canUseFallbackCache) {
     const mode = getSelectedMode();
     const buckets = uniqueBucketsFromPops(wxCacheBeforeClear.pops);
     Promise.all(buckets.map(b => warmPublicCache(mode, b))).catch(() => {});
@@ -2420,7 +2428,11 @@ try {
     return;
   }
 
-  setStatus(e.message || "天気取得エラー", "ng");
+  if (wxCacheBeforeClear?.pops) {
+    setStatus("最新取得に失敗（保存データが古いため非表示）", "ng");
+  } else {
+    setStatus(e.message || "天気取得エラー", "ng");
+  }
   state.source = "API: エラー";
   state.pops = null;
   scheduleRender();

@@ -1,6 +1,6 @@
 // sw.js
-// ★ 更新するたびに数字を上げる（tatoete-v8: API素通し安定版）
-const CACHE_NAME = "tatoete-v10";
+// ★ 更新するたびに数字を上げる（最小更新: 古い静的アセット回避）
+const CACHE_NAME = "tatoete-v11";
 
 const ASSETS = [
   "./",
@@ -65,11 +65,6 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
 });
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
-});
 // ------------------------------
 // fetch
 // ------------------------------
@@ -104,10 +99,6 @@ self.addEventListener("fetch", (event) => {
         return res;
       })
       .catch(() => caches.match(req))
-  );
-        return res;
-      });
-    })
   );
 });
 
