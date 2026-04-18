@@ -652,8 +652,11 @@ async function submitToPending(mode, bucket, text, penName, penPin, clientId){
 async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   const params = new URLSearchParams();
   if (mode) params.set("mode", mode);
-  if (Number.isFinite(bucket)) params.set("bucket", String(bucket));
+  if (Number.isFinite(Number(bucket))) params.set("bucket", String(bucket));
   params.set("limit", String(limit));
+  const needle = getDebugNeedle();
+  if (needle.id) params.set("debug_id", needle.id);
+  if (needle.text) params.set("debug_text", needle.text);
 
   const url = `${API_BASE}/api/public?${params.toString()}`;
   const res = await fetch(url, { method: "GET", cache: "no-store" });
@@ -682,23 +685,23 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
 
   const items = Array.isArray(data.items) ? data.items : [];
-  const deduped = mergeDisplayItems(
-    items
-      .map(it => ({
-        id: String(it.id || "").trim(),
-        text: String(it.text || "").trim(),
-        penName: (it.penName ? String(it.penName).trim() : null),
-        totalLikes: Number(it.totalLikes || 0),
-        likes: Number(it.likes || 0),
-        hof: !!it.hof,
-        source: "public",
-        mode: (mode === "fun" ? "fun" : "trivia"),
-        bucket: window.bucket10(Number(bucket))
-      }))
-      .filter(x => x.id && x.text)
-      .filter(x => !isNgText(x.text)),
-    { mode, bucket }
-  );
+  const mapped = items
+    .map(it => ({
+      id: String(it.id || "").trim(),
+      text: String(it.text || "").trim(),
+      penName: (it.penName ? String(it.penName).trim() : null),
+      totalLikes: Number(it.totalLikes || 0),
+      likes: Number(it.likes || 0),
+      hof: !!it.hof,
+      source: "public",
+      mode: (it?.mode === "fun" ? "fun" : (mode === "fun" ? "fun" : "trivia")),
+      bucket: Number.isFinite(Number(it?.bucket))
+        ? window.bucket10(Number(it.bucket))
+        : window.bucket10(Number(bucket))
+    }))
+    .filter(x => x.id && x.text);
+  const ngFiltered = mapped.filter(x => !isNgText(x.text));
+  const deduped = mergeDisplayItems(ngFiltered, { mode, bucket });
 
   const finalItems = deduped.map(x => {
   const flooredTotal = rememberTotalLikesFloor({
@@ -720,8 +723,10 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
   try{
     console.log(
       `[debug] fetchPublicMetaphors mode=${mode} bucket=${window.bucket10(Number(bucket))} ` +
-      `api_items=${items.length} api_count=${Number(data?.count || 0)} api_total=${Number(data?.total || 0)} ` +
-      `deduped=${deduped.length} final=${finalItems.length} limit=${limit}`
+      `API返却件数=${items.length} 受信後件数=${mapped.length} フィルタ後件数=${ngFiltered.length} 描画直前件数=${finalItems.length} ` +
+      `api_count=${Number(data?.count || 0)} api_total=${Number(data?.total || 0)} latest表示件数=${Number(data?.latestCount || 0)} limit=${limit} ` +
+      `target_in_api=${hasDebugNeedle(items, needle)} target_in_received=${hasDebugNeedle(mapped, needle)} ` +
+      `target_in_filtered=${hasDebugNeedle(ngFiltered, needle)} target_in_render=${hasDebugNeedle(finalItems, needle)}`
     );
   }catch{}
 
@@ -731,7 +736,26 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
 // ✅ 最新public（Workers /api/public_latest）
 // ==============================
 async function fetchPublicLatest(mode, limit = 10){
-  return [];
+  const params = new URLSearchParams();
+  if (mode) params.set("mode", mode);
+  params.set("limit", String(limit));
+  const needle = getDebugNeedle();
+  if (needle.id) params.set("debug_id", needle.id);
+  if (needle.text) params.set("debug_text", needle.text);
+
+  const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, { method: "GET", cache: "no-store" });
+  if (!res.ok) throw new Error(`public_latest fetch failed: ${res.status}`);
+  const data = await res.json().catch(()=>null);
+  if (!data?.ok) throw new Error("public_latest not ok");
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  try{
+    console.log(
+      `[debug] fetchPublicLatest mode=${mode || "all"} latest表示件数=${items.length} ` +
+      `api_count=${Number(data?.count || 0)} api_total=${Number(data?.total || 0)} target_in_latest=${hasDebugNeedle(items, needle)}`
+    );
+  }catch{}
+  return items;
 }
 
 // ==============================
@@ -1085,8 +1109,31 @@ function getSharedItems(mode, bucket) {
 // ✅ publicネタ（Workers /api/public）キャッシュ
 // ==============================
 const publicCache = new Map();
+const publicCacheMeta = new Map();
 const totalLikesFloor = new Map();
 const hallSnapshotTotals = new Map();
+const PUBLIC_CACHE_TTL_MS = 60 * 1000;
+
+function getDebugNeedle(){
+  try{
+    const usp = new URLSearchParams(window.location.search || "");
+    const id = String(usp.get("debug_id") || localStorage.getItem("debug_id") || "").trim();
+    const text = normalizeMetaphorText(String(usp.get("debug_text") || localStorage.getItem("debug_text") || ""));
+    return { id, text };
+  }catch{
+    return { id: "", text: "" };
+  }
+}
+
+function hasDebugNeedle(items, needle = getDebugNeedle()){
+  if (!needle?.id && !needle?.text) return "n/a";
+  const arr = Array.isArray(items) ? items : [];
+  return arr.some((it) => {
+    const byId = needle.id && String(it?.id || "").trim() === needle.id;
+    const byText = needle.text && normalizeMetaphorText(String(it?.text || "")) === needle.text;
+    return byId || byText;
+  });
+}
 
 function hallSnapshotKeyForItem(mode, bucket, text){
   const m = (mode === "fun" ? "fun" : "trivia");
@@ -1227,8 +1274,12 @@ function uniqueBucketsFromPops(pops){
 
 async function warmPublicCache(mode, bucket){
   const k = keyMB(mode, bucket);
+  const now = Date.now();
 
-  if (publicCache.has(k)) return publicCache.get(k) || [];
+  if (publicCache.has(k)) {
+    const cachedAt = Number(publicCacheMeta.get(k) || 0);
+    if (now - cachedAt < PUBLIC_CACHE_TTL_MS) return publicCache.get(k) || [];
+  }
 
   const inflight = publicInFlight.get(k);
   if (inflight) return inflight;
@@ -1238,15 +1289,17 @@ async function warmPublicCache(mode, bucket){
       const items = await fetchPublicMetaphors({
         mode: (mode === "fun" ? "fun" : "trivia"),
         bucket: window.bucket10(bucket),
-        limit: 300
+        limit: 800
       });
       publicCache.set(k, items);
+      publicCacheMeta.set(k, Date.now());
       try{
-        console.log(`[debug] warmPublicCache key=${k} fetched=${items.length}`);
+        console.log(`[debug] warmPublicCache key=${k} fetched=${items.length} ttlMs=${PUBLIC_CACHE_TTL_MS}`);
       }catch{}
       return items;
     }catch{
       publicCache.set(k, []);
+      publicCacheMeta.set(k, Date.now());
       return [];
     }finally{
       publicInFlight.delete(k);
@@ -1621,7 +1674,7 @@ function pickMetaphor(mode, bucket) {
 
     picked = publicPool[nextIndex];
 
-    if (basePool.length > 0 && Math.random() < 0.15) {
+    if (basePool.length > 0 && Math.random() < 0.05) {
       picked = basePool[Math.floor(Math.random() * basePool.length)];
     }
   } else {
@@ -1649,9 +1702,10 @@ function pickMetaphor(mode, bucket) {
   };
 
   try{
+    const needle = getDebugNeedle();
     console.log(
       `[debug] pickMetaphor mode=${mode} bucket=${b} pool=${pool.length} publicPool=${publicPool.length} ` +
-      `pickedSource=${picked?.source || "unknown"}`
+      `描画直前件数=${pool.length} pickedSource=${picked?.source || "unknown"} target_in_pool=${hasDebugNeedle(pool, needle)}`
     );
   }catch{}
   return picked;

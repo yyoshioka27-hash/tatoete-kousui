@@ -1,6 +1,11 @@
 const DEFAULT_LIMIT = 400; // >= 50
 const MAX_LIMIT = 1000;
 const INDEX_KEY_ALL = "idx:public";
+const SNAPSHOT_TTL_MS = 20 * 1000;
+let snapshotCache = {
+  at: 0,
+  items: null,
+};
 
 export default {
   async fetch(request, env, ctx) {
@@ -62,6 +67,10 @@ function normalizeItem(raw) {
   };
 }
 
+function canonicalText(text) {
+  return String(text || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function comparePublic(a, b) {
   const likesA = Number(a?.likes ?? -1);
   const likesB = Number(b?.likes ?? -1);
@@ -108,13 +117,51 @@ function relaxedFilter(items, mode, bucket) {
 }
 
 async function loadPublicItems(kv) {
-  const fromIndex = await kv.get(INDEX_KEY_ALL, "json");
-  if (Array.isArray(fromIndex) && fromIndex.length) {
-    return fromIndex.map(normalizeItem).filter(Boolean);
+  const now = Date.now();
+  if (Array.isArray(snapshotCache.items) && now - snapshotCache.at < SNAPSHOT_TTL_MS) {
+    return {
+      items: snapshotCache.items,
+      cacheHit: true,
+      fromIndex: snapshotCache.items.length,
+      fromScan: 0,
+      mergedOnlyScan: 0,
+    };
   }
 
-  const list = await scanPrefix(kv, "public:");
-  return list.map(normalizeItem).filter(Boolean);
+  const fromIndexRaw = await kv.get(INDEX_KEY_ALL, "json");
+  const fromIndex = Array.isArray(fromIndexRaw) ? fromIndexRaw.map(normalizeItem).filter(Boolean) : [];
+  const fromScanRaw = await scanPrefix(kv, "public:");
+  const fromScan = fromScanRaw.map(normalizeItem).filter(Boolean);
+
+  const merged = new Map();
+  const add = (it, source) => {
+    if (!it) return;
+    const key = String(it.id || "").trim() || `t:${canonicalText(it.text)}`;
+    if (!merged.has(key)) {
+      merged.set(key, it);
+      return;
+    }
+    const cur = merged.get(key);
+    // canonical text 同一なら新しい createdAt / likes を優先
+    if (Number(it.createdAt || 0) > Number(cur.createdAt || 0) || Number(it.likes || 0) > Number(cur.likes || 0)) {
+      merged.set(key, { ...cur, ...it });
+    } else if (source === "scan") {
+      merged.set(key, { ...it, ...cur });
+    }
+  };
+
+  for (const it of fromIndex) add(it, "index");
+  for (const it of fromScan) add(it, "scan");
+
+  const items = Array.from(merged.values());
+  snapshotCache = { at: now, items };
+  return {
+    items,
+    cacheHit: false,
+    fromIndex: fromIndex.length,
+    fromScan: fromScan.length,
+    mergedOnlyScan: Math.max(0, items.length - fromIndex.length),
+  };
 }
 
 async function scanPrefix(kv, prefix) {
@@ -147,16 +194,56 @@ async function handlePublic(request, env, { latestOnly }) {
   const mode = url.searchParams.get("mode");
   const bucket = url.searchParams.get("bucket");
 
-  let items = await loadPublicItems(kv);
-  const beforeFilter = items.length;
-  items = relaxedFilter(items, mode, bucket).sort(compareByCreatedAtDesc);
+  const debugId = String(url.searchParams.get("debug_id") || "").trim();
+  const debugText = canonicalText(url.searchParams.get("debug_text") || "");
 
-  const result = items.slice(0, limit);
+  const loaded = await loadPublicItems(kv);
+  const beforeFilter = loaded.items.length;
+  const filtered = relaxedFilter(loaded.items, mode, bucket);
+  const sorted = filtered.sort(latestOnly ? compareByCreatedAtDesc : comparePublic);
+  const result = sorted.slice(0, limit);
+
+  const hasTarget = (arr) => {
+    if (!debugId && !debugText) return "n/a";
+    return arr.some((it) => {
+      const hitById = debugId && String(it?.id || "").trim() === debugId;
+      const hitByText = debugText && canonicalText(it?.text) === debugText;
+      return hitById || hitByText;
+    });
+  };
+
   console.log(
-    `[debug] ${latestOnly ? "/api/public_latest" : "/api/public"} count=${result.length} beforeFilter=${beforeFilter} afterFilter=${items.length} limit=${limit} sort=createdAt_desc`
+    `[debug] ${latestOnly ? "/api/public_latest" : "/api/public"} ` +
+      `mode=${normalizeMode(mode) || "all"} bucket=${normalizeBucket(bucket) ?? "all"} ` +
+      `API返却件数=${result.length} beforeFilter=${beforeFilter} フィルタ後件数=${filtered.length} ` +
+      `latest表示件数=${latestOnly ? result.length : 0} limit=${limit} ` +
+      `source(index=${loaded.fromIndex},scan=${loaded.fromScan},scanOnly=${loaded.mergedOnlyScan},cacheHit=${loaded.cacheHit}) ` +
+      `target_in_loaded=${hasTarget(loaded.items)} target_in_filtered=${hasTarget(filtered)} target_in_result=${hasTarget(result)} ` +
+      `sort=${latestOnly ? "createdAt_desc" : "likes_createdAt_desc"}`
   );
 
-  return json({ ok: true, items: result, count: result.length, total: items.length });
+  return json({
+    ok: true,
+    items: result,
+    count: result.length,
+    total: filtered.length,
+    latestCount: latestOnly ? result.length : 0,
+    debug: {
+      mode: normalizeMode(mode) || "all",
+      bucket: normalizeBucket(bucket),
+      source: {
+        index: loaded.fromIndex,
+        scan: loaded.fromScan,
+        scanOnly: loaded.mergedOnlyScan,
+        cacheHit: loaded.cacheHit,
+      },
+      target: {
+        loaded: hasTarget(loaded.items),
+        filtered: hasTarget(filtered),
+        result: hasTarget(result),
+      },
+    },
+  });
 }
 
 async function handleReindex(env) {
@@ -167,6 +254,7 @@ async function handleReindex(env) {
   const items = scannedRaw.map(normalizeItem).filter(Boolean).sort(comparePublic);
 
   await kv.put(INDEX_KEY_ALL, JSON.stringify(items));
+  snapshotCache = { at: 0, items: null };
 
   // 既存運用との互換のため mode/bucket別 index も再作成
   const grouped = new Map();
