@@ -1,5 +1,5 @@
-const DEFAULT_LIMIT = 200; // >= 50
-const MAX_LIMIT = 500;
+const DEFAULT_LIMIT = 400; // >= 50
+const MAX_LIMIT = 1000;
 const INDEX_KEY_ALL = "idx:public";
 
 export default {
@@ -77,6 +77,16 @@ function comparePublic(a, b) {
   return createdB - createdA;
 }
 
+function compareByCreatedAtDesc(a, b) {
+  const createdA = Number(a?.createdAt || 0);
+  const createdB = Number(b?.createdAt || 0);
+  if (createdB !== createdA) return createdB - createdA;
+
+  const likesA = Number(a?.likes ?? 0);
+  const likesB = Number(b?.likes ?? 0);
+  return likesB - likesA;
+}
+
 function relaxedFilter(items, mode, bucket) {
   const m = normalizeMode(mode);
   const b = normalizeBucket(bucket);
@@ -139,15 +149,11 @@ async function handlePublic(request, env, { latestOnly }) {
 
   let items = await loadPublicItems(kv);
   const beforeFilter = items.length;
-  items = relaxedFilter(items, mode, bucket).sort(comparePublic);
-
-  if (latestOnly) {
-    items = items.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-  }
+  items = relaxedFilter(items, mode, bucket).sort(compareByCreatedAtDesc);
 
   const result = items.slice(0, limit);
   console.log(
-    `[debug] ${latestOnly ? "/api/public_latest" : "/api/public"} count=${result.length} beforeFilter=${beforeFilter} afterFilter=${items.length} limit=${limit}`
+    `[debug] ${latestOnly ? "/api/public_latest" : "/api/public"} count=${result.length} beforeFilter=${beforeFilter} afterFilter=${items.length} limit=${limit} sort=createdAt_desc`
   );
 
   return json({ ok: true, items: result, count: result.length, total: items.length });

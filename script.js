@@ -700,7 +700,7 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
     { mode, bucket }
   );
 
-  return deduped.map(x => {
+  const finalItems = deduped.map(x => {
   const flooredTotal = rememberTotalLikesFloor({
     mode,
     bucket,
@@ -716,6 +716,16 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
     hof: !!x.hof || (flooredTotal >= Number(state.hofThreshold || 20))
   };
 });
+
+  try{
+    console.log(
+      `[debug] fetchPublicMetaphors mode=${mode} bucket=${window.bucket10(Number(bucket))} ` +
+      `api_items=${items.length} api_count=${Number(data?.count || 0)} api_total=${Number(data?.total || 0)} ` +
+      `deduped=${deduped.length} final=${finalItems.length} limit=${limit}`
+    );
+  }catch{}
+
+  return finalItems;
 }
 // ==============================
 // ✅ 最新public（Workers /api/public_latest）
@@ -1228,9 +1238,12 @@ async function warmPublicCache(mode, bucket){
       const items = await fetchPublicMetaphors({
         mode: (mode === "fun" ? "fun" : "trivia"),
         bucket: window.bucket10(bucket),
-        limit: 80
+        limit: 300
       });
       publicCache.set(k, items);
+      try{
+        console.log(`[debug] warmPublicCache key=${k} fetched=${items.length}`);
+      }catch{}
       return items;
     }catch{
       publicCache.set(k, []);
@@ -1588,19 +1601,40 @@ function pickMetaphor(mode, bucket) {
 
   const key = `${mode}_${b}`;
   const publicPool = pool.filter(x => x.source === "public");
+  const basePool = pool.filter(x => x.source !== "public");
+  const usePublic = publicPool.length > 0;
   let picked;
 
-  if (publicPool.length && Math.random() < 0.7) {
-    picked = publicPool[Math.floor(Math.random() * publicPool.length)];
+  if (usePublic) {
+    const hist = lastPickKey[key];
+    const lastPublicIndex = Number.isFinite(Number(hist?.publicIndex)) ? Number(hist.publicIndex) : -1;
+    let nextIndex = (lastPublicIndex + 1) % publicPool.length;
+
+    if (publicPool.length > 1) {
+      const prevKey = String(hist?.dedupeKey || "");
+      let guard = 0;
+      while ((publicPool[nextIndex]?.dedupeKey || publicPool[nextIndex]?.text) === prevKey && guard < publicPool.length) {
+        nextIndex = (nextIndex + 1) % publicPool.length;
+        guard++;
+      }
+    }
+
+    picked = publicPool[nextIndex];
+
+    if (basePool.length > 0 && Math.random() < 0.15) {
+      picked = basePool[Math.floor(Math.random() * basePool.length)];
+    }
   } else {
     picked = pool[Math.floor(Math.random() * pool.length)];
   }
 
   if (pool.length > 1) {
     let attempts = 0;
-    while ((picked.dedupeKey || picked.text) === lastPickKey[key] && attempts < 8) {
-      if (publicPool.length && Math.random() < 0.7) {
-        picked = publicPool[Math.floor(Math.random() * publicPool.length)];
+    while ((picked.dedupeKey || picked.text) === String(lastPickKey[key]?.dedupeKey || "") && attempts < 8) {
+      if (usePublic) {
+        const hist = lastPickKey[key];
+        const idx = Number.isFinite(Number(hist?.publicIndex)) ? Number(hist.publicIndex) : -1;
+        picked = publicPool[(idx + 1 + attempts) % publicPool.length];
       } else {
         picked = pool[Math.floor(Math.random() * pool.length)];
       }
@@ -1608,7 +1642,18 @@ function pickMetaphor(mode, bucket) {
     }
   }
 
-  lastPickKey[key] = picked.dedupeKey || picked.text;
+  const publicIndex = usePublic ? publicPool.findIndex(it => (it.dedupeKey || it.text) === (picked.dedupeKey || picked.text)) : -1;
+  lastPickKey[key] = {
+    dedupeKey: picked.dedupeKey || picked.text,
+    publicIndex
+  };
+
+  try{
+    console.log(
+      `[debug] pickMetaphor mode=${mode} bucket=${b} pool=${pool.length} publicPool=${publicPool.length} ` +
+      `pickedSource=${picked?.source || "unknown"}`
+    );
+  }catch{}
   return picked;
 }
 
@@ -1769,6 +1814,7 @@ function render() {
   if (sourceTag) sourceTag.textContent = state.source;
   if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
 
+  let renderedSlotCount = 0;
   const setSlot = (slotKey, value, label) => {
     const popEl = document.getElementById(`pop_${slotKey}`);
     const metaEl = document.getElementById(`meta_${slotKey}`);
@@ -1901,6 +1947,7 @@ const nextTotalLikes = resolveDisplayTotalLikes(
     updateDeleteUI(slotKey);
 
     try { applyTheme(rounded); } catch {}
+    renderedSlotCount += 1;
 
     return { slotKey, value: rounded, text: picked.text, label };
   };
@@ -1921,6 +1968,14 @@ const nextTotalLikes = resolveDisplayTotalLikes(
   const c = setSlot("e", state.pops.e, "夜");
 
   const candidates = [a, b, c].filter(Boolean);
+  const finalShown = candidates.filter(x => !!x?.text).length;
+  try{
+    console.log(
+      `[debug] renderCounts slotsRendered=${renderedSlotCount} finalShown=${finalShown} ` +
+      `mode=${getSelectedMode()}`
+    );
+  }catch{}
+
   if (!candidates.length) {
     if (metaAll) metaAll.textContent = "データが取得できませんでした（別地点で試してください）";
     if (footEl) footEl.textContent = "";
