@@ -1,7 +1,9 @@
 const DEFAULT_LIMIT = 400; // >= 50
 const MAX_LIMIT = 1000;
 const INDEX_KEY_ALL = "idx:public";
+const INDEX_KEY_LATEST_PREFIX = "idx:public_latest:";
 const SNAPSHOT_TTL_MS = 20 * 1000;
+const NG_PHRASES = ["共通テスト"];
 let snapshotCache = {
   at: 0,
   items: null,
@@ -22,6 +24,10 @@ export default {
 
     if (path === "/api/admin/reindex" || path === "/api/admin/reindex_public") {
       return handleReindex(env);
+    }
+
+    if (path === "/api/admin/debug_item") {
+      return handleDebugItem(request, env);
     }
 
     return json({ error: "not_found" }, 404);
@@ -57,18 +63,77 @@ function normalizeItem(raw) {
   if (!text) return null;
 
   return {
+    ...raw,
     id: String(raw.id || raw.key || `${Date.now()}_${text.slice(0, 16)}`),
     text,
     mode: normalizeMode(raw.mode),
     bucket: normalizeBucket(raw.bucket),
     likes: Number(raw.likes ?? raw.totalLikes ?? raw.likesToday ?? 0) || 0,
     createdAt: Number(raw.createdAt ?? raw.ts ?? raw.time ?? 0) || 0,
-    ...raw,
   };
 }
 
 function canonicalText(text) {
   return String(text || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeMetaphorText(text) {
+  return String(text || "")
+    .normalize("NFKC")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t\u3000]+/g, " ")
+    .replace(/\n+/g, "\n")
+    .replace(/\s*[%％]\s*/g, "%")
+    .replace(/\s*[:：]\s*/g, "：")
+    .replace(/[‐-‒–—―ー]+/g, "ー")
+    .replace(/[!！?？。．、,，;；]+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function makeDedupeKey(mode, bucket, text) {
+  const m = normalizeMode(mode) || "trivia";
+  const b = normalizeBucket(bucket);
+  return `m:${m}|b:${b ?? 0}|t:${normalizeMetaphorText(text)}`;
+}
+
+function isNgText(text) {
+  const t = String(text || "");
+  if (!t) return true;
+  return NG_PHRASES.some((ng) => ng && t.includes(ng));
+}
+
+function hasMismatchedPercent(text, bucket) {
+  try {
+    const t = String(text || "");
+    const b = Number(bucket);
+    if (!Number.isFinite(b)) return false;
+
+    const re = /(\d{1,3})\s*[%％]/g;
+    let m;
+    while ((m = re.exec(t)) !== null) {
+      const p = Number(m[1]);
+      if (!Number.isFinite(p)) continue;
+      if (p < 0 || p > 100) continue;
+      if (p !== b) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function hasHard100PercentMismatch(text, bucket) {
+  try {
+    const t = String(text || "");
+    const b = Number(bucket);
+    if (!Number.isFinite(b)) return false;
+    if (b === 100) return false;
+    return /100\s*(%|％)/.test(t);
+  } catch {
+    return false;
+  }
 }
 
 function comparePublic(a, b) {
@@ -100,9 +165,6 @@ function relaxedFilter(items, mode, bucket) {
   const m = normalizeMode(mode);
   const b = normalizeBucket(bucket);
 
-  // mode/bucket フィルタを一時緩和:
-  // - クエリ指定があっても mode/bucket が欠損したアイテムは除外しない
-  // - 明示的に不一致のものだけ除外
   return items.filter((it) => {
     if (m) {
       const itemMode = normalizeMode(it.mode);
@@ -142,7 +204,6 @@ async function loadPublicItems(kv) {
       return;
     }
     const cur = merged.get(key);
-    // canonical text 同一なら新しい createdAt / likes を優先
     if (Number(it.createdAt || 0) > Number(cur.createdAt || 0) || Number(it.likes || 0) > Number(cur.likes || 0)) {
       merged.set(key, { ...cur, ...it });
     } else if (source === "scan") {
@@ -246,6 +307,110 @@ async function handlePublic(request, env, { latestOnly }) {
   });
 }
 
+async function handleDebugItem(request, env) {
+  const kv = getKv(env);
+  if (!kv) return json({ error: "kv_not_bound" }, 500);
+
+  const url = new URL(request.url);
+  const id = String(url.searchParams.get("id") || "").trim();
+  const mode = normalizeMode(url.searchParams.get("mode"));
+  const bucket = normalizeBucket(url.searchParams.get("bucket"));
+  const textParam = String(url.searchParams.get("text") || "").trim();
+
+  if (!id && !textParam) {
+    return json({ error: "id_or_text_required" }, 400);
+  }
+
+  const publicRecord = id ? await kv.get(`public:${id}`, "json") : null;
+  const indexAllRaw = await kv.get(INDEX_KEY_ALL, "json");
+  const modeBucketRaw = mode && bucket !== null ? await kv.get(`idx:public:${mode}:${bucket}`, "json") : null;
+  const latestRaw = mode ? await kv.get(`${INDEX_KEY_LATEST_PREFIX}${mode}`, "json") : null;
+
+  const allIndex = Array.isArray(indexAllRaw) ? indexAllRaw.map(normalizeItem).filter(Boolean) : [];
+  const modeBucketIndex = Array.isArray(modeBucketRaw) ? modeBucketRaw.map(normalizeItem).filter(Boolean) : [];
+  const latestIndex = Array.isArray(latestRaw) ? latestRaw.map(normalizeItem).filter(Boolean) : [];
+
+  const normalizedPublic = normalizeItem(publicRecord ? { key: `public:${id}`, ...publicRecord } : null);
+  const byId = (it) => String(it?.id || "").trim() === id;
+  const byText = (it) => textParam && canonicalText(it?.text) === canonicalText(textParam);
+  const matcher = (it) => (id && byId(it)) || byText(it);
+
+  const hitIndexAll = allIndex.find(matcher) || null;
+  const hitModeBucket = modeBucketIndex.find(matcher) || null;
+  const hitLatest = latestIndex.find(matcher) || null;
+
+  const sourceItem = normalizedPublic || hitIndexAll || hitModeBucket || hitLatest;
+  const resolvedMode = mode || normalizeMode(sourceItem?.mode);
+  const resolvedBucket = bucket !== null ? bucket : normalizeBucket(sourceItem?.bucket);
+
+  const loaded = await loadPublicItems(kv);
+  const filtered = relaxedFilter(loaded.items, resolvedMode, resolvedBucket);
+
+  const targetInFiltered = filtered.find((it) => (id ? byId(it) : byText(it)));
+
+  const reasons = [];
+  if (!normalizedPublic) reasons.push("not_found_in_public_key");
+  if (mode && bucket !== null && !hitModeBucket) reasons.push("missing_in_mode_bucket_index");
+  if (mode && !hitLatest) reasons.push("missing_in_public_latest_index");
+
+  const target = sourceItem || targetInFiltered;
+  const ng = isNgText(target?.text || "");
+  const mismatchPercent = hasMismatchedPercent(target?.text || "", resolvedBucket);
+  const mismatchHard100 = hasHard100PercentMismatch(target?.text || "", resolvedBucket);
+  if (ng) reasons.push("excluded_by_ng_phrase");
+  if (mismatchPercent) reasons.push("excluded_by_percent_mismatch");
+  if (mismatchHard100) reasons.push("excluded_by_hard_100_percent_mismatch");
+
+  const dedupeKey = target ? makeDedupeKey(resolvedMode, resolvedBucket, target.text) : null;
+  const dedupeConflicts = target
+    ? filtered.filter((it) => makeDedupeKey(resolvedMode, resolvedBucket, it.text) === dedupeKey).map((it) => ({ id: it.id, text: it.text }))
+    : [];
+
+  if (target && dedupeConflicts.length > 1) reasons.push("dedupe_conflict_same_canonical_text");
+
+  return json({
+    ok: true,
+    query: { id, text: textParam || null, mode: resolvedMode || null, bucket: resolvedBucket },
+    checks: {
+      publicKey: {
+        exists: !!normalizedPublic,
+        key: id ? `public:${id}` : null,
+      },
+      indexPublicAll: {
+        exists: !!hitIndexAll,
+        total: allIndex.length,
+      },
+      indexModeBucket: {
+        key: resolvedMode && resolvedBucket !== null ? `idx:public:${resolvedMode}:${resolvedBucket}` : null,
+        exists: !!hitModeBucket,
+        total: modeBucketIndex.length,
+      },
+      indexPublicLatest: {
+        key: resolvedMode ? `${INDEX_KEY_LATEST_PREFIX}${resolvedMode}` : null,
+        exists: !!hitLatest,
+        total: latestIndex.length,
+      },
+      appCandidate: {
+        consideredMode: resolvedMode,
+        consideredBucket: resolvedBucket,
+        inLoaded: loaded.items.some((it) => (id ? byId(it) : byText(it))),
+        inModeBucketFiltered: !!targetInFiltered,
+        excludedBy: reasons,
+      },
+      normalizeAndDedupe: {
+        canonicalText: target ? normalizeMetaphorText(target.text) : null,
+        dedupeKey,
+        conflictCount: dedupeConflicts.length,
+        conflicts: dedupeConflicts.slice(0, 10),
+      },
+    },
+    item: target || null,
+    sample: {
+      modeBucketTop10: filtered.slice(0, 10).map((it) => ({ id: it.id, text: it.text, likes: Number(it.likes || 0), createdAt: Number(it.createdAt || 0) })),
+    },
+  });
+}
+
 async function handleReindex(env) {
   const kv = getKv(env);
   if (!kv) return json({ error: "kv_not_bound" }, 500);
@@ -256,19 +421,26 @@ async function handleReindex(env) {
   await kv.put(INDEX_KEY_ALL, JSON.stringify(items));
   snapshotCache = { at: 0, items: null };
 
-  // 既存運用との互換のため mode/bucket別 index も再作成
   const grouped = new Map();
+  const latestByMode = new Map();
+
   for (const it of items) {
     const m = normalizeMode(it.mode) || "unknown";
     const b = normalizeBucket(it.bucket);
     const key = `idx:public:${m}:${b ?? "unknown"}`;
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(it);
+
+    if (!latestByMode.has(m)) latestByMode.set(m, []);
+    latestByMode.get(m).push(it);
   }
 
-  await Promise.all(
-    Array.from(grouped.entries()).map(([key, arr]) => kv.put(key, JSON.stringify(arr)))
-  );
+  for (const [m, arr] of latestByMode.entries()) {
+    arr.sort(compareByCreatedAtDesc);
+    grouped.set(`${INDEX_KEY_LATEST_PREFIX}${m}`, arr);
+  }
+
+  await Promise.all(Array.from(grouped.entries()).map(([key, arr]) => kv.put(key, JSON.stringify(arr))));
 
   console.log(`[debug] /api/admin/reindex scanned=${scannedRaw.length} normalized=${items.length} wrote=${grouped.size + 1}`);
   return json({ ok: true, scanned: scannedRaw.length, wrote: grouped.size + 1, total: items.length });

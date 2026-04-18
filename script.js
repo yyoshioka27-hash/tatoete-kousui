@@ -649,7 +649,7 @@ async function submitToPending(mode, bucket, text, penName, penPin, clientId){
 // ==============================
 // publicネタ取得（Workers）
 // ==============================
-async function fetchPublicMetaphors({ mode, bucket, limit = 50 }) {
+async function fetchPublicMetaphors({ mode, bucket, limit = 1000 }) {
   const params = new URLSearchParams();
   if (mode) params.set("mode", mode);
   if (Number.isFinite(Number(bucket))) params.set("bucket", String(bucket));
@@ -1289,7 +1289,7 @@ async function warmPublicCache(mode, bucket){
       const items = await fetchPublicMetaphors({
         mode: (mode === "fun" ? "fun" : "trivia"),
         bucket: window.bucket10(bucket),
-        limit: 800
+        limit: 1000
       });
       publicCache.set(k, items);
       publicCacheMeta.set(k, Date.now());
@@ -1309,6 +1309,46 @@ async function warmPublicCache(mode, bucket){
   publicInFlight.set(k, p);
   return p;
 }
+
+// ==============================
+// ✅ publicデバッグ（管理画面 or コンソール向け）
+// 使い方:
+//   await window.debugPublicItem("t_trivia_420451fb", "trivia", 0)
+// ==============================
+window.debugPublicItem = async function debugPublicItem(id, mode = "trivia", bucket = 0){
+  const itemId = String(id || "").trim();
+  if (!itemId) throw new Error("id is required");
+
+  const m = (mode === "fun" ? "fun" : "trivia");
+  const b = window.bucket10(Number(bucket || 0));
+  const params = new URLSearchParams({
+    id: itemId,
+    mode: m,
+    bucket: String(b)
+  });
+
+  const url = `${API_BASE}/api/admin/debug_item?${params.toString()}`;
+  const res = await fetch(url, { method: "GET", cache: "no-store" });
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data?.ok) {
+    throw new Error(data?.error || `debug_item failed: ${res.status}`);
+  }
+
+  try{
+    const c = data.checks || {};
+    console.log(
+      `[debug] id=${itemId} ` +
+      `publicKey=${!!c?.publicKey?.exists} ` +
+      `idx_public_all=${!!c?.indexPublicAll?.exists} ` +
+      `idx_mode_bucket=${!!c?.indexModeBucket?.exists} ` +
+      `idx_public_latest=${!!c?.indexPublicLatest?.exists} ` +
+      `in_candidate=${!!c?.appCandidate?.inModeBucketFiltered} ` +
+      `excludedBy=${Array.isArray(c?.appCandidate?.excludedBy) ? c.appCandidate.excludedBy.join(",") : ""}`
+    );
+  }catch{}
+
+  return data;
+};
 
 function getPublicItems(mode, bucket){
   const k = keyMB(mode, bucket);
