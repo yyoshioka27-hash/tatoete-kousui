@@ -931,6 +931,34 @@
     itemsAllKV = Array.isArray(kvItems) ? kvItems : [];
     itemsAll = itemsAllKV.concat(seed);
   }
+  function rebuildAllFromKnownLists(){
+    const map = new Map();
+    for (const it of (itemsPublic || [])){
+      if (!it?.id) continue;
+      map.set(it.id, { ...it, scope: "public" });
+    }
+    for (const it of (itemsPending || [])){
+      if (!it?.id) continue;
+      map.set(it.id, { ...it, scope: "pending" });
+    }
+    rebuildAllFromKV(Array.from(map.values()));
+  }
+
+  function promotePendingItemsToPublic(ids){
+    const idSet = new Set((ids || []).map(x => String(x || "").trim()).filter(Boolean));
+    if (!idSet.size) return;
+
+    const promoted = [];
+    itemsPending = (itemsPending || []).filter((it) => {
+      const id = String(it?.id || "").trim();
+      if (!idSet.has(id)) return true;
+      promoted.push({ ...it, scope: "public" });
+      return false;
+    });
+
+    const base = (itemsPublic || []).filter((it) => !idSet.has(String(it?.id || "").trim()));
+    itemsPublic = mergeById(promoted, base);
+  }
 
   function hydrateFromCache(){
     const cP = loadCache("pending");
@@ -1396,18 +1424,13 @@
         saveCache("pending", itemsPending);
             } else if (activeTab === "public"){
         await loadPublic(signal, true);
-            } else {
-        const oldKV = (loadCache("allkv")?.items) || itemsAllKV || [];
-        try{
-          await loadAll(signal);
-          const mergedKV = mergeById(oldKV, itemsAllKV);
-          rebuildAllFromKV(mergedKV);
-          saveCache("allkv", itemsAllKV);
-        } catch(e){
-          console.warn("loadAll skipped in refreshCurrentTab:", e?.message || e);
-          rebuildAllFromKV(oldKV);
-          saveCache("allkv", oldKV);
-        }
+      } else {
+        await Promise.all([
+          loadPending(signal),
+          loadPublic(signal, true),
+        ]);
+        rebuildAllFromKnownLists();
+        saveCache("allkv", itemsAllKV);
       }
 
       syncCacheAll();
@@ -1507,18 +1530,16 @@
         timeoutMs: 300000
       });
 
-      // ✅ まずは軽い更新だけ
+      // ✅ 差分更新：承認したIDだけローカル反映（全件再読込を避ける）
+      promotePendingItemsToPublic(uniq);
+      if (activeTab === "all") rebuildAllFromKnownLists();
+
+      // ✅ サーバ整合用に必要タブのみ軽く同期
       await loadPending(signal);
-
-      // 承認待ちタブ以外では公開一覧も更新
       if (activeTab !== "pending") {
-        await loadPublic(signal);
+        await loadPublic(signal, true);
       }
-
-      // allタブだけ必要なときに全件を更新
-      if (activeTab === "all") {
-        await loadAll(signal);
-      }
+      if (activeTab === "all") rebuildAllFromKnownLists();
 
       // DAUは後回し。失敗しても承認自体は成功扱いにする
       try{
@@ -1582,13 +1603,13 @@
     const signal = __ctrl.signal;
 
     try{
-      await deletePublicRobust(ids, signal);
-      await loadPublic(signal);
-try{
-  await loadAll(signal);
-}catch(e){
-  console.warn("loadAll skipped after deletePublic:", e?.message || e);
-}
+      const uniq = Array.from(new Set(ids)).filter(Boolean);
+      await deletePublicRobust(uniq, signal);
+      itemsPublic = removeByIds(itemsPublic, uniq);
+      if (activeTab === "all") rebuildAllFromKnownLists();
+
+      await loadPublic(signal, true);
+      if (activeTab === "all") rebuildAllFromKnownLists();
 
       await fetchDAU(signal);
 
@@ -1655,18 +1676,18 @@ try{
         // rejectが無くてもOK
       }
 
-      await deletePendingRobust(ids, signal);
+      const uniq = Array.from(new Set(ids)).filter(Boolean);
+      await deletePendingRobust(uniq, signal);
+
+      itemsPending = removeByIds(itemsPending, uniq);
+      if (activeTab === "all") rebuildAllFromKnownLists();
 
       await loadPending(signal);
-await loadPublic(signal);
-try{
-  await loadAll(signal);
-}catch(e){
-  console.warn("loadAll skipped after reject:", e?.message || e);
-}
+      if (activeTab !== "pending") await loadPublic(signal, true);
+      if (activeTab === "all") rebuildAllFromKnownLists();
 
       const remain = new Set(itemsPending.map(x => x.id));
-      const still = ids.filter(id => remain.has(id));
+      const still = uniq.filter(id => remain.has(id));
       if (still.length){
         alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
       }
