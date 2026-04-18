@@ -1532,19 +1532,9 @@
 
       // ✅ 差分更新：承認したIDだけローカル反映（全件再読込を避ける）
       promotePendingItemsToPublic(uniq);
+      // ✅ 操作直後はローカル反映のみで完結（全件再読込を避ける）
       if (activeTab === "all") rebuildAllFromKnownLists();
-
-      // ✅ サーバ整合用に必要タブのみ軽く同期
-      await loadPending(signal);
-      if (activeTab !== "pending") {
-        await loadPublic(signal, true);
-      }
-      if (activeTab === "all") rebuildAllFromKnownLists();
-
-      // DAUは後回し。失敗しても承認自体は成功扱いにする
-      try{
-        await fetchDAU(signal);
-      } catch(e){}
+      void fetchDAU(signal);
 
       selectedIds = new Set();
       syncCacheAll();
@@ -1607,11 +1597,7 @@
       await deletePublicRobust(uniq, signal);
       itemsPublic = removeByIds(itemsPublic, uniq);
       if (activeTab === "all") rebuildAllFromKnownLists();
-
-      await loadPublic(signal, true);
-      if (activeTab === "all") rebuildAllFromKnownLists();
-
-      await fetchDAU(signal);
+      void fetchDAU(signal);
 
       selectedIds = new Set();
       syncCacheAll();
@@ -1682,17 +1668,13 @@
       itemsPending = removeByIds(itemsPending, uniq);
       if (activeTab === "all") rebuildAllFromKnownLists();
 
-      await loadPending(signal);
-      if (activeTab !== "pending") await loadPublic(signal, true);
-      if (activeTab === "all") rebuildAllFromKnownLists();
-
       const remain = new Set(itemsPending.map(x => x.id));
       const still = uniq.filter(id => remain.has(id));
       if (still.length){
         alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
       }
 
-      await fetchDAU(signal);
+      void fetchDAU(signal);
 
       selectedIds = new Set();
       syncCacheAll();
