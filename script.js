@@ -1806,6 +1806,39 @@ function updateLikeUI(slot) {
 
   btnEl.disabled = false;
   btnEl.onclick = async () => {
+    const livePhrase = state.currentPhrases[slot] || phraseObj;
+    const prevToday = Number(livePhrase?.likesToday || 0);
+    const prevTotal = Number(livePhrase?.totalLikes || 0);
+    const optimisticToday = prevToday + 1;
+    const optimisticTotal = prevTotal + 1;
+
+    if (livePhrase) {
+      livePhrase.likesToday = optimisticToday;
+      livePhrase.totalLikes = rememberTotalLikesFloor({
+        mode: livePhrase.mode || getSelectedMode(),
+        bucket: Number(livePhrase.bucket ?? 0),
+        text: livePhrase.text,
+        totalLikes: optimisticTotal
+      });
+      livePhrase.hof = !!livePhrase.hof || (livePhrase.totalLikes >= Number(state.hofThreshold || 20));
+    }
+
+    patchPublicCacheItem(
+      livePhrase?.mode || getSelectedMode(),
+      Number(livePhrase?.bucket ?? 0),
+      livePhrase?.text,
+      {
+        likesToday: optimisticToday,
+        likes: optimisticToday,
+        totalLikes: optimisticTotal,
+        hof: !!livePhrase?.hof
+      }
+    );
+
+    updateLikeUI(slot);
+    likeFxPop(btnEl);
+    likeFxPlusOne(btnEl);
+
     btnEl.disabled = true;
     try{
       const out = await likeAny({
@@ -1817,45 +1850,66 @@ function updateLikeUI(slot) {
         source: phraseObj.source || null,
         clientId: getClientId(),
       });
+      const nowPhrase = state.currentPhrases[slot] || livePhrase;
+      const nextToday = Number(out.likesToday ?? out.displayedLikeCount ?? optimisticToday);
+      const nextTotal = Number(out.totalLikes ?? out.totalLikeCount ?? optimisticTotal);
 
-      likeFxPop(btnEl);
-      likeFxPlusOne(btnEl);
+      const safeToday = Math.max(Number(nowPhrase?.likesToday || 0), nextToday);
+      const safeTotal = rememberTotalLikesFloor({
+        mode: nowPhrase?.mode || getSelectedMode(),
+        bucket: Number(nowPhrase?.bucket ?? 0),
+        text: nowPhrase?.text,
+        totalLikes: Math.max(Number(nowPhrase?.totalLikes || 0), nextTotal)
+      });
 
-      const prevToday = Number(state.currentPhrases[slot].likesToday || 0);
-const prevTotal = Number(state.currentPhrases[slot].totalLikes || 0);
-const nextToday = Number(out.likesToday || 0);
-const nextTotal = Number(out.totalLikes || 0);
+      if (nowPhrase) {
+        nowPhrase.likesToday = safeToday;
+        nowPhrase.totalLikes = safeTotal;
+        nowPhrase.hof = !!out.hof || (safeTotal >= Number(state.hofThreshold || 20));
+      }
 
-const safeToday = Math.max(prevToday, nextToday);
-const safeTotal = rememberTotalLikesFloor({
-  mode: state.currentPhrases[slot].mode || getSelectedMode(),
-  bucket: Number(state.currentPhrases[slot].bucket ?? 0),
-  text: state.currentPhrases[slot].text,
-  totalLikes: Math.max(prevTotal, nextTotal)
-});
-
-state.currentPhrases[slot].likesToday = safeToday;
-state.currentPhrases[slot].totalLikes = safeTotal;
-state.currentPhrases[slot].hof =
-  !!out.hof || (safeTotal >= Number(state.hofThreshold || 20));
-
-patchPublicCacheItem(
-  state.currentPhrases[slot].mode || getSelectedMode(),
-  Number(state.currentPhrases[slot].bucket ?? 0),
-  state.currentPhrases[slot].text,
-  {
-    likesToday: safeToday,
-    likes: safeToday,
-    totalLikes: safeTotal,
-    hof: state.currentPhrases[slot].hof
-  }
-);
+      patchPublicCacheItem(
+        nowPhrase?.mode || getSelectedMode(),
+        Number(nowPhrase?.bucket ?? 0),
+        nowPhrase?.text,
+        {
+          likesToday: safeToday,
+          likes: safeToday,
+          totalLikes: safeTotal,
+          hof: !!nowPhrase?.hof
+        }
+      );
 
 __hofSnapshotMemory = null;
 __hofSnapshotHtml = null;
 
 updateLikeUI(slot);
     }catch(e){
+      const rollbackPhrase = state.currentPhrases[slot] || livePhrase;
+      if (rollbackPhrase) {
+        rollbackPhrase.likesToday = prevToday;
+        rollbackPhrase.totalLikes = rememberTotalLikesFloor({
+          mode: rollbackPhrase.mode || getSelectedMode(),
+          bucket: Number(rollbackPhrase.bucket ?? 0),
+          text: rollbackPhrase.text,
+          totalLikes: prevTotal
+        });
+        rollbackPhrase.hof = !!rollbackPhrase.hof || (rollbackPhrase.totalLikes >= Number(state.hofThreshold || 20));
+      }
+
+      patchPublicCacheItem(
+        rollbackPhrase?.mode || getSelectedMode(),
+        Number(rollbackPhrase?.bucket ?? 0),
+        rollbackPhrase?.text,
+        {
+          likesToday: prevToday,
+          likes: prevToday,
+          totalLikes: prevTotal,
+          hof: !!rollbackPhrase?.hof
+        }
+      );
+
+      updateLikeUI(slot);
       alert(`いいね失敗：${e?.message || e}`);
     }finally{
       btnEl.disabled = false;

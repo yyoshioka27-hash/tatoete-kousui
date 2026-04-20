@@ -30,6 +30,10 @@ export default {
       return handleDebugItem(request, env);
     }
 
+    if (path === "/api/like" && request.method === "POST") {
+      return handleLike(request, env, ctx);
+    }
+
     return json({ error: "not_found" }, 404);
   },
 };
@@ -454,4 +458,132 @@ function json(data, status = 200) {
       "cache-control": "no-store",
     },
   });
+}
+
+function getJstDay(ts = Date.now()) {
+  const jstMs = ts + 9 * 60 * 60 * 1000;
+  return new Date(jstMs).toISOString().slice(0, 10);
+}
+
+function normalizeClientId(request, body) {
+  const raw =
+    String(body?.clientId || "").trim() ||
+    String(request.headers.get("x-client-id") || "").trim() ||
+    "anonymous";
+  return raw.replace(/[^\w\-:.]/g, "_").slice(0, 128) || "anonymous";
+}
+
+function resolveLikeTarget(body) {
+  const itemId = String(body?.id || body?.itemId || "").trim();
+  const text = String(body?.text || "").trim();
+  const mode = normalizeMode(body?.mode) || "trivia";
+  const bucket = normalizeBucket(body?.bucket) ?? 0;
+  if (!itemId || !text) return null;
+  return { itemId, text, mode, bucket };
+}
+
+async function handleLike(request, env, ctx) {
+  const kv = getKv(env);
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500);
+
+  const body = await request.json().catch(() => null);
+  const target = resolveLikeTarget(body);
+  if (!target) return json({ ok: false, error: "invalid_like_payload" }, 400);
+
+  const day = getJstDay();
+  const clientId = normalizeClientId(request, body);
+  const dedupeKey = `like:${day}:${clientId}:${target.itemId}`;
+  const already = await kv.get(dedupeKey, "text");
+  if (already) {
+    const existing = (await kv.get(`public:${target.itemId}`, "json")) || {};
+    const totalLikes = Number(existing.likes || existing.totalLikes || 0);
+    return json({
+      ok: true,
+      liked: false,
+      itemId: target.itemId,
+      displayedLikeCount: totalLikes,
+      totalLikeCount: totalLikes,
+      totalLikes,
+      todayLikeCount: Number(existing.likesToday || 0),
+      likesToday: Number(existing.likesToday || 0),
+      hofThreshold: Number(env.HOF_THRESHOLD || 20),
+    });
+  }
+
+  const now = Date.now();
+  const current = (await kv.get(`public:${target.itemId}`, "json")) || {};
+  const prevLikes = Number(current.likes || current.totalLikes || 0);
+  const prevLikesToday = Number(current.likesToday || 0);
+  const nextLikes = prevLikes + 1;
+  const nextLikesToday = prevLikesToday + 1;
+
+  const nextItem = {
+    ...current,
+    id: target.itemId,
+    text: current.text || target.text,
+    mode: normalizeMode(current.mode) || target.mode,
+    bucket: normalizeBucket(current.bucket) ?? target.bucket,
+    likes: nextLikes,
+    totalLikes: nextLikes,
+    likesToday: nextLikesToday,
+    updatedAt: now,
+  };
+
+  await kv.put(
+    dedupeKey,
+    JSON.stringify({
+      id: target.itemId,
+      day,
+      clientId,
+      at: now,
+    }),
+    { expirationTtl: 60 * 60 * 24 * 2 }
+  );
+  await kv.put(`public:${target.itemId}`, JSON.stringify(nextItem));
+
+  snapshotCache = { at: 0, items: null };
+
+  ctx.waitUntil(runLikeHeavyTasks(env, target, now).catch((e) => {
+    console.log(`[warn] runLikeHeavyTasks failed id=${target.itemId}: ${e?.message || e}`);
+  }));
+
+  return json({
+    ok: true,
+    liked: true,
+    itemId: target.itemId,
+    displayedLikeCount: nextLikes,
+    totalLikeCount: nextLikes,
+    totalLikes: nextLikes,
+    todayLikeCount: nextLikesToday,
+    likesToday: nextLikesToday,
+    hofThreshold: Number(env.HOF_THRESHOLD || 20),
+  });
+}
+
+async function runLikeHeavyTasks(env, target, nowTs) {
+  const kv = getKv(env);
+  if (!kv) return;
+
+  const day = getJstDay(nowTs);
+  await Promise.all([
+    kv.put(`agg:canonical:pending:${target.mode}:${target.bucket}:${target.itemId}`, JSON.stringify({
+      id: target.itemId,
+      text: target.text,
+      mode: target.mode,
+      bucket: target.bucket,
+      at: nowTs,
+    })),
+    kv.put(`agg:ranking:pending:${target.mode}:${day}`, JSON.stringify({
+      id: target.itemId,
+      mode: target.mode,
+      day,
+      at: nowTs,
+    })),
+    kv.put(`agg:hof:pending:${target.mode}:${day}`, JSON.stringify({
+      id: target.itemId,
+      mode: target.mode,
+      day,
+      at: nowTs,
+    })),
+  ]);
 }
