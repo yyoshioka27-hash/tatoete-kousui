@@ -490,6 +490,32 @@ function pickBetterPenName(a, b){
   return pb || pa || null;
 }
 
+function numOrZero(v){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function readMergedTotalLikes(raw){
+  if (!raw || typeof raw !== "object") return 0;
+  return Math.max(
+    numOrZero(raw.totalLikes),
+    numOrZero(raw.likes_total),
+    numOrZero(raw.likesTotal),
+    numOrZero(raw.likes),
+    numOrZero(raw?.meta?.likes)
+  );
+}
+
+function readMergedTodayLikes(raw){
+  if (!raw || typeof raw !== "object") return 0;
+  return Math.max(
+    numOrZero(raw.likesToday),
+    numOrZero(raw.likes_today),
+    numOrZero(raw.todayLikes),
+    numOrZero(raw.likes)
+  );
+}
+
 function mergeDisplayItems(items, { mode, bucket } = {}){
   const map = new Map();
 
@@ -514,8 +540,8 @@ function mergeDisplayItems(items, { mode, bucket } = {}){
         source: raw?.source || null,
         id: raw?.id ? String(raw.id).trim() : null,
         penName: raw?.penName || null,
-        totalLikes: Number(raw?.totalLikes || 0),
-        likes: Number(raw?.likes || 0),
+        totalLikes: readMergedTotalLikes(raw),
+        likes: readMergedTodayLikes(raw),
         hof: !!raw?.hof,
         __dedupeKey: key,
         __canonText: normalizeMetaphorText(text),
@@ -527,8 +553,8 @@ function mergeDisplayItems(items, { mode, bucket } = {}){
 
     current.text = pickBetterText(current.text, text);
     current.penName = pickBetterPenName(current.penName, raw?.penName);
-    current.totalLikes = Math.max(Number(current.totalLikes || 0), Number(raw?.totalLikes || 0));
-    current.likes = Math.max(Number(current.likes || 0), Number(raw?.likes || 0));
+    current.totalLikes = Math.max(Number(current.totalLikes || 0), readMergedTotalLikes(raw));
+    current.likes = Math.max(Number(current.likes || 0), readMergedTodayLikes(raw));
     current.hof = !!current.hof || !!raw?.hof;
     current.__canonText = normalizeMetaphorText(current.text);
 
@@ -690,8 +716,8 @@ async function fetchPublicMetaphors({ mode, bucket, limit = 1000 }) {
       id: String(it.id || "").trim(),
       text: String(it.text || "").trim(),
       penName: (it.penName ? String(it.penName).trim() : null),
-      totalLikes: Number(it.totalLikes || 0),
-      likes: Number(it.likes || 0),
+      totalLikes: readMergedTotalLikes(it),
+      likes: readMergedTodayLikes(it),
       hof: !!it.hof,
       source: "public",
       mode: (it?.mode === "fun" ? "fun" : (mode === "fun" ? "fun" : "trivia")),
@@ -847,8 +873,8 @@ function normalizeHallSnapshotItem(raw){
     }),
     text,
     penName: raw?.penName ? String(raw.penName).trim() : null,
-    totalLikes: Number(raw?.totalLikes || 0),
-    likes: Number(raw?.likes || 0),
+    totalLikes: readMergedTotalLikes(raw),
+    likes: readMergedTodayLikes(raw),
     bucket: Number.isFinite(Number(raw?.bucket)) ? window.bucket10(Number(raw.bucket)) : 0,
     mode,
     hof: true,
@@ -971,8 +997,8 @@ function buildHallCardHtmlFromSnapshot(hofData){
       ...it,
       text: String(it?.text || "").trim(),
       penName: it?.penName ? String(it.penName).trim() : null,
-      totalLikes: Number(it?.totalLikes || 0),
-      likes: Number(it?.likes || 0),
+      totalLikes: readMergedTotalLikes(it),
+      likes: readMergedTodayLikes(it),
       bucket: Number.isFinite(Number(it?.bucket)) ? window.bucket10(Number(it.bucket)) : 0,
       mode: (it?.mode === "fun" ? "fun" : "trivia"),
       hof: true,
@@ -1153,10 +1179,10 @@ function rememberHallSnapshotTotals(items){
     const bucket = Number.isFinite(Number(it?.bucket))
       ? window.bucket10(Number(it.bucket))
       : 0;
-    const totalLikes = Number(it?.totalLikes || 0);
+    const totalLikes = readMergedTotalLikes(it);
 
     const key = hallSnapshotKeyForItem(mode, bucket, text);
-    hallSnapshotTotals.set(key, totalLikes);
+    hallSnapshotTotals.set(key, Math.max(Number(hallSnapshotTotals.get(key) || 0), totalLikes));
   }
 }
 
@@ -1167,9 +1193,10 @@ function getHallSnapshotTotalLikes(mode, bucket, text){
 }
 
 function resolveDisplayTotalLikes(mode, bucket, text, totalLikes){
+  const current = applyTotalLikesFloor({ mode, bucket, text, totalLikes });
   const snap = getHallSnapshotTotalLikes(mode, bucket, text);
-  if (snap !== null) return snap;
-  return applyTotalLikesFloor({ mode, bucket, text, totalLikes });
+  if (snap !== null) return Math.max(current, Number(snap || 0));
+  return current;
 }
 
 function floorKeyForItem(mode, bucket, text){
