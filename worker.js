@@ -660,25 +660,47 @@ async function runLikeHeavyTasks(env, target, nowTs) {
   if (!kv) return;
 
   const day = getJstDay(nowTs);
-  await Promise.all([
-    kv.put(`agg:canonical:pending:${target.mode}:${target.bucket}:${target.itemId}`, JSON.stringify({
+  const canonicalKey = `agg:canonical:pending:${target.mode}:${target.bucket}:${target.itemId}`;
+  const rankingKey = `agg:ranking:pending:${target.mode}:${day}`;
+  const hofKey = `agg:hof:pending:${target.mode}:${day}`;
+
+  const [canonicalExists, rankingExists, hofExists] = await Promise.all([
+    kv.get(canonicalKey, "text"),
+    kv.get(rankingKey, "text"),
+    kv.get(hofKey, "text"),
+  ]);
+
+  const tasks = [];
+
+  if (!canonicalExists) {
+    tasks.push(kv.put(canonicalKey, JSON.stringify({
       id: target.itemId,
       text: target.text,
       mode: target.mode,
       bucket: target.bucket,
       at: nowTs,
-    })),
-    kv.put(`agg:ranking:pending:${target.mode}:${day}`, JSON.stringify({
+    })));
+  }
+
+  if (!rankingExists) {
+    tasks.push(kv.put(rankingKey, JSON.stringify({
       id: target.itemId,
       mode: target.mode,
       day,
       at: nowTs,
-    })),
-    kv.put(`agg:hof:pending:${target.mode}:${day}`, JSON.stringify({
+    })));
+  }
+
+  if (!hofExists) {
+    tasks.push(kv.put(hofKey, JSON.stringify({
       id: target.itemId,
       mode: target.mode,
       day,
       at: nowTs,
-    })),
-  ]);
+    })));
+  }
+
+  if (tasks.length) {
+    await Promise.all(tasks);
+  }
 }
