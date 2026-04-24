@@ -239,10 +239,7 @@
         <button id="btnSave" class="btnPrimary">保存</button>
         <button id="btnHealth">health</button>
         <button id="btnRefresh">更新（表示中タブ）</button>
-        <button id="btnHofDailyBuild">殿堂入りbuild</button>
         <button id="btnHofDailyCheck">殿堂入り確認</button>
-        <!-- ✅ FIX: ID重複を解消（上部の復旧ボタンは unique にする） -->
-        <button id="btnReindexTop" class="btnDanger">復旧（reindex）</button>
       </div>
 
       <div class="right row" style="gap:8px;">
@@ -259,6 +256,14 @@
       ※ API_BASE は Workers のURL（例：<span class="mono">https://xxxx.workers.dev</span>）<br/>
       ※ 管理操作は <span class="mono">x-admin-key</span> ヘッダで送ります。鍵が違うと 403。
     </div>
+
+    <details style="margin-top:10px;">
+      <summary>危険操作（通常は開かない）</summary>
+      <div class="row" style="gap:8px; margin-top:8px;">
+        <button id="btnHofDailyBuild" class="btnDanger">殿堂入りbuild</button>
+        <button id="btnReindexTop" class="btnDanger">復旧（reindex）</button>
+      </div>
+    </details>
   </div>
 
   <div class="card">
@@ -320,7 +325,7 @@
         </select>
         <button id="btnClearQ" class="miniBtn">× クリア</button>
         <!-- ✅ 下部の復旧ボタンはそのまま（別IDにしたのでOK） -->
-        <button id="btnReindex" class="miniBtn">復旧（reindex）</button>
+        <button id="btnReindex" class="miniBtn" style="display:none;">復旧（reindex）</button>
       </div>
 
       <!-- ✅ pending用：承認/却下 -->
@@ -494,7 +499,7 @@
   // ======================================================
   // ✅ Pagination：20件ずつ「前へ / 次へ」
   // ======================================================
-  const PAGE_SIZE = 20;     // 1ページの件数
+  const PAGE_SIZE = 50;     // 1ページの件数
   let page = 1;             // 1-based
   const pagerEl = $("pager");
   function resetPager(){ page = 1; }
@@ -1113,6 +1118,7 @@
     selectedIds = new Set();
     resetPager();
     render();
+    void ensureActiveTabLoaded();
   }
 
   function render(){
@@ -1448,6 +1454,20 @@
     }
   }
 
+  async function ensureActiveTabLoaded(){
+    if (activeTab === "pending" && !hasLoadedPending){
+      await refreshCurrentTab();
+      return;
+    }
+    if (activeTab === "public" && !hasLoadedPublic){
+      await refreshCurrentTab();
+      return;
+    }
+    if (activeTab === "all" && (!hasLoadedPending || !hasLoadedPublic)){
+      await refreshCurrentTab();
+    }
+  }
+
   async function doHealth(){
     abortInFlight();
     __ctrl = new AbortController();
@@ -1690,6 +1710,8 @@
   }
 
 async function hofDailyBuild(){
+  if (!confirm("殿堂入りbuildを実行しますか？\n通常は1日1回の自動処理で十分です。")) return;
+
   abortInFlight();
   __ctrl = new AbortController();
   setBusy(true);
@@ -2051,6 +2073,7 @@ async function hofDailyCheck(){
 
   hydrateFromCache();
   render();
+  void ensureActiveTabLoaded();
 
     // ✅ 起動時に自動 health は実行しない
   // 必要なときだけ手動で health を押す

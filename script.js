@@ -769,19 +769,21 @@ async function fetchPublicLatest(mode, limit = 10){
   if (needle.id) params.set("debug_id", needle.id);
   if (needle.text) params.set("debug_text", needle.text);
 
-  const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, { method: "GET", cache: "no-store" });
-  if (!res.ok) throw new Error(`public_latest fetch failed: ${res.status}`);
-  const data = await res.json().catch(()=>null);
-  if (!data?.ok) throw new Error("public_latest not ok");
-  const items = Array.isArray(data.items) ? data.items : [];
+  return withApiGuard("public_latest", { mode: mode || "", limit }, async () => {
+    const res = await fetch(`${API_BASE}/api/public_latest?${params.toString()}`, { method: "GET", cache: "no-store" });
+    if (!res.ok) throw new Error(`public_latest fetch failed: ${res.status}`);
+    const data = await res.json().catch(()=>null);
+    if (!data?.ok) throw new Error("public_latest not ok");
+    const items = Array.isArray(data.items) ? data.items : [];
 
-  try{
-    console.log(
-      `[debug] fetchPublicLatest mode=${mode || "all"} latest表示件数=${items.length} ` +
-      `api_count=${Number(data?.count || 0)} api_total=${Number(data?.total || 0)} target_in_latest=${hasDebugNeedle(items, needle)}`
-    );
-  }catch{}
-  return items;
+    try{
+      console.log(
+        `[debug] fetchPublicLatest mode=${mode || "all"} latest表示件数=${items.length} ` +
+        `api_count=${Number(data?.count || 0)} api_total=${Number(data?.total || 0)} target_in_latest=${hasDebugNeedle(items, needle)}`
+      );
+    }catch{}
+    return items;
+  });
 }
 
 // ==============================
@@ -812,15 +814,49 @@ async function likeAny(payload){
 // ==============================
 // 今日のランキング（Workers）
 // ==============================
+const API_GUARD_TTL_MS = 30 * 1000;
+const apiGuardCache = new Map();
+const apiGuardInFlight = new Map();
+
+function guardCacheKey(name, params){
+  return `${name}:${JSON.stringify(params || {})}`;
+}
+
+async function withApiGuard(name, params, fn){
+  const key = guardCacheKey(name, params);
+  const now = Date.now();
+  const cached = apiGuardCache.get(key);
+  if (cached && now - Number(cached.at || 0) < API_GUARD_TTL_MS) {
+    return cached.value;
+  }
+
+  if (apiGuardInFlight.has(key)) {
+    return apiGuardInFlight.get(key);
+  }
+
+  const p = (async () => {
+    const value = await fn();
+    apiGuardCache.set(key, { at: Date.now(), value });
+    return value;
+  })().finally(() => {
+    apiGuardInFlight.delete(key);
+  });
+
+  apiGuardInFlight.set(key, p);
+  return p;
+}
+
 async function fetchRankingToday(mode, bucket, limit = 3){
   const params = new URLSearchParams();
   params.set("mode", mode);
   params.set("bucket", String(bucket));
   params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking failed ${res.status}`);
-  return Array.isArray(data.items) ? data.items : [];
+  return withApiGuard("ranking_today", { mode, bucket, limit }, async () => {
+    const res = await fetch(`${API_BASE}/api/ranking/today?${params.toString()}`, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking failed ${res.status}`);
+    return Array.isArray(data.items) ? data.items : [];
+  });
 }
 
 // ✅ 今日の総合ランキング（全バケット共通）
@@ -828,10 +864,12 @@ async function fetchRankingTodayAll(mode, limit = 3){
   const params = new URLSearchParams();
   params.set("mode", mode);
   params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/today_all?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking today_all failed ${res.status}`);
-  return Array.isArray(data.items) ? data.items : [];
+  return withApiGuard("ranking_today_all", { mode, limit }, async () => {
+    const res = await fetch(`${API_BASE}/api/ranking/today_all?${params.toString()}`, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking today_all failed ${res.status}`);
+    return Array.isArray(data.items) ? data.items : [];
+  });
 }
 
 async function fetchRankingTotal(mode, bucket, limit = 3){
@@ -839,11 +877,13 @@ async function fetchRankingTotal(mode, bucket, limit = 3){
   params.set("mode", mode);
   params.set("bucket", String(bucket));
   params.set("limit", String(limit));
-  const res = await fetch(`${API_BASE}/api/ranking/total?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking total failed ${res.status}`);
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return Array.isArray(data.items) ? data.items : [];
+  return withApiGuard("ranking_total", { mode, bucket, limit }, async () => {
+    const res = await fetch(`${API_BASE}/api/ranking/total?${params.toString()}`, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `ranking total failed ${res.status}`);
+    if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+    return Array.isArray(data.items) ? data.items : [];
+  });
 }
 
 // ✅ 殿堂入り（従来API / フォールバック用）
@@ -852,11 +892,13 @@ async function fetchHallOfFame(mode, bucket, limit = 50){
   params.set("mode", mode);
   params.set("limit", String(limit));
   params.set("scope", "all");
-  const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET", cache:"no-store" });
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return Array.isArray(data.items) ? data.items : [];
+  return withApiGuard("hof", { mode, bucket, limit }, async () => {
+    const res = await fetch(`${API_BASE}/api/hof?${params.toString()}`, { method:"GET", cache:"no-store" });
+    const data = await res.json().catch(()=>null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `hof failed ${res.status}`);
+    if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+    return Array.isArray(data.items) ? data.items : [];
+  });
 }
 
 function normalizeHallSnapshotItem(raw){
