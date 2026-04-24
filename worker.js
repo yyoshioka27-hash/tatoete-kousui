@@ -8,38 +8,92 @@ let snapshotCache = {
   at: 0,
   items: null,
 };
+let lastKvDebug = null;
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const kvStats = createKvStats(path);
+    const kv = getTrackedKv(env, kvStats);
 
-    if (path === "/api/public") {
-      return handlePublic(request, env, { latestOnly: false });
+    try {
+      if (path === "/api/public") {
+        return handlePublic(request, kv, { latestOnly: false, kvStats });
+      }
+
+      if (path === "/api/public_latest") {
+        return handlePublic(request, kv, { latestOnly: true, kvStats });
+      }
+
+      if (path === "/api/admin/reindex" || path === "/api/admin/reindex_public") {
+        return handleReindex(kv, { kvStats });
+      }
+
+      if (path === "/api/admin/debug_item") {
+        return handleDebugItem(request, kv, { kvStats });
+      }
+
+      if (path === "/api/admin/kv_debug") {
+        return handleKvDebug(request, env, kvStats);
+      }
+
+      if (path === "/api/like" && request.method === "POST") {
+        return handleLike(request, env, ctx, kv, { kvStats });
+      }
+
+      return json({ error: "not_found" }, 404, kvStats);
+    } finally {
+      finalizeKvStats(kvStats);
     }
-
-    if (path === "/api/public_latest") {
-      return handlePublic(request, env, { latestOnly: true });
-    }
-
-    if (path === "/api/admin/reindex" || path === "/api/admin/reindex_public") {
-      return handleReindex(env);
-    }
-
-    if (path === "/api/admin/debug_item") {
-      return handleDebugItem(request, env);
-    }
-
-    if (path === "/api/like" && request.method === "POST") {
-      return handleLike(request, env, ctx);
-    }
-
-    return json({ error: "not_found" }, 404);
   },
 };
 
 function getKv(env) {
   return env.PUBLIC_KV || env.KV || env.DB || null;
+}
+
+function createKvStats(pathname) {
+  return {
+    path: pathname,
+    startedAt: Date.now(),
+    get: 0,
+    put: 0,
+    list: 0,
+    delete: 0,
+  };
+}
+
+function getTrackedKv(env, kvStats) {
+  const kv = getKv(env);
+  if (!kv) return null;
+  return {
+    get: (...args) => {
+      kvStats.get += 1;
+      return kv.get(...args);
+    },
+    put: (...args) => {
+      kvStats.put += 1;
+      return kv.put(...args);
+    },
+    list: (...args) => {
+      kvStats.list += 1;
+      return kv.list(...args);
+    },
+    delete: (...args) => {
+      kvStats.delete += 1;
+      return kv.delete(...args);
+    },
+  };
+}
+
+function finalizeKvStats(kvStats) {
+  kvStats.finishedAt = Date.now();
+  kvStats.elapsedMs = Math.max(0, kvStats.finishedAt - kvStats.startedAt);
+  lastKvDebug = {
+    ...kvStats,
+    total: Number(kvStats.get + kvStats.put + kvStats.list + kvStats.delete),
+  };
 }
 
 function parseLimit(url, fallback = DEFAULT_LIMIT) {
@@ -182,7 +236,7 @@ function relaxedFilter(items, mode, bucket) {
   });
 }
 
-async function loadPublicItems(kv) {
+async function loadPublicItems(kv, { mode = "", bucket = null, latestOnly = false, allowScan = false } = {}) {
   const now = Date.now();
   if (Array.isArray(snapshotCache.items) && now - snapshotCache.at < SNAPSHOT_TTL_MS) {
     return {
@@ -194,9 +248,18 @@ async function loadPublicItems(kv) {
     };
   }
 
-  const fromIndexRaw = await kv.get(INDEX_KEY_ALL, "json");
+  const normalizedMode = normalizeMode(mode);
+  const normalizedBucket = normalizeBucket(bucket);
+  let indexKey = INDEX_KEY_ALL;
+  if (latestOnly && normalizedMode) {
+    indexKey = `${INDEX_KEY_LATEST_PREFIX}${normalizedMode}`;
+  } else if (normalizedMode && normalizedBucket !== null) {
+    indexKey = `idx:public:${normalizedMode}:${normalizedBucket}`;
+  }
+
+  const fromIndexRaw = await kv.get(indexKey, "json");
   const fromIndex = Array.isArray(fromIndexRaw) ? fromIndexRaw.map(normalizeItem).filter(Boolean) : [];
-  const fromScanRaw = await scanPrefix(kv, "public:");
+  const fromScanRaw = allowScan ? await scanPrefix(kv, "public:") : [];
   const fromScan = fromScanRaw.map(normalizeItem).filter(Boolean);
 
   const merged = new Map();
@@ -219,10 +282,13 @@ async function loadPublicItems(kv) {
   for (const it of fromScan) add(it, "scan");
 
   const items = Array.from(merged.values());
-  snapshotCache = { at: now, items };
+  if (indexKey === INDEX_KEY_ALL) {
+    snapshotCache = { at: now, items };
+  }
   return {
     items,
     cacheHit: false,
+    indexKey,
     fromIndex: fromIndex.length,
     fromScan: fromScan.length,
     mergedOnlyScan: Math.max(0, items.length - fromIndex.length),
@@ -250,9 +316,8 @@ async function scanPrefix(kv, prefix) {
   return out;
 }
 
-async function handlePublic(request, env, { latestOnly }) {
-  const kv = getKv(env);
-  if (!kv) return json({ error: "kv_not_bound" }, 500);
+async function handlePublic(request, kv, { latestOnly, kvStats }) {
+  if (!kv) return json({ error: "kv_not_bound" }, 500, kvStats);
 
   const url = new URL(request.url);
   const limit = parseLimit(url, latestOnly ? 100 : DEFAULT_LIMIT);
@@ -262,7 +327,8 @@ async function handlePublic(request, env, { latestOnly }) {
   const debugId = String(url.searchParams.get("debug_id") || "").trim();
   const debugText = canonicalText(url.searchParams.get("debug_text") || "");
 
-  const loaded = await loadPublicItems(kv);
+  const includeScan = url.searchParams.get("include_scan") === "1";
+  const loaded = await loadPublicItems(kv, { mode, bucket, latestOnly, allowScan: includeScan });
   const beforeFilter = loaded.items.length;
   const filtered = relaxedFilter(loaded.items, mode, bucket);
   const sorted = filtered.sort(latestOnly ? compareByCreatedAtDesc : comparePublic);
@@ -282,7 +348,7 @@ async function handlePublic(request, env, { latestOnly }) {
       `mode=${normalizeMode(mode) || "all"} bucket=${normalizeBucket(bucket) ?? "all"} ` +
       `API返却件数=${result.length} beforeFilter=${beforeFilter} フィルタ後件数=${filtered.length} ` +
       `latest表示件数=${latestOnly ? result.length : 0} limit=${limit} ` +
-      `source(index=${loaded.fromIndex},scan=${loaded.fromScan},scanOnly=${loaded.mergedOnlyScan},cacheHit=${loaded.cacheHit}) ` +
+      `source(indexKey=${loaded.indexKey || INDEX_KEY_ALL},index=${loaded.fromIndex},scan=${loaded.fromScan},scanOnly=${loaded.mergedOnlyScan},cacheHit=${loaded.cacheHit}) ` +
       `target_in_loaded=${hasTarget(loaded.items)} target_in_filtered=${hasTarget(filtered)} target_in_result=${hasTarget(result)} ` +
       `sort=${latestOnly ? "createdAt_desc" : "likes_createdAt_desc"}`
   );
@@ -297,6 +363,7 @@ async function handlePublic(request, env, { latestOnly }) {
       mode: normalizeMode(mode) || "all",
       bucket: normalizeBucket(bucket),
       source: {
+        indexKey: loaded.indexKey || INDEX_KEY_ALL,
         index: loaded.fromIndex,
         scan: loaded.fromScan,
         scanOnly: loaded.mergedOnlyScan,
@@ -308,12 +375,11 @@ async function handlePublic(request, env, { latestOnly }) {
         result: hasTarget(result),
       },
     },
-  });
+  }, 200, kvStats);
 }
 
-async function handleDebugItem(request, env) {
-  const kv = getKv(env);
-  if (!kv) return json({ error: "kv_not_bound" }, 500);
+async function handleDebugItem(request, kv, { kvStats }) {
+  if (!kv) return json({ error: "kv_not_bound" }, 500, kvStats);
 
   const url = new URL(request.url);
   const id = String(url.searchParams.get("id") || "").trim();
@@ -347,7 +413,7 @@ async function handleDebugItem(request, env) {
   const resolvedMode = mode || normalizeMode(sourceItem?.mode);
   const resolvedBucket = bucket !== null ? bucket : normalizeBucket(sourceItem?.bucket);
 
-  const loaded = await loadPublicItems(kv);
+  const loaded = await loadPublicItems(kv, { mode: resolvedMode, bucket: resolvedBucket, allowScan: true });
   const filtered = relaxedFilter(loaded.items, resolvedMode, resolvedBucket);
 
   const targetInFiltered = filtered.find((it) => (id ? byId(it) : byText(it)));
@@ -412,12 +478,11 @@ async function handleDebugItem(request, env) {
     sample: {
       modeBucketTop10: filtered.slice(0, 10).map((it) => ({ id: it.id, text: it.text, likes: Number(it.likes || 0), createdAt: Number(it.createdAt || 0) })),
     },
-  });
+  }, 200, kvStats);
 }
 
-async function handleReindex(env) {
-  const kv = getKv(env);
-  if (!kv) return json({ error: "kv_not_bound" }, 500);
+async function handleReindex(kv, { kvStats }) {
+  if (!kv) return json({ error: "kv_not_bound" }, 500, kvStats);
 
   const scannedRaw = await scanPrefix(kv, "public:");
   const items = scannedRaw.map(normalizeItem).filter(Boolean).sort(comparePublic);
@@ -447,16 +512,47 @@ async function handleReindex(env) {
   await Promise.all(Array.from(grouped.entries()).map(([key, arr]) => kv.put(key, JSON.stringify(arr))));
 
   console.log(`[debug] /api/admin/reindex scanned=${scannedRaw.length} normalized=${items.length} wrote=${grouped.size + 1}`);
-  return json({ ok: true, scanned: scannedRaw.length, wrote: grouped.size + 1, total: items.length });
+  return json({ ok: true, scanned: scannedRaw.length, wrote: grouped.size + 1, total: items.length }, 200, kvStats);
 }
 
-function json(data, status = 200) {
+async function handleKvDebug(request, env, kvStats) {
+  const adminKey = String(env.ADMIN_KEY || "").trim();
+  if (adminKey) {
+    const reqKey = String(request.headers.get("x-admin-key") || "").trim();
+    if (!reqKey || reqKey !== adminKey) {
+      return json({ ok: false, error: "forbidden" }, 403, kvStats);
+    }
+  }
+
+  return json({
+    ok: true,
+    now: {
+      path: kvStats.path,
+      get: kvStats.get,
+      put: kvStats.put,
+      list: kvStats.list,
+      delete: kvStats.delete,
+      elapsedMs: Math.max(0, Date.now() - kvStats.startedAt),
+    },
+    last: lastKvDebug,
+  }, 200, kvStats);
+}
+
+function json(data, status = 200, kvStats = null) {
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+  };
+  if (kvStats) {
+    headers["x-kv-get"] = String(kvStats.get || 0);
+    headers["x-kv-put"] = String(kvStats.put || 0);
+    headers["x-kv-list"] = String(kvStats.list || 0);
+    headers["x-kv-delete"] = String(kvStats.delete || 0);
+    headers["x-kv-total"] = String((kvStats.get || 0) + (kvStats.put || 0) + (kvStats.list || 0) + (kvStats.delete || 0));
+  }
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-    },
+    headers,
   });
 }
 
@@ -482,9 +578,8 @@ function resolveLikeTarget(body) {
   return { itemId, text, mode, bucket };
 }
 
-async function handleLike(request, env, ctx) {
-  const kv = getKv(env);
-  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500);
+async function handleLike(request, env, ctx, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
 
   const body = await request.json().catch(() => null);
   const target = resolveLikeTarget(body);
@@ -507,7 +602,7 @@ async function handleLike(request, env, ctx) {
       todayLikeCount: Number(existing.likesToday || 0),
       likesToday: Number(existing.likesToday || 0),
       hofThreshold: Number(env.HOF_THRESHOLD || 20),
-    });
+    }, 200, kvStats);
   }
 
   const now = Date.now();
@@ -557,7 +652,7 @@ async function handleLike(request, env, ctx) {
     todayLikeCount: nextLikesToday,
     likesToday: nextLikesToday,
     hofThreshold: Number(env.HOF_THRESHOLD || 20),
-  });
+  }, 200, kvStats);
 }
 
 async function runLikeHeavyTasks(env, target, nowTs) {
