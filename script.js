@@ -108,10 +108,24 @@ function getOrCreateDeviceId(){
 async function pingUsageOncePerDay(reason="wx_ok"){
   const dayKey = "usage_ping_day_v1";
   const day = todayJSTString();
+  const memKey = "__usage_ping_day_mem_v1";
+  const sessionKey = "usage_ping_day_session_v1";
+
+  if (window[memKey] === day) return;
 
   try{
     const done = localStorage.getItem(dayKey);
-    if (done === day) return;
+    if (done === day) {
+      window[memKey] = day;
+      return;
+    }
+  }catch{}
+  try{
+    const doneS = sessionStorage.getItem(sessionKey);
+    if (doneS === day) {
+      window[memKey] = day;
+      return;
+    }
   }catch{}
 
   const deviceId = getOrCreateDeviceId();
@@ -136,7 +150,9 @@ async function pingUsageOncePerDay(reason="wx_ok"){
     }
 
     if (res.ok && data?.ok) {
+      window[memKey] = day;
       try{ localStorage.setItem(dayKey, day); }catch{}
+      try{ sessionStorage.setItem(sessionKey, day); }catch{}
       return;
     }
 
