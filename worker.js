@@ -872,7 +872,7 @@ function usageMetricKey(day, metric) {
 
 function normalizeUsageReason(value) {
   const v = String(value || "").trim().toLowerCase();
-  if (v === "weather_search" || v === "wx_search") return "weather_search";
+  if (v === "weather_search" || v === "wx_search" || v === "weather_search_count") return "weather_search";
   if (v === "dau_ping" || v === "wx_ok") return "dau_ping";
   return "other";
 }
