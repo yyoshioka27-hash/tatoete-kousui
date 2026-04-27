@@ -162,6 +162,29 @@ async function pingUsageOncePerDay(reason="wx_ok"){
   }
 }
 
+async function pingUsageEvent(reason="weather_search"){
+  const deviceId = getOrCreateDeviceId();
+  const url = `${API_BASE}/api/usage/ping?d=${encodeURIComponent(deviceId)}&r=${encodeURIComponent(reason)}&v=${encodeURIComponent(BUILD)}`;
+
+  try{
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 2500);
+    try{
+      await fetch(url, {
+        method:"POST",
+        cache:"no-store",
+        signal: ac.signal,
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ deviceId, reason, v: BUILD })
+      });
+    } finally {
+      clearTimeout(t);
+    }
+  }catch(e){
+    console.warn("usage event ping failed", e?.message || e);
+  }
+}
+
 // =========================
 // ✅ render 多重呼び出し防止
 // =========================
@@ -2663,7 +2686,8 @@ try {
 
           setStatus("取得しました", "ok");
 
-          try{ pingUsageOncePerDay("wx_ok"); }catch{}
+          try{ pingUsageOncePerDay("dau_ping"); }catch{}
+          try{ pingUsageEvent("weather_search"); }catch{}
           try { fireIfApprovedOnNextSearch(); } catch {}
 
           try{

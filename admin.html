@@ -287,6 +287,20 @@
 
   <div class="card">
     <div class="row" style="justify-content:space-between;">
+      <div style="font-weight:800;">本日の使用状況</div>
+      <button id="btnUsageStatus" class="smallBtn">使用状況更新</button>
+    </div>
+    <dl class="opsGrid" style="margin:10px 0 0;">
+      <dt>対象日</dt><dd id="usageDay">-</dd>
+      <dt>今日の利用者数</dt><dd id="usageUsers">-</dd>
+      <dt>天気検索回数</dt><dd id="usageWeatherSearches">-</dd>
+      <dt>いいね回数</dt><dd id="usageLikes">-</dd>
+      <dt>ランキング取得回数</dt><dd id="usageRankingFetches">-</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;">
       <div class="tabs">
         <button id="tabPending" class="tab active">承認待ち</button>
         <button id="tabPublic" class="tab">一般公開</button>
@@ -464,6 +478,7 @@
 　const btnHofDailyBuild = $("btnHofDailyBuild");
 　const btnHofDailyCheck = $("btnHofDailyCheck");
   const btnOpsStatus = $("btnOpsStatus");
+  const btnUsageStatus = $("btnUsageStatus");
 
   const opsBuild = $("opsBuild");
   const opsHofDay = $("opsHofDay");
@@ -474,6 +489,12 @@
   const opsPublicCount = $("opsPublicCount");
   const opsSnapshot = $("opsSnapshot");
   const opsState = $("opsState");
+
+  const usageDay = $("usageDay");
+  const usageUsers = $("usageUsers");
+  const usageWeatherSearches = $("usageWeatherSearches");
+  const usageLikes = $("usageLikes");
+  const usageRankingFetches = $("usageRankingFetches");
 
   const bulkActionsPending = $("bulkActionsPending");
   const bulkActionsPublic  = $("bulkActionsPublic");
@@ -540,7 +561,7 @@
     tabPending, tabPublic, tabAll,
     btnBulkApprove, btnBulkReject, btnBulkDeletePublic,
     elQ, elSort, btnClearQ,
-    btnReindexTop, btnReindex
+    btnReindexTop, btnReindex, btnOpsStatus, btnUsageStatus
   ].forEach(b => { try{ if (b) b.disabled = dis; }catch{} });
 }
 
@@ -732,6 +753,11 @@
       "/api/admin/stats",
       "/api/admin/usage",
       "/api/admin/dau",
+    ],
+
+    usageToday: [
+      "/api/admin/usage",
+      "/api/admin/stats",
     ],
   };
 
@@ -1404,12 +1430,48 @@
     }
   }
 
+  function formatCountText(v){
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return "-";
+    return `${n}`;
+  }
+
+  async function fetchUsageToday(signal){
+    try{
+      const s = await callAdminWithFallback(API.usageToday, { admin:true, signal });
+      const day = String(s?.day || todayJstYmd());
+      const users = Number(s?.dauToday ?? s?.usage?.users ?? s?.today ?? NaN);
+      const weatherSearches = Number(s?.weatherSearches ?? s?.usage?.weatherSearches ?? NaN);
+      const likes = Number(s?.likeCount ?? s?.usage?.likes ?? NaN);
+      const rankingFetches = Number(s?.rankingFetches ?? s?.usage?.rankingFetches ?? NaN);
+
+      usageDay.textContent = day;
+      usageUsers.textContent = formatCountText(users);
+      usageWeatherSearches.textContent = formatCountText(weatherSearches);
+      usageLikes.textContent = formatCountText(likes);
+      usageRankingFetches.textContent = formatCountText(rankingFetches);
+
+      if (Number.isFinite(users)) {
+        setPill(pillDAU, `今日の使用者数: ${users}`, true);
+      } else {
+        setPill(pillDAU, "今日の使用者数: -（usage形式不明）", null);
+      }
+    } catch(e){
+      usageDay.textContent = todayJstYmd();
+      usageUsers.textContent = "-";
+      usageWeatherSearches.textContent = "-";
+      usageLikes.textContent = "-";
+      usageRankingFetches.textContent = "-";
+      await fetchDAU(signal);
+    }
+  }
+
   // ✅ 更新ボタンの体感速度改善:
   // 一覧更新に必須ではない補助情報（DAU/運用ステータス）は
   // 非同期で裏更新し、一覧描画を先に完了させる。
   async function refreshAuxPanels(signal){
     await Promise.allSettled([
-      fetchDAU(signal),
+      fetchUsageToday(signal),
       refreshOpsStatus(signal),
     ]);
   }
@@ -1488,13 +1550,18 @@
         else setPill(pillAdmin, `admin: NG（${e.message}）`, false);
       }
 
-      // ✅ DAU表示（stats/usage/dau どれでも）
-      await fetchDAU(signal);
+      // ✅ DAU/使用状況表示
+      await fetchUsageToday(signal);
       await refreshOpsStatus(signal);
 
     } catch(e){
       setPill(pillHealth, `health: NG（${e.message}）`, false);
       setPill(pillDAU, "今日の使用者数: -", null);
+      usageDay.textContent = todayJstYmd();
+      usageUsers.textContent = "-";
+      usageWeatherSearches.textContent = "-";
+      usageLikes.textContent = "-";
+      usageRankingFetches.textContent = "-";
       await refreshOpsStatus(signal);
     } finally {
       setBusy(false);
@@ -1554,7 +1621,7 @@
       promotePendingItemsToPublic(uniq);
       // ✅ 操作直後はローカル反映のみで完結（全件再読込を避ける）
       if (activeTab === "all") rebuildAllFromKnownLists();
-      void fetchDAU(signal);
+      void fetchUsageToday(signal);
 
       selectedIds = new Set();
       syncCacheAll();
@@ -1617,7 +1684,7 @@
       await deletePublicRobust(uniq, signal);
       itemsPublic = removeByIds(itemsPublic, uniq);
       if (activeTab === "all") rebuildAllFromKnownLists();
-      void fetchDAU(signal);
+      void fetchUsageToday(signal);
 
       selectedIds = new Set();
       syncCacheAll();
@@ -1694,7 +1761,7 @@
         alert(`却下(削除)を実行しましたが、まだ pending に残っています：${still.length}件\n最初の数件: ${still.slice(0,5).join(", ")}`);
       }
 
-      void fetchDAU(signal);
+      void fetchUsageToday(signal);
 
       selectedIds = new Set();
       syncCacheAll();
@@ -1868,6 +1935,20 @@ async function hofDailyCheck(){
       await refreshOpsStatus(signal);
     } catch(e){
       alert(`運用ステータス更新に失敗: ${e.message}`);
+    } finally{
+      setBusy(false);
+      __ctrl = null;
+    }
+  });
+  btnUsageStatus.addEventListener("click", async () => {
+    abortInFlight();
+    __ctrl = new AbortController();
+    setBusy(true);
+    const signal = __ctrl.signal;
+    try{
+      await fetchUsageToday(signal);
+    } catch(e){
+      alert(`使用状況更新に失敗: ${e.message}`);
     } finally{
       setBusy(false);
       __ctrl = null;
@@ -2070,6 +2151,11 @@ async function hofDailyCheck(){
   opsPublicCount.textContent = "未取得";
   opsSnapshot.textContent = "未確認";
   opsState.textContent = "情報不足（ステータス更新を実行）";
+  usageDay.textContent = todayJstYmd();
+  usageUsers.textContent = "-";
+  usageWeatherSearches.textContent = "-";
+  usageLikes.textContent = "-";
+  usageRankingFetches.textContent = "-";
 
   hydrateFromCache();
   render();
