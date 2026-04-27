@@ -69,6 +69,10 @@ export default {
         return handleUsagePing(request, env, kv, { kvStats });
       }
 
+      if (path === "/api/usage/weather_search_success" && (request.method === "GET" || request.method === "POST")) {
+        return handleWeatherSearchSuccess(request, env, kv, { kvStats });
+      }
+
       if ((path === "/api/admin/usage" || path === "/api/admin/stats") && request.method === "GET") {
         return handleAdminUsage(request, env, kv, { kvStats });
       }
@@ -849,7 +853,7 @@ async function handleUsagePing(request, _env, kv, { kvStats }) {
   const countKey = `${USAGE_COUNT_PREFIX}${day}`;
 
   if (reason === "weather_search") {
-    await incrementUsageMetric(kv, day, "weather_searches");
+    await incrementUsageMetric(kv, day, "weather_search_count");
   }
 
   const seen = await kv.get(seenKey, "text");
@@ -866,13 +870,20 @@ async function handleUsagePing(request, _env, kv, { kvStats }) {
   return json({ ok: true, day, unique: false, dau, reason }, 200, kvStats);
 }
 
+async function handleWeatherSearchSuccess(request, _env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  const day = getJstDay();
+  const total = await incrementUsageMetric(kv, day, "weather_search_count");
+  return json({ ok: true, day, weatherSearchCount: total }, 200, kvStats);
+}
+
 function usageMetricKey(day, metric) {
   return `${USAGE_METRIC_PREFIX}${day}:${metric}`;
 }
 
 function normalizeUsageReason(value) {
   const v = String(value || "").trim().toLowerCase();
-  if (v === "weather_search" || v === "wx_search") return "weather_search";
+  if (v === "weather_search" || v === "wx_search" || v === "weather_search_count") return "weather_search";
   if (v === "dau_ping" || v === "wx_ok") return "dau_ping";
   return "other";
 }
@@ -896,12 +907,14 @@ async function handleAdminUsage(request, env, kv, { kvStats }) {
   const url = new URL(request.url);
   const day = parseDayOrToday(url.searchParams.get("day"));
   const countKey = `${USAGE_COUNT_PREFIX}${day}`;
-  const [dauToday, weatherSearches, likeCount, rankingFetches] = await Promise.all([
+  const [dauToday, weatherSearchCount, weatherSearchesLegacy, likeCount, rankingFetches] = await Promise.all([
     Number(await kv.get(countKey, "text")) || 0,
+    readUsageMetric(kv, day, "weather_search_count"),
     readUsageMetric(kv, day, "weather_searches"),
     readUsageMetric(kv, day, "likes"),
     readUsageMetric(kv, day, "ranking_fetches"),
   ]);
+  const weatherSearches = Math.max(weatherSearchCount, weatherSearchesLegacy);
 
   return json({
     ok: true,
