@@ -3,10 +3,20 @@ const MAX_LIMIT = 1000;
 const INDEX_KEY_ALL = "idx:public";
 const INDEX_KEY_LATEST_PREFIX = "idx:public_latest:";
 const SNAPSHOT_TTL_MS = 20 * 1000;
+const RANK_CACHE_TTL_MS = 15 * 1000;
+const HOF_THRESHOLD_DEFAULT = 20;
+const HOF_DAILY_KEY_PREFIX = "snapshot:hof_daily:";
+const USAGE_SEEN_PREFIX = "usage:seen:";
+const USAGE_COUNT_PREFIX = "usage:count:";
 const NG_PHRASES = ["共通テスト"];
 let snapshotCache = {
   at: 0,
   items: null,
+};
+let rankingCache = {
+  at: 0,
+  day: "",
+  byMode: new Map(),
 };
 let lastKvDebug = null;
 
@@ -19,11 +29,43 @@ export default {
 
     try {
       if (path === "/api/public") {
-        return handlePublic(request, kv, { latestOnly: false, kvStats });
+        return handlePublic(request, env, kv, { latestOnly: false, kvStats });
       }
 
       if (path === "/api/public_latest") {
-        return handlePublic(request, kv, { latestOnly: true, kvStats });
+        return handlePublic(request, env, kv, { latestOnly: true, kvStats });
+      }
+
+      if (path === "/api/health") {
+        return handleHealth(request, env, kvStats);
+      }
+
+      if (path === "/api/ranking/today" || path === "/api/ranking/today_all") {
+        return handleRankingToday(request, env, kv, { kvStats });
+      }
+
+      if (path === "/api/ranking/total") {
+        return handleRankingTotal(request, env, kv, { kvStats });
+      }
+
+      if (path === "/api/hof_daily") {
+        return handleHofDaily(request, env, kv, { kvStats, requireAdmin: false });
+      }
+
+      if (path === "/api/hof") {
+        return handleHof(request, env, kv, { kvStats });
+      }
+
+      if (path === "/api/admin/hof_daily") {
+        return handleHofDaily(request, env, kv, { kvStats, requireAdmin: true });
+      }
+
+      if (path === "/api/admin/hof_daily_build" && request.method === "POST") {
+        return handleHofDailyBuild(request, env, kv, { kvStats });
+      }
+
+      if (path === "/api/usage/ping" && request.method === "POST") {
+        return handleUsagePing(request, env, kv, { kvStats });
       }
 
       if (path === "/api/admin/reindex" || path === "/api/admin/reindex_public") {
@@ -316,7 +358,7 @@ async function scanPrefix(kv, prefix) {
   return out;
 }
 
-async function handlePublic(request, kv, { latestOnly, kvStats }) {
+async function handlePublic(request, env, kv, { latestOnly, kvStats }) {
   if (!kv) return json({ error: "kv_not_bound" }, 500, kvStats);
 
   const url = new URL(request.url);
@@ -355,6 +397,8 @@ async function handlePublic(request, kv, { latestOnly, kvStats }) {
 
   return json({
     ok: true,
+    day: getJstDay(),
+    hofThreshold: getHofThreshold(env),
     items: result,
     count: result.length,
     total: filtered.length,
@@ -538,6 +582,278 @@ async function handleKvDebug(request, env, kvStats) {
   }, 200, kvStats);
 }
 
+function getHofThreshold(env) {
+  const n = Number(env?.HOF_THRESHOLD || HOF_THRESHOLD_DEFAULT);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : HOF_THRESHOLD_DEFAULT;
+}
+
+function ensureAdmin(request, env) {
+  const adminKey = String(env.ADMIN_KEY || "").trim();
+  if (!adminKey) return true;
+  const reqKey = String(request.headers.get("x-admin-key") || "").trim();
+  return !!reqKey && reqKey === adminKey;
+}
+
+function parseDayOrToday(value, now = Date.now()) {
+  const raw = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return getJstDay(now);
+}
+
+function getModeParam(url) {
+  const m = normalizeMode(url.searchParams.get("mode"));
+  return m || "trivia";
+}
+
+function normalizeRankingEntry(raw, modeHint = "") {
+  const it = normalizeItem(raw);
+  if (!it) return null;
+  return {
+    id: String(it.id || "").trim(),
+    text: String(it.text || "").trim(),
+    mode: normalizeMode(it.mode) || normalizeMode(modeHint) || "trivia",
+    bucket: normalizeBucket(it.bucket) ?? 0,
+    likes: Number(it.likesToday ?? it.likes ?? 0) || 0,
+    totalLikes: Number(it.likes ?? it.totalLikes ?? 0) || 0,
+    penName: it.penName ? String(it.penName).trim() : null,
+    hof: !!it.hof,
+    createdAt: Number(it.createdAt || 0),
+  };
+}
+
+function mergeRankingById(items) {
+  const map = new Map();
+  for (const raw of Array.isArray(items) ? items : []) {
+    const it = normalizeRankingEntry(raw);
+    if (!it || !it.id || !it.text) continue;
+    const cur = map.get(it.id);
+    if (!cur) {
+      map.set(it.id, it);
+      continue;
+    }
+    cur.likes = Math.max(Number(cur.likes || 0), Number(it.likes || 0));
+    cur.totalLikes = Math.max(Number(cur.totalLikes || 0), Number(it.totalLikes || 0));
+    cur.createdAt = Math.max(Number(cur.createdAt || 0), Number(it.createdAt || 0));
+    cur.hof = !!cur.hof || !!it.hof;
+    if (!cur.penName && it.penName) cur.penName = it.penName;
+    if (it.text.length > cur.text.length) cur.text = it.text;
+  }
+  return Array.from(map.values());
+}
+
+async function getAllPublicItemsForRanking(kv, { includeScan = false } = {}) {
+  const loaded = await loadPublicItems(kv, {
+    latestOnly: false,
+    allowScan: includeScan,
+  });
+  return mergeRankingById(loaded.items);
+}
+
+async function getRankingSnapshot(kv, { mode, day }) {
+  const now = Date.now();
+  if (rankingCache.day === day && now - rankingCache.at < RANK_CACHE_TTL_MS && rankingCache.byMode.has(mode)) {
+    return rankingCache.byMode.get(mode);
+  }
+
+  const all = await getAllPublicItemsForRanking(kv, { includeScan: false });
+  const filtered = all.filter((it) => (normalizeMode(it.mode) || "trivia") === mode);
+  const today = filtered
+    .filter((it) => Number(it.likes || 0) > 0)
+    .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0) || Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  const total = filtered
+    .filter((it) => Number(it.totalLikes || 0) > 0)
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0) || Number(b.createdAt || 0) - Number(a.createdAt || 0));
+
+  if (rankingCache.day !== day) {
+    rankingCache = { at: now, day, byMode: new Map() };
+  } else {
+    rankingCache.at = now;
+  }
+
+  const snap = { today, total };
+  rankingCache.byMode.set(mode, snap);
+  return snap;
+}
+
+async function handleHealth(_request, env, kvStats) {
+  return json({
+    ok: true,
+    BUILD: String(env.BUILD || "worker-local"),
+    now: Date.now(),
+    hofThreshold: getHofThreshold(env),
+  }, 200, kvStats);
+}
+
+async function handleRankingToday(request, env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+
+  const url = new URL(request.url);
+  const mode = getModeParam(url);
+  const limit = parseLimit(url, 20);
+  const day = parseDayOrToday(url.searchParams.get("day"));
+  const path = url.pathname;
+
+  if (path === "/api/ranking/today_all") {
+    const all = await getAllPublicItemsForRanking(kv, { includeScan: false });
+    const items = all
+      .filter((it) => (normalizeMode(it.mode) || "trivia") === mode)
+      .filter((it) => Number(it.likes || 0) > 0)
+      .sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0) || Number(b.createdAt || 0) - Number(a.createdAt || 0))
+      .slice(0, limit);
+    return json({ ok: true, mode, day, items, count: items.length, hofThreshold: getHofThreshold(env) }, 200, kvStats);
+  }
+
+  const bucket = normalizeBucket(url.searchParams.get("bucket"));
+  const snapshot = await getRankingSnapshot(kv, { mode, day });
+  let items = snapshot.today;
+  if (bucket !== null) {
+    items = items.filter((it) => normalizeBucket(it.bucket) === bucket);
+  }
+  items = items.slice(0, limit);
+  return json({
+    ok: true,
+    mode,
+    bucket,
+    day,
+    items,
+    count: items.length,
+    hofThreshold: getHofThreshold(env),
+  }, 200, kvStats);
+}
+
+async function handleRankingTotal(request, env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  const url = new URL(request.url);
+  const mode = getModeParam(url);
+  const bucket = normalizeBucket(url.searchParams.get("bucket"));
+  const limit = parseLimit(url, 20);
+  const day = getJstDay();
+  const snapshot = await getRankingSnapshot(kv, { mode, day });
+  let items = snapshot.total;
+  if (bucket !== null) {
+    items = items.filter((it) => normalizeBucket(it.bucket) === bucket);
+  }
+  items = items.slice(0, limit).map((it) => ({
+    ...it,
+    hof: !!it.hof || Number(it.totalLikes || 0) >= getHofThreshold(env),
+  }));
+  return json({ ok: true, mode, bucket, items, count: items.length, hofThreshold: getHofThreshold(env) }, 200, kvStats);
+}
+
+async function handleHof(request, env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  const url = new URL(request.url);
+  const mode = getModeParam(url);
+  const limit = parseLimit(url, 50);
+  const threshold = getHofThreshold(env);
+  const all = await getAllPublicItemsForRanking(kv, { includeScan: false });
+  const items = all
+    .filter((it) => (normalizeMode(it.mode) || "trivia") === mode)
+    .filter((it) => Number(it.totalLikes || 0) >= threshold)
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0) || Number(b.createdAt || 0) - Number(a.createdAt || 0))
+    .slice(0, limit)
+    .map((it) => ({ ...it, hof: true }));
+  return json({
+    ok: true,
+    mode,
+    count: items.length,
+    items,
+    hofThreshold: threshold,
+  }, 200, kvStats);
+}
+
+function hofKeyByDay(day) {
+  return `${HOF_DAILY_KEY_PREFIX}${day}`;
+}
+
+async function buildHofDailySnapshot(kv, env, day) {
+  const threshold = getHofThreshold(env);
+  const all = await getAllPublicItemsForRanking(kv, { includeScan: false });
+  const hofItems = all
+    .filter((it) => Number(it.totalLikes || 0) >= threshold)
+    .sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0) || Number(b.createdAt || 0) - Number(a.createdAt || 0));
+
+  const payload = {
+    ok: true,
+    day,
+    type: "hall_of_fame_daily_snapshot",
+    generatedAt: Date.now(),
+    hofThreshold: threshold,
+    count: hofItems.length,
+    items: hofItems,
+  };
+  await kv.put(hofKeyByDay(day), JSON.stringify(payload));
+  return payload;
+}
+
+async function handleHofDaily(request, env, kv, { kvStats, requireAdmin }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  if (requireAdmin && !ensureAdmin(request, env)) {
+    return json({ ok: false, error: "forbidden" }, 403, kvStats);
+  }
+  const url = new URL(request.url);
+  const day = parseDayOrToday(url.searchParams.get("day"));
+  const existing = await kv.get(hofKeyByDay(day), "json");
+  if (existing && typeof existing === "object") {
+    return json({ ...existing, ok: true }, 200, kvStats);
+  }
+  if (requireAdmin) {
+    return json({
+      ok: true,
+      day,
+      type: "hall_of_fame_daily_snapshot_missing",
+      snapshotExists: false,
+      count: 0,
+      hofThreshold: getHofThreshold(env),
+    }, 200, kvStats);
+  }
+  const auto = await buildHofDailySnapshot(kv, env, day);
+  return json(auto, 200, kvStats);
+}
+
+async function handleHofDailyBuild(request, env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  if (!ensureAdmin(request, env)) return json({ ok: false, error: "forbidden" }, 403, kvStats);
+  const body = await request.json().catch(() => ({}));
+  const day = parseDayOrToday(body?.day || new URL(request.url).searchParams.get("day"));
+  const built = await buildHofDailySnapshot(kv, env, day);
+  return json({
+    ok: true,
+    built: true,
+    day,
+    count: Number(built.count || 0),
+    generatedAt: built.generatedAt,
+    hofThreshold: built.hofThreshold,
+  }, 200, kvStats);
+}
+
+async function handleUsagePing(request, _env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  const url = new URL(request.url);
+  const body = await request.json().catch(() => ({}));
+  const day = getJstDay();
+  const deviceId =
+    String(url.searchParams.get("d") || "").trim() ||
+    String(body?.deviceId || "").trim() ||
+    "anonymous";
+  const normalizedDevice = deviceId.replace(/[^\w\-:.]/g, "_").slice(0, 128) || "anonymous";
+  const seenKey = `${USAGE_SEEN_PREFIX}${day}:${normalizedDevice}`;
+  const countKey = `${USAGE_COUNT_PREFIX}${day}`;
+
+  const seen = await kv.get(seenKey, "text");
+  if (!seen) {
+    const current = Number(await kv.get(countKey, "text")) || 0;
+    const next = current + 1;
+    await Promise.all([
+      kv.put(seenKey, "1", { expirationTtl: 60 * 60 * 24 * 3 }),
+      kv.put(countKey, String(next), { expirationTtl: 60 * 60 * 24 * 8 }),
+    ]);
+    return json({ ok: true, day, unique: true, dau: next }, 200, kvStats);
+  }
+  const dau = Number(await kv.get(countKey, "text")) || 0;
+  return json({ ok: true, day, unique: false, dau }, 200, kvStats);
+}
+
 function json(data, status = 200, kvStats = null) {
   const headers = {
     "content-type": "application/json; charset=utf-8",
@@ -606,23 +922,38 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
   }
 
   const now = Date.now();
-  const current = (await kv.get(`public:${target.itemId}`, "json")) || {};
-  const prevLikes = Number(current.likes || current.totalLikes || 0);
-  const prevLikesToday = Number(current.likesToday || 0);
-  const nextLikes = prevLikes + 1;
-  const nextLikesToday = prevLikesToday + 1;
+  const publicKey = `public:${target.itemId}`;
+  let nextLikes = 1;
+  let nextLikesToday = 1;
+  let wrote = false;
 
-  const nextItem = {
-    ...current,
-    id: target.itemId,
-    text: current.text || target.text,
-    mode: normalizeMode(current.mode) || target.mode,
-    bucket: normalizeBucket(current.bucket) ?? target.bucket,
-    likes: nextLikes,
-    totalLikes: nextLikes,
-    likesToday: nextLikesToday,
-    updatedAt: now,
-  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const current = (await kv.get(publicKey, "json")) || {};
+    const prevLikes = Number(current.likes || current.totalLikes || 0);
+    const prevLikesToday = Number(current.likesToday || 0);
+    nextLikes = prevLikes + 1;
+    nextLikesToday = prevLikesToday + 1;
+
+    const nextItem = {
+      ...current,
+      id: target.itemId,
+      text: current.text || target.text,
+      mode: normalizeMode(current.mode) || target.mode,
+      bucket: normalizeBucket(current.bucket) ?? target.bucket,
+      likes: nextLikes,
+      totalLikes: nextLikes,
+      likesToday: nextLikesToday,
+      updatedAt: now,
+    };
+
+    await kv.put(publicKey, JSON.stringify(nextItem));
+    const verify = (await kv.get(publicKey, "json")) || {};
+    const storedLikes = Number(verify.likes || verify.totalLikes || 0);
+    if (storedLikes >= nextLikes) {
+      wrote = true;
+      break;
+    }
+  }
 
   await kv.put(
     dedupeKey,
@@ -634,9 +965,14 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
     }),
     { expirationTtl: 60 * 60 * 24 * 2 }
   );
-  await kv.put(`public:${target.itemId}`, JSON.stringify(nextItem));
+  if (!wrote) {
+    const latest = (await kv.get(publicKey, "json")) || {};
+    nextLikes = Number(latest.likes || latest.totalLikes || nextLikes);
+    nextLikesToday = Number(latest.likesToday || nextLikesToday);
+  }
 
   snapshotCache = { at: 0, items: null };
+  rankingCache.at = 0;
 
   ctx.waitUntil(runLikeHeavyTasks(env, target, now).catch((e) => {
     console.log(`[warn] runLikeHeavyTasks failed id=${target.itemId}: ${e?.message || e}`);
