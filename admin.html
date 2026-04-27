@@ -1436,14 +1436,24 @@
     return `${n}`;
   }
 
+  function toCountOrZero(v){
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.floor(n);
+  }
+
   async function fetchUsageToday(signal){
     try{
-      const s = await callAdminWithFallback(API.usageToday, { admin:true, signal });
-      const day = String(s?.day || todayJstYmd());
-      const users = Number(s?.dauToday ?? s?.usage?.users ?? s?.today ?? NaN);
-      const weatherSearches = Number(s?.weatherSearches ?? s?.usage?.weatherSearches ?? NaN);
-      const likes = Number(s?.likeCount ?? s?.usage?.likes ?? NaN);
-      const rankingFetches = Number(s?.rankingFetches ?? s?.usage?.rankingFetches ?? NaN);
+      const day = todayJstYmd();
+      const s = await callAdminWithFallback([
+        `/api/admin/usage?day=${encodeURIComponent(day)}`,
+        `/api/admin/stats?day=${encodeURIComponent(day)}`,
+      ], { admin:true, signal });
+
+      const users = toCountOrZero(s?.dauToday ?? s?.usage?.users ?? s?.today ?? s?.dau ?? s?.count);
+      const weatherSearches = toCountOrZero(s?.weatherSearches ?? s?.usage?.weatherSearches);
+      const likes = toCountOrZero(s?.likes ?? s?.likeCount ?? s?.usage?.likes);
+      const rankingFetches = toCountOrZero(s?.rankingFetches ?? s?.usage?.rankingFetches);
 
       usageDay.textContent = day;
       usageUsers.textContent = formatCountText(users);
@@ -1451,11 +1461,7 @@
       usageLikes.textContent = formatCountText(likes);
       usageRankingFetches.textContent = formatCountText(rankingFetches);
 
-      if (Number.isFinite(users)) {
-        setPill(pillDAU, `今日の使用者数: ${users}`, true);
-      } else {
-        setPill(pillDAU, "今日の使用者数: -（usage形式不明）", null);
-      }
+      setPill(pillDAU, `今日の使用者数: ${users}`, true);
     } catch(e){
       usageDay.textContent = todayJstYmd();
       usageUsers.textContent = "-";

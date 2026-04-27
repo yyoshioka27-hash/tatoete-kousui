@@ -907,7 +907,10 @@ async function handleAdminUsage(request, env, kv, { kvStats }) {
     ok: true,
     day,
     dauToday,
+    users: dauToday,
     weatherSearches,
+    weatherSearchCount: weatherSearches,
+    likes: likeCount,
     likeCount,
     rankingFetches,
     usage: {
