@@ -8,6 +8,7 @@ const HOF_THRESHOLD_DEFAULT = 20;
 const HOF_DAILY_KEY_PREFIX = "snapshot:hof_daily:";
 const USAGE_SEEN_PREFIX = "usage:seen:";
 const USAGE_COUNT_PREFIX = "usage:count:";
+const USAGE_METRIC_PREFIX = "usage:metric:";
 const NG_PHRASES = ["共通テスト"];
 let snapshotCache = {
   at: 0,
@@ -66,6 +67,10 @@ export default {
 
       if (path === "/api/usage/ping" && request.method === "POST") {
         return handleUsagePing(request, env, kv, { kvStats });
+      }
+
+      if ((path === "/api/admin/usage" || path === "/api/admin/stats") && request.method === "GET") {
+        return handleAdminUsage(request, env, kv, { kvStats });
       }
 
       if (path === "/api/admin/reindex" || path === "/api/admin/reindex_public") {
@@ -692,6 +697,7 @@ async function handleRankingToday(request, env, kv, { kvStats }) {
   const limit = parseLimit(url, 20);
   const day = parseDayOrToday(url.searchParams.get("day"));
   const path = url.pathname;
+  await incrementUsageMetric(kv, getJstDay(), "ranking_fetches");
 
   if (path === "/api/ranking/today_all") {
     const all = await getAllPublicItemsForRanking(kv, { includeScan: false });
@@ -728,6 +734,7 @@ async function handleRankingTotal(request, env, kv, { kvStats }) {
   const bucket = normalizeBucket(url.searchParams.get("bucket"));
   const limit = parseLimit(url, 20);
   const day = getJstDay();
+  await incrementUsageMetric(kv, day, "ranking_fetches");
   const snapshot = await getRankingSnapshot(kv, { mode, day });
   let items = snapshot.total;
   if (bucket !== null) {
@@ -832,6 +839,7 @@ async function handleUsagePing(request, _env, kv, { kvStats }) {
   const url = new URL(request.url);
   const body = await request.json().catch(() => ({}));
   const day = getJstDay();
+  const reason = normalizeUsageReason(url.searchParams.get("r") || body?.reason || "");
   const deviceId =
     String(url.searchParams.get("d") || "").trim() ||
     String(body?.deviceId || "").trim() ||
@@ -839,6 +847,10 @@ async function handleUsagePing(request, _env, kv, { kvStats }) {
   const normalizedDevice = deviceId.replace(/[^\w\-:.]/g, "_").slice(0, 128) || "anonymous";
   const seenKey = `${USAGE_SEEN_PREFIX}${day}:${normalizedDevice}`;
   const countKey = `${USAGE_COUNT_PREFIX}${day}`;
+
+  if (reason === "weather_search") {
+    await incrementUsageMetric(kv, day, "weather_searches");
+  }
 
   const seen = await kv.get(seenKey, "text");
   if (!seen) {
@@ -848,10 +860,64 @@ async function handleUsagePing(request, _env, kv, { kvStats }) {
       kv.put(seenKey, "1", { expirationTtl: 60 * 60 * 24 * 3 }),
       kv.put(countKey, String(next), { expirationTtl: 60 * 60 * 24 * 8 }),
     ]);
-    return json({ ok: true, day, unique: true, dau: next }, 200, kvStats);
+    return json({ ok: true, day, unique: true, dau: next, reason }, 200, kvStats);
   }
   const dau = Number(await kv.get(countKey, "text")) || 0;
-  return json({ ok: true, day, unique: false, dau }, 200, kvStats);
+  return json({ ok: true, day, unique: false, dau, reason }, 200, kvStats);
+}
+
+function usageMetricKey(day, metric) {
+  return `${USAGE_METRIC_PREFIX}${day}:${metric}`;
+}
+
+function normalizeUsageReason(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "weather_search" || v === "wx_search") return "weather_search";
+  if (v === "dau_ping" || v === "wx_ok") return "dau_ping";
+  return "other";
+}
+
+async function incrementUsageMetric(kv, day, metric, delta = 1) {
+  const key = usageMetricKey(day, metric);
+  const current = Number(await kv.get(key, "text")) || 0;
+  const next = Math.max(0, current + Number(delta || 0));
+  await kv.put(key, String(next), { expirationTtl: 60 * 60 * 24 * 8 });
+  return next;
+}
+
+async function readUsageMetric(kv, day, metric) {
+  return Number(await kv.get(usageMetricKey(day, metric), "text")) || 0;
+}
+
+async function handleAdminUsage(request, env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  if (!ensureAdmin(request, env)) return json({ ok: false, error: "forbidden" }, 403, kvStats);
+
+  const url = new URL(request.url);
+  const day = parseDayOrToday(url.searchParams.get("day"));
+  const countKey = `${USAGE_COUNT_PREFIX}${day}`;
+  const [dauToday, weatherSearches, likeCount, rankingFetches] = await Promise.all([
+    Number(await kv.get(countKey, "text")) || 0,
+    readUsageMetric(kv, day, "weather_searches"),
+    readUsageMetric(kv, day, "likes"),
+    readUsageMetric(kv, day, "ranking_fetches"),
+  ]);
+
+  return json({
+    ok: true,
+    day,
+    dauToday,
+    weatherSearches,
+    likeCount,
+    rankingFetches,
+    usage: {
+      day,
+      users: dauToday,
+      weatherSearches,
+      likes: likeCount,
+      rankingFetches,
+    },
+  }, 200, kvStats);
 }
 
 function json(data, status = 200, kvStats = null) {
@@ -973,6 +1039,7 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
 
   snapshotCache = { at: 0, items: null };
   rankingCache.at = 0;
+  await incrementUsageMetric(kv, day, "likes");
 
   ctx.waitUntil(runLikeHeavyTasks(env, target, now).catch((e) => {
     console.log(`[warn] runLikeHeavyTasks failed id=${target.itemId}: ${e?.message || e}`);
