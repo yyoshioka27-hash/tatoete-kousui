@@ -168,12 +168,13 @@ async function pingUsageEvent(reason="weather_search"){
 
   try{
     const ac = new AbortController();
-    const t = setTimeout(() => ac.abort(), 2500);
+    const t = setTimeout(() => ac.abort(), 5000);
     try{
       await fetch(url, {
         method:"POST",
         cache:"no-store",
         signal: ac.signal,
+        keepalive: true,
         headers: { "Content-Type":"application/json" },
         body: JSON.stringify({ deviceId, reason, v: BUILD })
       });

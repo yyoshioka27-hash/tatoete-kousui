@@ -849,7 +849,7 @@ async function handleUsagePing(request, _env, kv, { kvStats }) {
   const countKey = `${USAGE_COUNT_PREFIX}${day}`;
 
   if (reason === "weather_search") {
-    await incrementUsageMetric(kv, day, "weather_searches");
+    await incrementUsageMetric(kv, day, "weather_search_count");
   }
 
   const seen = await kv.get(seenKey, "text");
@@ -872,7 +872,7 @@ function usageMetricKey(day, metric) {
 
 function normalizeUsageReason(value) {
   const v = String(value || "").trim().toLowerCase();
-  if (v === "weather_search" || v === "wx_search") return "weather_search";
+  if (v === "weather_search" || v === "wx_search" || v === "weather_search_count") return "weather_search";
   if (v === "dau_ping" || v === "wx_ok") return "dau_ping";
   return "other";
 }
@@ -896,12 +896,14 @@ async function handleAdminUsage(request, env, kv, { kvStats }) {
   const url = new URL(request.url);
   const day = parseDayOrToday(url.searchParams.get("day"));
   const countKey = `${USAGE_COUNT_PREFIX}${day}`;
-  const [dauToday, weatherSearches, likeCount, rankingFetches] = await Promise.all([
+  const [dauToday, weatherSearchCount, weatherSearchesLegacy, likeCount, rankingFetches] = await Promise.all([
     Number(await kv.get(countKey, "text")) || 0,
+    readUsageMetric(kv, day, "weather_search_count"),
     readUsageMetric(kv, day, "weather_searches"),
     readUsageMetric(kv, day, "likes"),
     readUsageMetric(kv, day, "ranking_fetches"),
   ]);
+  const weatherSearches = Math.max(weatherSearchCount, weatherSearchesLegacy);
 
   return json({
     ok: true,
