@@ -186,6 +186,16 @@ async function pingUsageEvent(reason="weather_search"){
   }
 }
 
+async function pingWeatherSearchSuccess(){
+  const deviceId = getOrCreateDeviceId();
+  const url = `${API_BASE}/api/usage/weather_search_success?d=${encodeURIComponent(deviceId)}&v=${encodeURIComponent(BUILD)}`;
+  try{
+    await fetch(url, { method:"GET", cache:"no-store", keepalive:true });
+  }catch(e){
+    console.warn("weather search success ping failed", e?.message || e);
+  }
+}
+
 // =========================
 // ✅ render 多重呼び出し防止
 // =========================
@@ -2688,7 +2698,7 @@ try {
           setStatus("取得しました", "ok");
 
           try{ pingUsageOncePerDay("dau_ping"); }catch{}
-          try{ pingUsageEvent("weather_search"); }catch{}
+          try{ await pingWeatherSearchSuccess(); }catch{}
           try { fireIfApprovedOnNextSearch(); } catch {}
 
           try{

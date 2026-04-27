@@ -69,6 +69,10 @@ export default {
         return handleUsagePing(request, env, kv, { kvStats });
       }
 
+      if (path === "/api/usage/weather_search_success" && (request.method === "GET" || request.method === "POST")) {
+        return handleWeatherSearchSuccess(request, env, kv, { kvStats });
+      }
+
       if ((path === "/api/admin/usage" || path === "/api/admin/stats") && request.method === "GET") {
         return handleAdminUsage(request, env, kv, { kvStats });
       }
@@ -864,6 +868,13 @@ async function handleUsagePing(request, _env, kv, { kvStats }) {
   }
   const dau = Number(await kv.get(countKey, "text")) || 0;
   return json({ ok: true, day, unique: false, dau, reason }, 200, kvStats);
+}
+
+async function handleWeatherSearchSuccess(request, _env, kv, { kvStats }) {
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  const day = getJstDay();
+  const total = await incrementUsageMetric(kv, day, "weather_search_count");
+  return json({ ok: true, day, weatherSearchCount: total }, 200, kvStats);
 }
 
 function usageMetricKey(day, metric) {
