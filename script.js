@@ -168,12 +168,13 @@ async function pingUsageEvent(reason="weather_search"){
 
   try{
     const ac = new AbortController();
-    const t = setTimeout(() => ac.abort(), 2500);
+    const t = setTimeout(() => ac.abort(), 5000);
     try{
       await fetch(url, {
         method:"POST",
         cache:"no-store",
         signal: ac.signal,
+        keepalive: true,
         headers: { "Content-Type":"application/json" },
         body: JSON.stringify({ deviceId, reason, v: BUILD })
       });
@@ -182,6 +183,18 @@ async function pingUsageEvent(reason="weather_search"){
     }
   }catch(e){
     console.warn("usage event ping failed", e?.message || e);
+  }
+}
+
+async function pingWeatherSearchSuccess(){
+  const deviceId = getOrCreateDeviceId();
+  const url = `${API_BASE}/api/usage/weather_search_success?d=${encodeURIComponent(deviceId)}&v=${encodeURIComponent(BUILD)}`;
+  try{
+    const res = await fetch(url, { method:"GET", cache:"no-store", keepalive:true });
+    if (!res.ok) throw new Error(`weather_search_success failed: ${res.status}`);
+  }catch(e){
+    console.warn("weather search success ping failed, fallback to usage/ping", e?.message || e);
+    await pingUsageEvent("weather_search");
   }
 }
 
@@ -2687,7 +2700,7 @@ try {
           setStatus("取得しました", "ok");
 
           try{ pingUsageOncePerDay("dau_ping"); }catch{}
-          try{ pingUsageEvent("weather_search"); }catch{}
+          try{ await pingWeatherSearchSuccess(); }catch{}
           try { fireIfApprovedOnNextSearch(); } catch {}
 
           try{
