@@ -25,7 +25,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const kvStats = createKvStats(path);
+    const kvStats = createKvStats(path, request.method);
     const kv = getTrackedKv(env, kvStats);
 
     try {
@@ -98,15 +98,41 @@ export default {
       finalizeKvStats(kvStats);
     }
   },
+
+  async scheduled(event, env, ctx) {
+    const day = getJstDay(event?.scheduledTime || Date.now());
+    const kvStats = createKvStats("cron:hof_daily_build", "CRON");
+    const kv = getTrackedKv(env, kvStats);
+    try {
+      if (!kv) {
+        console.log(`[cron] hof_daily_build skipped day=${day} reason=kv_not_bound`);
+        return;
+      }
+      const result = await ensureHofDailySnapshot(kv, env, day, { force: false, source: "cron" });
+      console.log(
+        `[cron] hof_daily_build day=${day} built=${result.built} count=${Number(result.payload?.count || 0)} generatedAt=${result.payload?.generatedAt || 0}`
+      );
+    } catch (e) {
+      console.log(`[cron] hof_daily_build failed day=${day} error=${e?.message || e}`);
+      throw e;
+    } finally {
+      finalizeKvStats(kvStats);
+    }
+
+    if (ctx && typeof ctx.waitUntil === "function") {
+      ctx.waitUntil(Promise.resolve());
+    }
+  },
 };
 
 function getKv(env) {
   return env.PUBLIC_KV || env.KV || env.DB || null;
 }
 
-function createKvStats(pathname) {
+function createKvStats(pathname, method = "GET") {
   return {
     path: pathname,
+    method,
     startedAt: Date.now(),
     get: 0,
     put: 0,
@@ -145,6 +171,9 @@ function finalizeKvStats(kvStats) {
     ...kvStats,
     total: Number(kvStats.get + kvStats.put + kvStats.list + kvStats.delete),
   };
+  console.log(
+    `[api] ${kvStats.method || "GET"} ${kvStats.path} status=${kvStats.status || "n/a"} ms=${kvStats.elapsedMs} kv(get=${kvStats.get},put=${kvStats.put},list=${kvStats.list},delete=${kvStats.delete})`
+  );
 }
 
 function parseLimit(url, fallback = DEFAULT_LIMIT) {
@@ -797,6 +826,15 @@ async function buildHofDailySnapshot(kv, env, day) {
   return payload;
 }
 
+async function ensureHofDailySnapshot(kv, env, day, { force = false, source = "api" } = {}) {
+  const existing = await kv.get(hofKeyByDay(day), "json");
+  if (!force && existing && typeof existing === "object") {
+    return { built: false, payload: { ...existing, ok: true }, snapshotExists: true, source };
+  }
+  const payload = await buildHofDailySnapshot(kv, env, day);
+  return { built: true, payload, snapshotExists: false, source };
+}
+
 async function handleHofDaily(request, env, kv, { kvStats, requireAdmin }) {
   if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
   if (requireAdmin && !ensureAdmin(request, env)) {
@@ -827,14 +865,16 @@ async function handleHofDailyBuild(request, env, kv, { kvStats }) {
   if (!ensureAdmin(request, env)) return json({ ok: false, error: "forbidden" }, 403, kvStats);
   const body = await request.json().catch(() => ({}));
   const day = parseDayOrToday(body?.day || new URL(request.url).searchParams.get("day"));
-  const built = await buildHofDailySnapshot(kv, env, day);
+  const result = await ensureHofDailySnapshot(kv, env, day, { force: false, source: "manual" });
+  const payload = result.payload || {};
   return json({
     ok: true,
-    built: true,
+    built: !!result.built,
+    snapshotExists: true,
     day,
-    count: Number(built.count || 0),
-    generatedAt: built.generatedAt,
-    hofThreshold: built.hofThreshold,
+    count: Number(payload.count || 0),
+    generatedAt: payload.generatedAt || Date.now(),
+    hofThreshold: payload.hofThreshold || getHofThreshold(env),
   }, 200, kvStats);
 }
 
@@ -937,6 +977,7 @@ async function handleAdminUsage(request, env, kv, { kvStats }) {
 }
 
 function json(data, status = 200, kvStats = null) {
+  if (kvStats) kvStats.status = status;
   const headers = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",

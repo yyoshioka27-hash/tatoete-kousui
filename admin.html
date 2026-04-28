@@ -2152,9 +2152,8 @@ async function hofDailyCheck(){
 
   hydrateFromCache();
   render();
-  void ensureActiveTabLoaded();
 
-    // ✅ 起動時に自動 health は実行しない
+    // ✅ 起動時にAPIを自動実行しない（必要時のみ更新/タブ切替で実行）
   // 必要なときだけ手動で health を押す
   setBusy(false);
 
