@@ -293,9 +293,6 @@
     <dl class="opsGrid" style="margin:10px 0 0;">
       <dt>対象日</dt><dd id="usageDay">-</dd>
       <dt>今日の利用者数</dt><dd id="usageUsers">-</dd>
-      <dt>天気検索回数</dt><dd id="usageWeatherSearches">-</dd>
-      <dt>いいね回数</dt><dd id="usageLikes">-</dd>
-      <dt>ランキング取得回数</dt><dd id="usageRankingFetches">-</dd>
     </dl>
   </div>
 
@@ -492,9 +489,6 @@
 
   const usageDay = $("usageDay");
   const usageUsers = $("usageUsers");
-  const usageWeatherSearches = $("usageWeatherSearches");
-  const usageLikes = $("usageLikes");
-  const usageRankingFetches = $("usageRankingFetches");
 
   const bulkActionsPending = $("bulkActionsPending");
   const bulkActionsPublic  = $("bulkActionsPublic");
@@ -1451,28 +1445,13 @@
       ], { admin:true, signal });
 
       const users = toCountOrZero(s?.dauToday ?? s?.usage?.users ?? s?.today ?? s?.dau ?? s?.count);
-      const weatherSearches = toCountOrZero(
-        s?.weatherSearches ??
-        s?.weatherSearchCount ??
-        s?.usage?.weatherSearches ??
-        s?.usage?.weatherSearchCount
-      );
-      const likes = toCountOrZero(s?.likes ?? s?.likeCount ?? s?.usage?.likes);
-      const rankingFetches = toCountOrZero(s?.rankingFetches ?? s?.usage?.rankingFetches);
-
       usageDay.textContent = day;
       usageUsers.textContent = formatCountText(users);
-      usageWeatherSearches.textContent = formatCountText(weatherSearches);
-      usageLikes.textContent = formatCountText(likes);
-      usageRankingFetches.textContent = formatCountText(rankingFetches);
 
       setPill(pillDAU, `今日の使用者数: ${users}`, true);
     } catch(e){
       usageDay.textContent = todayJstYmd();
       usageUsers.textContent = "-";
-      usageWeatherSearches.textContent = "-";
-      usageLikes.textContent = "-";
-      usageRankingFetches.textContent = "-";
       await fetchDAU(signal);
     }
   }
@@ -1570,9 +1549,6 @@
       setPill(pillDAU, "今日の使用者数: -", null);
       usageDay.textContent = todayJstYmd();
       usageUsers.textContent = "-";
-      usageWeatherSearches.textContent = "-";
-      usageLikes.textContent = "-";
-      usageRankingFetches.textContent = "-";
       await refreshOpsStatus(signal);
     } finally {
       setBusy(false);
@@ -2164,9 +2140,6 @@ async function hofDailyCheck(){
   opsState.textContent = "情報不足（ステータス更新を実行）";
   usageDay.textContent = todayJstYmd();
   usageUsers.textContent = "-";
-  usageWeatherSearches.textContent = "-";
-  usageLikes.textContent = "-";
-  usageRankingFetches.textContent = "-";
 
   hydrateFromCache();
   render();
