@@ -190,11 +190,9 @@ async function pingWeatherSearchSuccess(){
   const deviceId = getOrCreateDeviceId();
   const url = `${API_BASE}/api/usage/weather_search_success?d=${encodeURIComponent(deviceId)}&v=${encodeURIComponent(BUILD)}`;
   try{
-    const res = await fetch(url, { method:"GET", cache:"no-store", keepalive:true });
-    if (!res.ok) throw new Error(`weather_search_success failed: ${res.status}`);
+    await fetch(url, { method:"GET", cache:"no-store", keepalive:true });
   }catch(e){
-    console.warn("weather search success ping failed, fallback to usage/ping", e?.message || e);
-    await pingUsageEvent("weather_search");
+    console.warn("weather search success ping failed", e?.message || e);
   }
 }
 

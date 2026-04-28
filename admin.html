@@ -1445,6 +1445,15 @@
       ], { admin:true, signal });
 
       const users = toCountOrZero(s?.dauToday ?? s?.usage?.users ?? s?.today ?? s?.dau ?? s?.count);
+      const weatherSearches = toCountOrZero(
+        s?.weatherSearches ??
+        s?.weatherSearchCount ??
+        s?.usage?.weatherSearches ??
+        s?.usage?.weatherSearchCount
+      );
+      const likes = toCountOrZero(s?.likes ?? s?.likeCount ?? s?.usage?.likes);
+      const rankingFetches = toCountOrZero(s?.rankingFetches ?? s?.usage?.rankingFetches);
+
       usageDay.textContent = day;
       usageUsers.textContent = formatCountText(users);
 
