@@ -63,7 +63,7 @@ const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.work
 
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
 const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
-const HOF_DAILY_CACHE_KEY = "hof_daily_cache_v2";
+const HOF_DAILY_CACHE_PREFIX = "hof_daily_cache_";
 // 殿堂入りランキング描画で扱う件数は軽量化のため上限を固定
 const HOF_RANK_LIMIT = 20;
 let __hofSnapshotMemory = null;
@@ -1022,10 +1022,21 @@ async function fetchHallModeFromApiOnce(mode, limit = 100){
       .filter(it => !isNgText(it.text))
   ).sort((a, b) => Number(b.totalLikes || 0) - Number(a.totalLikes || 0));
 }
+function hallDailyCacheKey(day){
+  return `${HOF_DAILY_CACHE_PREFIX}${day}`;
+}
 function saveHallDailyCache(payload){
   try{
-    localStorage.setItem(HOF_DAILY_CACHE_KEY, JSON.stringify(payload));
+    const day = String(payload?.day || todayJSTString());
+    localStorage.setItem(hallDailyCacheKey(day), JSON.stringify(payload));
   }catch{}
+}
+function loadHallDailyCache(day = todayJSTString()){
+  try{
+    return JSON.parse(localStorage.getItem(hallDailyCacheKey(day)) || "null");
+  }catch{
+    return null;
+  }
 }
 
   
@@ -1152,9 +1163,18 @@ function buildHallCardHtmlFromSnapshot(hofData){
 async function ensureHallSnapshotLoaded(force = false){
   const today = todayJSTString();
 
-  // ✅ 同日キャッシュを固定で返さない
-  // force=true のとき、または通常時でも毎回 API を取り直す
-  // 失敗したときだけ当日メモリを救済で使う
+  const dailyCached = !force ? loadHallDailyCache(today) : null;
+  if (dailyCached?.day === today && Array.isArray(dailyCached?.items)) {
+    __hofSnapshotMemory = {
+      day: today,
+      generatedAt: dailyCached?.generatedAt || null,
+      hofThreshold: Number(dailyCached?.hofThreshold || state.hofThreshold || 20),
+      items: dailyCached.items.slice(0, HOF_RANK_LIMIT)
+    };
+    __hofSnapshotHtml = buildHallCardHtmlFromSnapshot(__hofSnapshotMemory);
+    return __hofSnapshotMemory;
+  }
+
   try {
     const hofData = await fetchHallOfFameForRanking(HOF_RANK_LIMIT);
 
@@ -1526,9 +1546,13 @@ const FC  = "https://api.open-meteo.com/v1/forecast";
 
 // ✅ SWRキャッシュ
 const WX_CACHE_KEY = "wx_pops_cache_v1";
+const WEATHER_LAST_SUCCESS_KEY = "weather_last_success_v1";
 const WX_CACHE_TTL_MS = 10 * 60 * 1000;
 // 通信失敗時のフォールバックは「新しめ」のみ許容
 const WX_FALLBACK_MAX_STALE_MS = 30 * 60 * 1000;
+const SAME_SEARCH_SUPPRESS_MS = 30 * 1000;
+let __lastWeatherFetchSig = null;
+let __lastWeatherFetchAt = 0;
 
 function wxKey(lat, lon){
   const la = Math.round(Number(lat) * 100) / 100;
@@ -1552,6 +1576,21 @@ function clearWxCacheByLatLon(lat, lon){
     }
   }catch(e){
     console.warn("clearWxCacheByLatLon failed", e);
+  }
+}
+function saveLastSuccessWeather(payload){
+  try{
+    localStorage.setItem(WEATHER_LAST_SUCCESS_KEY, JSON.stringify({
+      ...payload,
+      savedAt: Date.now()
+    }));
+  }catch{}
+}
+function loadLastSuccessWeather(){
+  try{
+    return JSON.parse(localStorage.getItem(WEATHER_LAST_SUCCESS_KEY) || "null");
+  }catch{
+    return null;
   }
 }
 async function fetchWithTimeout(url, ms = 4500){
@@ -2029,7 +2068,7 @@ updateLikeUI(slot);
       );
 
       updateLikeUI(slot);
-      alert(`いいね失敗：${e?.message || e}`);
+      setStatus("いいねの反映に失敗しました", "ng");
     }finally{
       btnEl.disabled = false;
     }
@@ -2366,6 +2405,17 @@ async function fetchPopsBySlotsSWR(lat, lon, { onCached, timeoutMs = 4500 } = {}
 
   return out;
 }
+
+function applyWeatherStateFromPayload(payload, sourceLabel = "保存データ"){
+  if (!payload?.pops) return false;
+  state.selectedLat = Number(payload?.lat ?? state.selectedLat ?? 0);
+  state.selectedLon = Number(payload?.lon ?? state.selectedLon ?? 0);
+  state.placeLabel = String(payload?.placeLabel || state.placeLabel || "");
+  state.pops = payload.pops;
+  state.tz = payload?.tz || null;
+  state.source = sourceLabel;
+  return true;
+}
 // =========================
 // ✅ ランキングDOM
 // =========================
@@ -2653,6 +2703,17 @@ function fireIfApprovedOnNextSearch(){
         state.placeLabel = opt.textContent;
         state.source = "API: Open-Meteo";
 
+        const modeNow = getSelectedMode();
+        const sig = `${Number(lat).toFixed(2)},${Number(lon).toFixed(2)}|${modeNow}`;
+        if (__lastWeatherFetchSig === sig && (Date.now() - __lastWeatherFetchAt) < SAME_SEARCH_SUPPRESS_MS) {
+          setStatus("同じ地点の再取得を少し待ってから実行します", "muted");
+          setSearchBusy(false);
+          setRankingBusy(false);
+          return;
+        }
+        __lastWeatherFetchSig = sig;
+        __lastWeatherFetchAt = Date.now();
+
         invalidateRanking();
         setRankingBusy(true);
         setSearchBusy(true);
@@ -2696,6 +2757,13 @@ try {
           });
 
           setStatus("取得しました", "ok");
+          saveLastSuccessWeather({
+            lat,
+            lon,
+            placeLabel: state.placeLabel,
+            pops: state.pops,
+            tz: state.tz
+          });
 
           try{ pingUsageOncePerDay("dau_ping"); }catch{}
           try{ await pingWeatherSearchSuccess(); }catch{}
@@ -3240,6 +3308,31 @@ function renderMySubmissions(){
 // ==============================
 async function init(){
   await clearOldAppCachesOnBuildChange();
+  try {
+    const last = loadLastSuccessWeather();
+    if (applyWeatherStateFromPayload(last, "前回の結果です")) {
+      setStatus("前回の結果です。更新中…", "muted");
+      scheduleRender();
+      setTimeout(async () => {
+        try{
+          if (!Number.isFinite(Number(last?.lat)) || !Number.isFinite(Number(last?.lon))) return;
+          const out = await fetchPopsBySlotsNetwork(Number(last.lat), Number(last.lon), 4500);
+          state.pops = out.pops;
+          state.tz = out.tz || null;
+          state.source = "API: Open-Meteo";
+          const mode = getSelectedMode();
+          uniqueBucketsFromPops(state.pops).forEach(b => { warmPublicCache(mode, b).catch(()=>{}); });
+          saveLastSuccessWeather({ lat: Number(last.lat), lon: Number(last.lon), placeLabel: state.placeLabel, pops: state.pops, tz: state.tz });
+          scheduleRender();
+          setStatus("最新データに更新しました", "ok");
+          const key = getRankingKeyNow();
+          if (key) setTimeout(() => { renderRankingOnce(key).catch(()=>{}); }, 150);
+        }catch(e){
+          setStatus("最新取得に失敗したため前回結果を表示中", "ng");
+        }
+      }, 0);
+    }
+  } catch {}
   try { ensureRankingDom(); } catch {}
   try { ensureReindexHintDom(); } catch {}
   try { await loadSharedJSON(); } catch {}
