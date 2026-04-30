@@ -291,6 +291,43 @@
     .is-searching #searchBusy{
       display:block;
     }
+
+    #loadingText{
+      font-weight:600;
+      color:#334155;
+    }
+
+    #summaryCard{
+      display:none;
+      margin: 10px 0 12px;
+      padding: 12px;
+      border:1px solid rgba(15,23,42,.12);
+      border-radius: 12px;
+      background: rgba(255,255,255,.92);
+    }
+    #summaryCard .title{
+      font-size:12px;
+      color:#475569;
+      font-weight:700;
+      margin-bottom:6px;
+    }
+    #summaryMain{
+      font-size:18px;
+      font-weight:900;
+      margin-bottom:4px;
+    }
+    #summarySub, #summaryNote{
+      font-size:14px;
+      color:#1f2937;
+      line-height:1.5;
+    }
+    #summaryBadge{
+      display:none;
+      margin-top:6px;
+      font-size:12px;
+      color:#64748b;
+    }
+
   </style>
 </head>
 
@@ -354,7 +391,7 @@
         <button id="search" class="btnPrimary">検索</button>
       </div>
 
-      <div id="searchBusy" aria-live="polite">地点とランキングを更新中…</div>
+      <div id="searchBusy" aria-live="polite"><span id="loadingText">現在地を確認中…</span></div>
 
       <div style="margin-top:10px;">
         <select id="candidates" disabled>
@@ -382,6 +419,14 @@
     <div class="card">
       <div class="small">今日の降水確率（朝/昼/夜）</div>
       <div class="small" id="popHint">地点を選ぶと自動取得します</div>
+
+      <div id="summaryCard" aria-live="polite">
+        <div class="title">【今の結論】</div>
+        <div id="summaryMain">☂ 傘：--</div>
+        <div id="summarySub">降水確率：--%</div>
+        <div id="summaryNote">ひとこと：--</div>
+        <div id="summaryBadge">前回の結果です</div>
+      </div>
 
       <div class="slot" data-slot="m">
         <div class="small">朝（6-11時）</div>
