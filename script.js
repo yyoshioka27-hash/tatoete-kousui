@@ -474,6 +474,52 @@ function setStatus(text, kind="muted") {
   el.textContent = text;
 }
 
+const __loadingState = { text: "" };
+function setLoadingStep(text){
+  const el = document.getElementById("loadingText");
+  if (!el) return;
+  if (__loadingState.text === text) return;
+  __loadingState.text = text;
+  el.textContent = text;
+}
+
+function getConclusionByPop(pop){
+  const p = Number(window.bucket10(pop));
+  if (p <= 20) return { umbrella: "基本いらない", note: "雨の心配は低めです" };
+  if (p <= 40) return { umbrella: "折りたたみ傘があると安心", note: "にわか雨に備えると安心です" };
+  if (p <= 70) return { umbrella: "持った方が安心", note: "帰りに降る可能性があります" };
+  return { umbrella: "必須", note: "しっかり降る見込みです" };
+}
+
+function renderConclusionCard({ pops, isCached=false } = {}){
+  const card = document.getElementById("summaryCard");
+  const main = document.getElementById("summaryMain");
+  const sub = document.getElementById("summarySub");
+  const note = document.getElementById("summaryNote");
+  const badge = document.getElementById("summaryBadge");
+  if (!card || !main || !sub || !note || !badge) return;
+
+  if (!pops) {
+    card.style.display = "none";
+    return;
+  }
+
+  const vals = [pops.m, pops.d, pops.e].map(v => Number(v)).filter(Number.isFinite);
+  if (!vals.length) {
+    card.style.display = "none";
+    return;
+  }
+
+  const pop = Math.max(...vals);
+  const c = getConclusionByPop(pop);
+
+  card.style.display = "block";
+  main.textContent = `☂ 傘：${c.umbrella}`;
+  sub.textContent = `降水確率：${pop}%`;
+  note.textContent = `ひとこと：${c.note}`;
+  badge.style.display = isCached ? "block" : "none";
+}
+
 function normalizePlaceName(input) {
   return input
     .replace(/[ 　]+/g, " ")
@@ -1614,6 +1660,7 @@ let state = {
   hofThreshold: 20,
   selectedLat: null,
   selectedLon: null,
+  isCachedResult: false,
   currentPhrases: {
     m: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
     d: { text: null, source: null, id: null, penName: null, likesToday: 0, totalLikes: 0, hof: false, mode: null, bucket: null, dedupeKey: null },
@@ -2119,6 +2166,7 @@ function render() {
 
   if (sourceTag) sourceTag.textContent = state.source;
   if (tzTag) tzTag.textContent = state.tz ? `TZ: ${state.tz}` : "TZ: --";
+  renderConclusionCard({ pops: state.pops, isCached: !!state.isCachedResult });
 
   let renderedSlotCount = 0;
   const setSlot = (slotKey, value, label) => {
@@ -2414,6 +2462,7 @@ function applyWeatherStateFromPayload(payload, sourceLabel = "保存データ"){
   state.pops = payload.pops;
   state.tz = payload?.tz || null;
   state.source = sourceLabel;
+  state.isCachedResult = true;
   return true;
 }
 // =========================
@@ -2661,6 +2710,7 @@ function fireIfApprovedOnNextSearch(){
     if (!q) { setStatus("地点名を入力してください", "ng"); return; }
 
     setSearchBusy(true);
+    setLoadingStep("現在地を確認中…");
     setStatus("検索中…", "muted");
 
     try {
@@ -2717,6 +2767,7 @@ function fireIfApprovedOnNextSearch(){
         invalidateRanking();
         setRankingBusy(true);
         setSearchBusy(true);
+        setLoadingStep("天気を取得中…");
         setStatus("天気取得中…", "muted");
 
         const wxCacheBeforeClear = loadWxCache()[wxKey(lat, lon)] || null;
@@ -2739,6 +2790,7 @@ try {
 
           state.pops = nextPops;
           state.tz = nextTz;
+          state.isCachedResult = false;
 
           const any = (state.pops.m != null) || (state.pops.d != null) || (state.pops.e != null);
           if (!any) {
@@ -2749,6 +2801,7 @@ try {
             return;
           }
 
+          setLoadingStep("天気を取得しました");
           __freezeMetaphor = false;
           window.__forceRepick = true;
           scheduleRender();
@@ -2769,8 +2822,11 @@ try {
           try{ await pingWeatherSearchSuccess(); }catch{}
           try { fireIfApprovedOnNextSearch(); } catch {}
 
+          setLoadingStep("ネタを準備中…");
+
           try{
         const key = getRankingKeyNow();
+        setLoadingStep("ランキングを準備中…");
         renderRankingOnce(key).catch(e => {
         console.warn("renderRankingOnce(after search) failed", e);
         });
@@ -2797,6 +2853,7 @@ try {
     state.pops = wxCacheBeforeClear.pops;
     state.tz = wxCacheBeforeClear.tz || null;
     state.source = "API: キャッシュ(通信失敗時のみ)";
+    state.isCachedResult = true;
 
     __freezeMetaphor = false;
     window.__forceRepick = true;
@@ -2805,7 +2862,8 @@ try {
       window.__forceRepick = false;
     });
 
-    setStatus(`最新取得に失敗したため保存データを表示：${e?.message || e}`, "ng");
+    setStatus("取得に失敗しました。前回結果があれば表示しています。", "ng");
+    setLoadingStep("取得に失敗しました。前回結果があれば表示しています。");
 
     try{
       const key = getRankingKeyNow();
@@ -2826,10 +2884,13 @@ try {
   }
   state.source = "API: エラー";
   state.pops = null;
+  state.isCachedResult = false;
+  setLoadingStep("取得に失敗しました。前回結果があれば表示しています。");
   scheduleRender();
 } finally {
           if (mySeq === __searchSeq) {
-            setSearchBusy(false);
+            setLoadingStep("更新完了");
+            setTimeout(() => setSearchBusy(false), 600);
             setRankingBusy(false);
           }
         }
@@ -3320,6 +3381,7 @@ async function init(){
           state.pops = out.pops;
           state.tz = out.tz || null;
           state.source = "API: Open-Meteo";
+          state.isCachedResult = false;
           const mode = getSelectedMode();
           uniqueBucketsFromPops(state.pops).forEach(b => { warmPublicCache(mode, b).catch(()=>{}); });
           saveLastSuccessWeather({ lat: Number(last.lat), lon: Number(last.lon), placeLabel: state.placeLabel, pops: state.pops, tz: state.tz });
@@ -3328,7 +3390,8 @@ async function init(){
           const key = getRankingKeyNow();
           if (key) setTimeout(() => { renderRankingOnce(key).catch(()=>{}); }, 150);
         }catch(e){
-          setStatus("最新取得に失敗したため前回結果を表示中", "ng");
+          state.isCachedResult = true;
+          setStatus("取得に失敗しました。前回結果があれば表示しています。", "ng");
         }
       }, 0);
     }
