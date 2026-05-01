@@ -919,31 +919,8 @@ async function likeAny(payload){
     });
     throw new Error(data?.error || `like failed ${res.status}`);
   }
-
-      const data = await res.json().catch(()=>null);
-      if (!res.ok || !data?.ok) {
-        console.error("[likeAny] response status", {
-          endpoint,
-          status: res.status,
-          statusText: res.statusText,
-          body: data
-        });
-        if (res.status === 404) {
-          lastError = new Error("endpoint not found");
-          continue;
-        }
-        throw new Error(data?.error || `like failed ${res.status}`);
-      }
-      if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-      return data;
-    }catch(e){
-      lastError = e;
-      if (!String(e?.message || "").includes("endpoint not found")) {
-        console.error("[likeAny] request failed", { endpoint, error: e?.message || e });
-      }
-    }
-  }
-  throw lastError || new Error("like failed");
+  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+  return data;
 }
 
 // ==============================
@@ -2431,10 +2408,21 @@ async function geocode(name) {
   url.searchParams.set("language", "ja");
   url.searchParams.set("format", "json");
 
-  const res = await fetchWithTimeout(url.toString(), 3500);
-  if (!res.ok) throw new Error("地点検索に失敗しました");
+  let data = null;
+  try{
+    const res = await fetchWithTimeout(url.toString(), 3500);
+    if (!res.ok) throw new Error(`geo_http_${res.status}`);
+    data = await res.json();
+  }catch(_e){
+    const proxyUrl = new URL(`${API_BASE}/api/geocode`);
+    proxyUrl.searchParams.set("q", name);
+    proxyUrl.searchParams.set("count", "5");
+    proxyUrl.searchParams.set("lang", "ja");
+    const proxyRes = await fetchWithTimeout(proxyUrl.toString(), 4500);
+    if (!proxyRes.ok) throw new Error("地点検索に失敗しました");
+    data = await proxyRes.json();
+  }
 
-  const data = await res.json();
   cache[key] = { ts: now, data };
   saveGeoCache(cache);
   return data;

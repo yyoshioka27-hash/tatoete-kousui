@@ -78,6 +78,9 @@ export default {
       if (path === "/api/usage/weather_search_success" && (request.method === "GET" || request.method === "POST")) {
         return handleWeatherSearchSuccess(request, env, kv, { kvStats });
       }
+      if (path === "/api/geocode" && request.method === "GET") {
+        return handleGeocodeProxy(request, { kvStats });
+      }
 
       if ((path === "/api/admin/usage" || path === "/api/admin/stats") && request.method === "GET") {
         return handleAdminUsage(request, env, kv, { kvStats });
@@ -921,6 +924,43 @@ async function handleWeatherSearchSuccess(request, _env, kv, { kvStats }) {
   const day = getJstDay();
   const total = await incrementUsageMetric(kv, day, "weather_search_count");
   return json({ ok: true, day, weatherSearchCount: total }, 200, kvStats);
+}
+
+async function handleGeocodeProxy(request, { kvStats }) {
+  const url = new URL(request.url);
+  const q = String(url.searchParams.get("q") || "").trim();
+  if (!q) return json({ ok: false, error: "q_required", results: [] }, 400, kvStats, request);
+
+  const countRaw = Number(url.searchParams.get("count") || 5);
+  const count = Number.isFinite(countRaw) ? Math.max(1, Math.min(10, Math.trunc(countRaw))) : 5;
+  const lang = String(url.searchParams.get("lang") || "ja").trim() || "ja";
+
+  const upstream = new URL("https://geocoding-api.open-meteo.com/v1/search");
+  upstream.searchParams.set("name", q);
+  upstream.searchParams.set("count", String(count));
+  upstream.searchParams.set("language", lang);
+  upstream.searchParams.set("format", "json");
+
+  try {
+    const res = await fetch(upstream.toString(), {
+      method: "GET",
+      cf: { cacheEverything: true, cacheTtl: 1800 },
+    });
+    if (!res.ok) throw new Error(`upstream_${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    return json({
+      ok: true,
+      source: "open-meteo",
+      results: Array.isArray(data?.results) ? data.results : [],
+    }, 200, kvStats, request);
+  } catch (e) {
+    return json({
+      ok: false,
+      error: "upstream_failed",
+      message: String(e?.message || e),
+      results: [],
+    }, 502, kvStats, request);
+  }
 }
 
 function usageMetricKey(day, metric) {
