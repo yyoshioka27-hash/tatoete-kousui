@@ -1992,7 +1992,7 @@ function updateLikeUI(slot) {
 
   if (!btnEl) return;
 
-  const ok = !!phraseObj?.id && !!phraseObj?.text && !isNgText(phraseObj.text);
+  const ok = (!!phraseObj?.id || !!phraseObj?.text) && !!phraseObj?.text && !isNgText(phraseObj.text);
   btnEl.style.display = ok ? "" : "none";
   if (totalEl) totalEl.style.display = ok ? "" : "none";
   if (badgeEl) badgeEl.style.display = ok ? "" : "none";
@@ -2063,7 +2063,7 @@ function updateLikeUI(slot) {
     btnEl.disabled = true;
     try{
       const out = await likeAny({
-        id: phraseObj.id,
+        id: phraseObj.id || phraseObj.dedupeKey || makeMetaphorDedupeKey({ mode: phraseObj.mode || getSelectedMode(), bucket: Number(phraseObj.bucket ?? 0), text: phraseObj.text || "" }),
         mode: phraseObj.mode || getSelectedMode(),
         bucket: Number(phraseObj.bucket ?? 0),
         text: phraseObj.text,
@@ -2073,7 +2073,7 @@ function updateLikeUI(slot) {
       });
       const nowPhrase = state.currentPhrases[slot] || livePhrase;
       const nextToday = Number(out.likesToday ?? out.displayedLikeCount ?? optimisticToday);
-      const nextTotal = Number(out.totalLikes ?? out.totalLikeCount ?? optimisticTotal);
+      const nextTotal = Number(out.canonicalTotal ?? out.total ?? out.totalLikes ?? out.totalLikeCount ?? optimisticTotal);
 
       const safeToday = Math.max(Number(nowPhrase?.likesToday || 0), nextToday);
       const safeTotal = rememberTotalLikesFloor({

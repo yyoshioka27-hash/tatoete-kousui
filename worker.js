@@ -1067,12 +1067,14 @@ function normalizeClientId(request, body) {
 }
 
 function resolveLikeTarget(body) {
-  const itemId = String(body?.id || body?.itemId || "").trim();
   const text = String(body?.text || "").trim();
   const mode = normalizeMode(body?.mode) || "trivia";
   const bucket = normalizeBucket(body?.bucket) ?? 0;
+  const rawItemId = String(body?.id || body?.itemId || "").trim();
+  const canonicalId = text ? makeDedupeKey(mode, bucket, text) : "";
+  const itemId = rawItemId || canonicalId;
   if (!itemId || !text) return null;
-  return { itemId, text, mode, bucket };
+  return { itemId, text, mode, bucket, canonicalId };
 }
 
 async function handleLike(request, env, ctx, kv, { kvStats }) {
@@ -1080,8 +1082,8 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
 
   const body = await request.json().catch(() => null);
   const target = resolveLikeTarget(body);
-  if (!target) return json({ ok: false, error: "invalid_like_payload" }, 400, kvStats, request);
-  const canonicalId = makeDedupeKey(target.mode, target.bucket, target.text);
+  if (!target) return json({ ok: false, error: "invalid_like_payload", detail: "id/itemId か text が不足しています" }, 400, kvStats, request);
+  const canonicalId = target.canonicalId || makeDedupeKey(target.mode, target.bucket, target.text);
 
   const day = getJstDay();
   const clientId = normalizeClientId(request, body);
