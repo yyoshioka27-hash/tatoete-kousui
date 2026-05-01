@@ -95,7 +95,7 @@ export default {
         return handleKvDebug(request, env, kvStats);
       }
 
-      if (path === "/api/like" && request.method === "POST") {
+      if ((path === "/api/like" || path === "/api/likes") && request.method === "POST") {
         return handleLike(request, env, ctx, kv, { kvStats });
       }
 

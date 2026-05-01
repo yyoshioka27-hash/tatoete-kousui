@@ -58,8 +58,16 @@ async function clearOldAppCachesOnBuildChange() {
     localStorage.setItem(BUILD_KEY, BUILD);
   }
 }
-// ✅ API_BASE（/api/health がOKの“正”）
-const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+// ✅ API_BASE（通常画面でも admin 設定値を優先）
+const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+function resolveApiBase(){
+  try{
+    const fromAdmin = String(localStorage.getItem("tatoete_admin_api_base") || "").trim();
+    if (fromAdmin) return fromAdmin.replace(/\/+$/, "");
+  }catch{}
+  return DEFAULT_API_BASE;
+}
+const API_BASE = resolveApiBase();
 
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
 const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
@@ -912,8 +920,30 @@ async function likeAny(payload){
     throw new Error(data?.error || `like failed ${res.status}`);
   }
 
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return data;
+      const data = await res.json().catch(()=>null);
+      if (!res.ok || !data?.ok) {
+        console.error("[likeAny] response status", {
+          endpoint,
+          status: res.status,
+          statusText: res.statusText,
+          body: data
+        });
+        if (res.status === 404) {
+          lastError = new Error("endpoint not found");
+          continue;
+        }
+        throw new Error(data?.error || `like failed ${res.status}`);
+      }
+      if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+      return data;
+    }catch(e){
+      lastError = e;
+      if (!String(e?.message || "").includes("endpoint not found")) {
+        console.error("[likeAny] request failed", { endpoint, error: e?.message || e });
+      }
+    }
+  }
+  throw lastError || new Error("like failed");
 }
 
 // ==============================
