@@ -2084,6 +2084,7 @@ function updateLikeUI(slot) {
     likeFxPlusOne(btnEl);
 
     btnEl.disabled = true;
+    let likeLimitReached = false;
     try{
       const out = await likeAny({
         id: phraseObj.id || phraseObj.dedupeKey || makeMetaphorDedupeKey({ mode: phraseObj.mode || getSelectedMode(), bucket: Number(phraseObj.bucket ?? 0), text: phraseObj.text || "" }),
@@ -2161,9 +2162,17 @@ updateLikeUI(slot);
       );
 
       updateLikeUI(slot);
-      setStatus(`いいねの反映に失敗しました（status: ${Number(e?.status || 0) || "unknown"} / error: ${String(e?.message || "unknown")})`, "ng");
+      const errStatus = Number(e?.status || 0) || 0;
+      const errMessage = String(e?.message || "");
+      likeLimitReached = (errStatus === 429) && /like limit/i.test(errMessage);
+      if (likeLimitReached) {
+        btnEl.disabled = true;
+        setStatus("本日のいいね上限（10回）に達しました", "ng");
+      } else {
+        setStatus("いいねの反映に失敗しました", "ng");
+      }
     }finally{
-      btnEl.disabled = false;
+      if (!likeLimitReached) btnEl.disabled = false;
     }
   };
 }
