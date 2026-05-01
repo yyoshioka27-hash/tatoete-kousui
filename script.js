@@ -58,8 +58,16 @@ async function clearOldAppCachesOnBuildChange() {
     localStorage.setItem(BUILD_KEY, BUILD);
   }
 }
-// ✅ API_BASE（/api/health がOKの“正”）
-const API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+// ✅ API_BASE（通常画面でも admin 設定値を優先）
+const DEFAULT_API_BASE = "https://ancient-union-4aa4tatoete-kousui-api.y-yoshioka27.workers.dev";
+function resolveApiBase(){
+  try{
+    const fromAdmin = String(localStorage.getItem("tatoete_admin_api_base") || "").trim();
+    if (fromAdmin) return fromAdmin.replace(/\/+$/, "");
+  }catch{}
+  return DEFAULT_API_BASE;
+}
+const API_BASE = resolveApiBase();
 
 // ✅ 殿堂入り日次スナップショット（GitHub Pages側に1日1回だけ配置）
 const HOF_DAILY_JSON_URL = `${API_BASE}/api/hof_daily`;
@@ -887,24 +895,48 @@ async function fetchPublicLatest(mode, limit = 10){
 // ==============================
 async function likeAny(payload){
   const cid = getClientId();
-  const res = await fetch(`${API_BASE}/api/like`, {
-    method: "POST",
-    cache: "no-store",
-    headers: {
-      "Content-Type":"application/json",
-      "x-client-id": cid,
-    },
-    body: JSON.stringify({
-      ...payload,
-      clientId: cid,
-    })
-  });
+  const endpoints = [`${API_BASE}/api/like`, `${API_BASE}/api/likes`];
+  let lastError = null;
 
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
+  for (const endpoint of endpoints) {
+    try{
+      const res = await fetch(endpoint, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type":"application/json",
+          "x-client-id": cid,
+        },
+        body: JSON.stringify({
+          ...payload,
+          clientId: cid,
+        })
+      });
 
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return data;
+      const data = await res.json().catch(()=>null);
+      if (!res.ok || !data?.ok) {
+        console.error("[likeAny] response status", {
+          endpoint,
+          status: res.status,
+          statusText: res.statusText,
+          body: data
+        });
+        if (res.status === 404) {
+          lastError = new Error("endpoint not found");
+          continue;
+        }
+        throw new Error(data?.error || `like failed ${res.status}`);
+      }
+      if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+      return data;
+    }catch(e){
+      lastError = e;
+      if (!String(e?.message || "").includes("endpoint not found")) {
+        console.error("[likeAny] request failed", { endpoint, error: e?.message || e });
+      }
+    }
+  }
+  throw lastError || new Error("like failed");
 }
 
 // ==============================
@@ -2090,6 +2122,13 @@ __hofSnapshotHtml = null;
 
 updateLikeUI(slot);
     }catch(e){
+      console.error("[like] failed", {
+        reason: e?.message || e,
+        endpoint: `${API_BASE}/api/like`,
+        id: phraseObj?.id,
+        mode: phraseObj?.mode || getSelectedMode(),
+        bucket: Number(phraseObj?.bucket ?? 0),
+      });
       const rollbackPhrase = state.currentPhrases[slot] || livePhrase;
       if (rollbackPhrase) {
         rollbackPhrase.likesToday = prevToday;
