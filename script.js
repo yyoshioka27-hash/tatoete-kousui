@@ -895,23 +895,30 @@ async function fetchPublicLatest(mode, limit = 10){
 // ==============================
 async function likeAny(payload){
   const cid = getClientId();
-  const endpoints = [`${API_BASE}/api/like`, `${API_BASE}/api/likes`];
-  let lastError = null;
+  const endpoint = `${API_BASE}/api/like`;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type":"application/json",
+      "x-client-id": cid,
+    },
+    body: JSON.stringify({
+      ...payload,
+      clientId: cid,
+    })
+  });
 
-  for (const endpoint of endpoints) {
-    try{
-      const res = await fetch(endpoint, {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          "Content-Type":"application/json",
-          "x-client-id": cid,
-        },
-        body: JSON.stringify({
-          ...payload,
-          clientId: cid,
-        })
-      });
+  const data = await res.json().catch(()=>null);
+  if (!res.ok || !data?.ok) {
+    console.error("[likeAny] response status", {
+      endpoint,
+      status: res.status,
+      statusText: res.statusText,
+      body: data
+    });
+    throw new Error(data?.error || `like failed ${res.status}`);
+  }
 
       const data = await res.json().catch(()=>null);
       if (!res.ok || !data?.ok) {
