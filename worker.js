@@ -29,6 +29,12 @@ export default {
     const kv = getTrackedKv(env, kvStats);
 
     try {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: corsHeaders(request),
+        });
+      }
       if (path === "/api/public") {
         return handlePublic(request, env, kv, { latestOnly: false, kvStats });
       }
@@ -93,7 +99,7 @@ export default {
         return handleLike(request, env, ctx, kv, { kvStats });
       }
 
-      return json({ error: "not_found" }, 404, kvStats);
+      return json({ ok: false, error: "not_found" }, 404, kvStats, request);
     } finally {
       finalizeKvStats(kvStats);
     }
@@ -976,11 +982,23 @@ async function handleAdminUsage(request, env, kv, { kvStats }) {
   }, 200, kvStats);
 }
 
-function json(data, status = 200, kvStats = null) {
+function corsHeaders(request) {
+  const origin = request?.headers?.get("origin") || "*";
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "content-type,x-client-id",
+    "access-control-max-age": "86400",
+    vary: "Origin",
+  };
+}
+
+function json(data, status = 200, kvStats = null, request = null) {
   if (kvStats) kvStats.status = status;
   const headers = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
+    ...corsHeaders(request),
   };
   if (kvStats) {
     headers["x-kv-get"] = String(kvStats.get || 0);
@@ -1018,11 +1036,12 @@ function resolveLikeTarget(body) {
 }
 
 async function handleLike(request, env, ctx, kv, { kvStats }) {
-  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats);
+  if (!kv) return json({ ok: false, error: "kv_not_bound" }, 500, kvStats, request);
 
   const body = await request.json().catch(() => null);
   const target = resolveLikeTarget(body);
-  if (!target) return json({ ok: false, error: "invalid_like_payload" }, 400);
+  if (!target) return json({ ok: false, error: "invalid_like_payload" }, 400, kvStats, request);
+  const canonicalId = makeDedupeKey(target.mode, target.bucket, target.text);
 
   const day = getJstDay();
   const clientId = normalizeClientId(request, body);
@@ -1034,14 +1053,18 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
     return json({
       ok: true,
       liked: false,
+      id: target.itemId,
       itemId: target.itemId,
+      total: totalLikes,
       displayedLikeCount: totalLikes,
       totalLikeCount: totalLikes,
       totalLikes,
+      today: Number(existing.likesToday || 0),
       todayLikeCount: Number(existing.likesToday || 0),
       likesToday: Number(existing.likesToday || 0),
+      canonicalTotal: Number((await kv.get(`likes_total_canon:${canonicalId}`, "text")) || totalLikes || 0),
       hofThreshold: Number(env.HOF_THRESHOLD || 20),
-    }, 200, kvStats);
+    }, 200, kvStats, request);
   }
 
   const now = Date.now();
@@ -1096,6 +1119,16 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
 
   snapshotCache = { at: 0, items: null };
   rankingCache.at = 0;
+  const dailyIdKey = `likes:${day}:${target.itemId}`;
+  const dailyCanonKey = `likes:${day}:canon:${canonicalId}`;
+  const totalIdKey = `likes_total:${target.itemId}`;
+  const totalCanonKey = `likes_total_canon:${canonicalId}`;
+  await Promise.all([
+    kv.put(dailyIdKey, String(nextLikesToday)),
+    kv.put(totalIdKey, String(nextLikes)),
+    incrementCounter(kv, dailyCanonKey, 1),
+    incrementCounter(kv, totalCanonKey, 1),
+  ]);
   await incrementUsageMetric(kv, day, "likes");
 
   ctx.waitUntil(runLikeHeavyTasks(env, target, now).catch((e) => {
@@ -1105,14 +1138,25 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
   return json({
     ok: true,
     liked: true,
+    id: target.itemId,
     itemId: target.itemId,
+    total: nextLikes,
     displayedLikeCount: nextLikes,
     totalLikeCount: nextLikes,
     totalLikes: nextLikes,
+    today: nextLikesToday,
     todayLikeCount: nextLikesToday,
     likesToday: nextLikesToday,
+    canonicalTotal: Number((await kv.get(totalCanonKey, "text")) || nextLikes || 0),
     hofThreshold: Number(env.HOF_THRESHOLD || 20),
-  }, 200, kvStats);
+  }, 200, kvStats, request);
+}
+
+async function incrementCounter(kv, key, delta = 1) {
+  const current = Number((await kv.get(key, "text")) || 0);
+  const next = current + Number(delta || 0);
+  await kv.put(key, String(next));
+  return next;
 }
 
 async function runLikeHeavyTasks(env, target, nowTs) {

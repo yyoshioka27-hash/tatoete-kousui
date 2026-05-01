@@ -887,7 +887,8 @@ async function fetchPublicLatest(mode, limit = 10){
 // ==============================
 async function likeAny(payload){
   const cid = getClientId();
-  const res = await fetch(`${API_BASE}/api/like`, {
+  const endpoint = `${API_BASE}/api/like`;
+  const res = await fetch(endpoint, {
     method: "POST",
     cache: "no-store",
     headers: {
@@ -901,7 +902,15 @@ async function likeAny(payload){
   });
 
   const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) throw new Error(data?.error || `like failed ${res.status}`);
+  if (!res.ok || !data?.ok) {
+    console.error("[likeAny] response status", {
+      endpoint,
+      status: res.status,
+      statusText: res.statusText,
+      body: data
+    });
+    throw new Error(data?.error || `like failed ${res.status}`);
+  }
 
   if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
   return data;
@@ -2090,6 +2099,13 @@ __hofSnapshotHtml = null;
 
 updateLikeUI(slot);
     }catch(e){
+      console.error("[like] failed", {
+        reason: e?.message || e,
+        endpoint: `${API_BASE}/api/like`,
+        id: phraseObj?.id,
+        mode: phraseObj?.mode || getSelectedMode(),
+        bucket: Number(phraseObj?.bucket ?? 0),
+      });
       const rollbackPhrase = state.currentPhrases[slot] || livePhrase;
       if (rollbackPhrase) {
         rollbackPhrase.likesToday = prevToday;
