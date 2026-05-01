@@ -896,31 +896,54 @@ async function fetchPublicLatest(mode, limit = 10){
 async function likeAny(payload){
   const cid = getClientId();
   const endpoint = `${API_BASE}/api/like`;
-  const res = await fetch(endpoint, {
-    method: "POST",
-    cache: "no-store",
-    headers: {
-      "Content-Type":"application/json",
-      "x-client-id": cid,
-    },
-    body: JSON.stringify({
-      ...payload,
-      clientId: cid,
-    })
-  });
-
-  const data = await res.json().catch(()=>null);
-  if (!res.ok || !data?.ok) {
-    console.error("[likeAny] response status", {
-      endpoint,
-      status: res.status,
-      statusText: res.statusText,
-      body: data
+  const requestBody = {
+    ...payload,
+    clientId: cid,
+  };
+  let res = null;
+  let responseText = "";
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type":"application/json",
+        "x-client-id": cid,
+      },
+      body: JSON.stringify(requestBody)
     });
-    throw new Error(data?.error || `like failed ${res.status}`);
+
+    responseText = await res.text().catch(() => "");
+    const data = (() => {
+      try { return responseText ? JSON.parse(responseText) : null; } catch { return null; }
+    })();
+
+    if (!res.ok || !data?.ok) {
+      console.error("[likeAny] response error", {
+        endpoint,
+        requestBody,
+        status: res.status,
+        statusText: res.statusText,
+        responseText,
+      });
+      const detail = data?.detail || data?.error || responseText || `http_${res.status}`;
+      const err = new Error(String(detail));
+      err.status = res.status;
+      throw err;
+    }
+    if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
+    return data;
+  } catch (e) {
+    console.error("[likeAny] fetch exception", {
+      endpoint,
+      requestBody,
+      status: res?.status ?? null,
+      statusText: res?.statusText ?? null,
+      responseText,
+      fetchMessage: e?.message || String(e),
+    });
+    throw e;
   }
-  if (data.hofThreshold != null) state.hofThreshold = Number(data.hofThreshold || state.hofThreshold || 20);
-  return data;
 }
 
 // ==============================
@@ -2138,7 +2161,7 @@ updateLikeUI(slot);
       );
 
       updateLikeUI(slot);
-      setStatus("いいねの反映に失敗しました", "ng");
+      setStatus(`いいねの反映に失敗しました（status: ${Number(e?.status || 0) || "unknown"} / error: ${String(e?.message || "unknown")})`, "ng");
     }finally{
       btnEl.disabled = false;
     }
