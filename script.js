@@ -2099,12 +2099,12 @@ function updateLikeUI(slot) {
       const nextToday = Number(out.likesToday ?? out.displayedLikeCount ?? optimisticToday);
       const nextTotal = Number(out.canonicalTotal ?? out.total ?? out.totalLikes ?? out.totalLikeCount ?? optimisticTotal);
 
-      const safeToday = Math.max(Number(nowPhrase?.likesToday || 0), nextToday);
+      const safeToday = nextToday;
       const safeTotal = rememberTotalLikesFloor({
         mode: nowPhrase?.mode || getSelectedMode(),
         bucket: Number(nowPhrase?.bucket ?? 0),
         text: nowPhrase?.text,
-        totalLikes: Math.max(Number(nowPhrase?.totalLikes || 0), nextTotal)
+        totalLikes: nextTotal
       });
 
       if (nowPhrase) {
