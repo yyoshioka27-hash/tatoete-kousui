@@ -1113,12 +1113,12 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
 
     const day = getJstDay();
     const clientId = normalizeClientId(request, body);
-    const dedupeKey = `like:${day}:${clientId}:${target.itemId}`;
+    const dedupeKey = `like:${day}:${clientId}:${canonicalId}`;
     const already = await kv.get(dedupeKey, "text");
     if (already) {
-      const existing = (await kv.get(`public:${target.itemId}`, "json")) || {};
-      const totalLikes = Number(existing.likes || existing.totalLikes || 0);
-      return json({ ok: true, liked: false, id: target.itemId, itemId: target.itemId, total: totalLikes, displayedLikeCount: totalLikes, totalLikeCount: totalLikes, totalLikes, today: Number(existing.likesToday || 0), todayLikeCount: Number(existing.likesToday || 0), likesToday: Number(existing.likesToday || 0), canonicalTotal: Number((await kv.get(`likes_total_canon:${canonicalId}`, "text")) || totalLikes || 0), hofThreshold: Number(env.HOF_THRESHOLD || 20) }, 200, kvStats, request);
+      const currentCanonTotal = Number((await kv.get(`likes_total_canon:${canonicalId}`, "text")) || 0);
+      const currentCanonToday = Number((await kv.get(`likes:${day}:canon:${canonicalId}`, "text")) || 0);
+      return json({ ok: true, liked: false, id: target.itemId, itemId: target.itemId, canonicalId, beforeTotal: currentCanonTotal, afterTotal: currentCanonTotal, delta: 0, debugIds: { incremented: [`likes_total_canon:${canonicalId}`], dayKey: `likes:${day}:canon:${canonicalId}`, dedupeKey }, total: currentCanonTotal, displayedLikeCount: currentCanonToday, totalLikeCount: currentCanonTotal, totalLikes: currentCanonTotal, today: currentCanonToday, todayLikeCount: currentCanonToday, likesToday: currentCanonToday, canonicalTotal: currentCanonTotal, hofThreshold: Number(env.HOF_THRESHOLD || 20) }, 200, kvStats, request);
     }
 
     const now = Date.now();
@@ -1156,25 +1156,22 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
 
     snapshotCache = { at: 0, items: null };
     rankingCache.at = 0;
-    const dailyIdKey = `likes:${day}:${target.itemId}`;
     const dailyCanonKey = `likes:${day}:canon:${canonicalId}`;
-    const totalIdKey = `likes_total:${target.itemId}`;
     const totalCanonKey = `likes_total_canon:${canonicalId}`;
+    const beforeTotal = Number((await kv.get(totalCanonKey, "text")) || 0);
 
-    console.log("[like] kv_put before", { key: dailyIdKey, value: nextLikesToday });
-    console.log("[like] kv_put before", { key: totalIdKey, value: nextLikes });
     console.log("[like] kv_put before", { key: dailyCanonKey, delta: 1 });
     console.log("[like] kv_put before", { key: totalCanonKey, delta: 1 });
-    await Promise.all([
-      kv.put(dailyIdKey, String(nextLikesToday)),
-      kv.put(totalIdKey, String(nextLikes)),
+    const [afterToday, afterTotal] = await Promise.all([
       incrementCounter(kv, dailyCanonKey, 1),
       incrementCounter(kv, totalCanonKey, 1),
     ]);
-    console.log("[like] kv_put after", { key: dailyIdKey });
-    console.log("[like] kv_put after", { key: totalIdKey });
-    console.log("[like] kv_put after", { key: dailyCanonKey });
-    console.log("[like] kv_put after", { key: totalCanonKey });
+    console.log("[like] kv_put after", { key: dailyCanonKey, afterToday });
+    console.log("[like] kv_put after", { key: totalCanonKey, afterTotal });
+    const delta = afterTotal - beforeTotal;
+    if (delta !== 1) {
+      console.log("LIKE_DELTA_ANOMALY", { id: target.itemId, canonicalId, beforeTotal, afterTotal, delta });
+    }
 
     await incrementUsageMetric(kv, day, "likes");
 
@@ -1182,7 +1179,7 @@ async function handleLike(request, env, ctx, kv, { kvStats }) {
       console.log(`[warn] runLikeHeavyTasks failed id=${target.itemId}: ${e?.message || e}`);
     }));
 
-    return json({ ok: true, liked: true, id: target.itemId, itemId: target.itemId, total: nextLikes, displayedLikeCount: nextLikes, totalLikeCount: nextLikes, totalLikes: nextLikes, today: nextLikesToday, todayLikeCount: nextLikesToday, likesToday: nextLikesToday, canonicalTotal: Number((await kv.get(totalCanonKey, "text")) || nextLikes || 0), hofThreshold: Number(env.HOF_THRESHOLD || 20) }, 200, kvStats, request);
+    return json({ ok: true, liked: true, id: target.itemId, itemId: target.itemId, canonicalId, beforeTotal, afterTotal, delta, debugIds: { incremented: [totalCanonKey], dayKey: dailyCanonKey, legacyReadOnly: { publicKey } }, total: afterTotal, displayedLikeCount: afterToday, totalLikeCount: afterTotal, totalLikes: afterTotal, today: afterToday, todayLikeCount: afterToday, likesToday: afterToday, canonicalTotal: afterTotal, hofThreshold: Number(env.HOF_THRESHOLD || 20) }, 200, kvStats, request);
   } catch (e) {
     console.error("[like] failed", {
       path: url.pathname,
