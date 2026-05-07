@@ -387,6 +387,39 @@ function likeFxPlusOne(btnEl){
     setTimeout(() => { try{ plus.remove(); }catch{} }, 700);
   }catch{}
 }
+
+function showInlineLikeLimitMessage(btnEl, message = "本日のいいね上限(10回)に達しました。") {
+  if (!btnEl) return;
+
+  const host =
+    btnEl.closest(".meta") ||
+    btnEl.closest(".actions") ||
+    btnEl.closest(".like-area") ||
+    btnEl.parentElement;
+  if (!host) return;
+
+  const old = host.querySelector(".inline-like-limit-message");
+  if (old) old.remove();
+
+  const el = document.createElement("div");
+  el.className = "inline-like-limit-message";
+  el.textContent = message;
+  el.style.marginTop = "6px";
+  el.style.fontSize = "12px";
+  el.style.lineHeight = "1.4";
+  el.style.color = "#b00020";
+  el.style.background = "rgba(176,0,32,0.08)";
+  el.style.border = "1px solid rgba(176,0,32,0.24)";
+  el.style.borderRadius = "8px";
+  el.style.padding = "6px 8px";
+  el.style.maxWidth = "100%";
+  el.style.wordBreak = "break-word";
+
+  btnEl.insertAdjacentElement("afterend", el);
+  setTimeout(() => {
+    if (el && el.parentNode) el.remove();
+  }, 2500);
+}
 // ==============================
 // ✅ 合言葉（PIN）入力欄をJS側で自動生成
 // ==============================
@@ -2167,7 +2200,8 @@ updateLikeUI(slot);
       likeLimitReached = (errStatus === 429) && /like limit/i.test(errMessage);
       if (likeLimitReached) {
         btnEl.disabled = true;
-        setStatus("本日のいいね上限（10回）に達しました", "ng");
+        showInlineLikeLimitMessage(btnEl, "本日のいいね上限(10回)に達しました。");
+        setStatus("本日のいいね上限(10回)に達しました。", "ng");
       } else {
         setStatus("いいねの反映に失敗しました", "ng");
       }
